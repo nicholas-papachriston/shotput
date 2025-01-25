@@ -1,0 +1,11 @@
+{
+	"name": "shotput",
+	"type": "module",
+	"version": "1.0.0",
+	"devDependencies": {
+		"@biomejs/biome": "latest",
+		"@types/bun": "latest",
+		"@types/node": "latest",
+		"typescript": "latest"
+	}
+}
