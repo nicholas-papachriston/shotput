@@ -7,16 +7,11 @@ export const handleS3 = async (
 	let combinedContent = `filename:${path}:\n`;
 	let combinedRemainingCount = remainingLength;
 
-	await Bun.s3
-		.file(path)
-		.text()
-		.then((data) => {
-			if (combinedRemainingCount - data.length < 0) {
-				combinedContent += data.slice(0, combinedRemainingCount);
-			} else {
-				combinedContent += data;
-			}
-		});
+	const fileStream = Bun.s3.file(path).stream();
+
+	for await (const chunk of fileStream) {
+		combinedContent += chunk.toString();
+	}
 
 	combinedRemainingCount -= combinedContent.length;
 

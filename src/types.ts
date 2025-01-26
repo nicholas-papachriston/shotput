@@ -6,6 +6,7 @@ export enum TemplateType {
 	Regex = "regex",
 	S3 = "s3",
 	Function = "function",
+	Http = "http",
 }
 
 export interface FileResult {

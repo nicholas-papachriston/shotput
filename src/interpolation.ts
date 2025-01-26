@@ -3,6 +3,7 @@ import { CONFIG } from "./config";
 import { handleDirectory } from "./directory";
 import { handleFile } from "./file";
 import { handleGlob } from "./glob";
+import { handleHttp } from "./http";
 import { handleS3 } from "./s3";
 import { findTemplateType } from "./template";
 import { TemplateType } from "./types";
@@ -68,6 +69,17 @@ export const interpolation = async (
 				}
 				case TemplateType.S3: {
 					const { operationResults, combinedRemainingCount } = await handleS3(
+						result,
+						path,
+						match,
+						remainingLength,
+					);
+					remainingLength = combinedRemainingCount;
+					result += operationResults;
+					continue;
+				}
+				case TemplateType.Http: {
+					const { operationResults, combinedRemainingCount } = await handleHttp(
 						result,
 						path,
 						match,

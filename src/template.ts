@@ -29,6 +29,14 @@ export const findTemplateType = async (path: string): Promise<TemplateType> => {
 			return TemplateType.Regex;
 		}
 
+		if (path.includes("TemplateType.Function:")) {
+			return TemplateType.Function;
+		}
+
+		if (path.includes("http://") || path.includes("https://")) {
+			return TemplateType.Http;
+		}
+
 		return TemplateType.String;
 	} catch (error) {
 		console.log(JSON.stringify(error));
