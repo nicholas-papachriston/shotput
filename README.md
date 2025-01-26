@@ -23,12 +23,20 @@ in the file format of you choice, simply include the following to have the file 
 {{relative_file_path}}
 
 {{relative_dir_path}}
+
+{{/usr/local/app/*.ts}}
+
+{{s3://path/to/file}}
+
+{{\regex\/g}}
 ```
 
 ## todo
 
-[] templating with globs
-[] templating with regex
-[] templating with functions
-[] historical context injection
-[] more generic http based llm api usage (bedrock, etc)
+- [X] templating with paths
+- [X] templating with globs
+- [X] templating with Bun.s3
+- [X] templating with regex
+- [] templating with functions
+- [] historical context injection
+- [] more generic http based llm api usage (bedrock, etc)

@@ -1,25 +1,11 @@
 import { isAbsolute, resolve } from "node:path";
 import { CONFIG } from "./config";
-import { getAllFiles, isDirectory } from "./directory";
-import type { FileResult } from "./types";
-
-const processContent = async (
-	content: string,
-	remainingLength: number,
-): Promise<FileResult> => {
-	if (content.length > remainingLength) {
-		return {
-			content: content.slice(0, remainingLength),
-			length: remainingLength,
-			truncated: true,
-		};
-	}
-	return {
-		content,
-		length: content.length,
-		truncated: false,
-	};
-};
+import { handleDirectory } from "./directory";
+import { handleFile } from "./file";
+import { handleGlob } from "./glob";
+import { handleS3 } from "./s3";
+import { findTemplateType } from "./template";
+import { TemplateType } from "./types";
 
 const resolvePath = (basePath: string, filePath: string): string =>
 	isAbsolute(filePath) ? filePath : resolve(basePath, filePath);
@@ -39,36 +25,58 @@ export const interpolation = async (
 		const path = resolvePath(basePath, match.slice(2, -2).trim());
 
 		try {
-			if (await isDirectory(path)) {
-				let combinedContent = "";
-				for (const file of await getAllFiles(path)) {
-					const fileContent = `filename:${path}:\n${await Bun.file(file).text()}\n`;
-					const processed = await processContent(fileContent, remainingLength);
-
-					if (processed.truncated) {
-						console.warn(`Content truncated for ${file} due to length limit`);
-					}
-
-					combinedContent += processed.content;
-					remainingLength -= processed.length;
-
-					if (remainingLength <= 0) {
-						console.warn("Maximum prompt length reached");
-						break;
-					}
+			switch (await findTemplateType(path)) {
+				case TemplateType.File: {
+					const { operationResults, combinedRemainingCount } =
+						await handleDirectory(result, path, match, remainingLength);
+					remainingLength = combinedRemainingCount;
+					result += operationResults;
+					continue;
 				}
-
-				result = result.replace(match, combinedContent);
-			} else {
-				const fileContent = `filename:${path}:\n${await Bun.file(path).text()}`;
-				const processed = await processContent(fileContent, remainingLength);
-
-				if (processed.truncated) {
-					console.warn(`Content truncated for ${path} due to length limit`);
+				case TemplateType.Directory: {
+					const { operationResults, combinedRemainingCount } = await handleFile(
+						result,
+						path,
+						match,
+						remainingLength,
+					);
+					remainingLength = combinedRemainingCount;
+					result += operationResults;
+					continue;
 				}
-
-				result = result.replace(match, processed.content);
-				remainingLength -= processed.length;
+				case TemplateType.Glob: {
+					const { operationResults, combinedRemainingCount } = await handleGlob(
+						result,
+						path,
+						match,
+						remainingLength,
+					);
+					remainingLength = combinedRemainingCount;
+					result += operationResults;
+					continue;
+				}
+				case TemplateType.Regex: {
+					const { operationResults, combinedRemainingCount } = await handleGlob(
+						result,
+						path,
+						match,
+						remainingLength,
+					);
+					remainingLength = combinedRemainingCount;
+					result += operationResults;
+					continue;
+				}
+				case TemplateType.S3: {
+					const { operationResults, combinedRemainingCount } = await handleS3(
+						result,
+						path,
+						match,
+						remainingLength,
+					);
+					remainingLength = combinedRemainingCount;
+					result += operationResults;
+					continue;
+				}
 			}
 		} catch (err) {
 			console.error(`Failed to read path ${path}:`, err);
