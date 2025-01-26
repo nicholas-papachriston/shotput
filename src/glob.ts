@@ -1,31 +1,37 @@
-import { join } from "node:path";
-
 export const handleGlob = async (
 	result: string,
 	path: string,
 	match: string,
 	remainingLength: number,
 ) => {
+	console.log(`Handling glob: ${path}`);
+
 	const glob = new Bun.Glob(path);
 
 	let combinedContent = "";
 	let combinedRemainingCount = remainingLength;
 
-	for await (const file of glob.scan(".")) {
-		const content = await Bun.file(join(process.cwd(), file)).text();
+	try {
+		for await (const file of glob.scan(".")) {
+			try {
+				if (combinedRemainingCount <= 0) break;
+				console.log(`Processing file: ${file}`);
+				const content = await Bun.file(file).text();
 
-		if (combinedRemainingCount - content.length < 0) {
-			combinedContent += content.slice(0, combinedRemainingCount);
-			combinedRemainingCount = 0;
-			break;
+				const contentToAdd = content.slice(0, combinedRemainingCount);
+				combinedContent += `filename:${file}:\ncontent:${contentToAdd}\n`;
+				combinedRemainingCount -= contentToAdd.length;
+			} catch (error) {
+				console.error(`Error processing file ${file}:`, error);
+			}
 		}
 
-		combinedContent += content;
-		combinedRemainingCount -= content.length;
+		return {
+			operationResults: result.replace(match, combinedContent),
+			combinedRemainingCount,
+		};
+	} catch (error) {
+		console.error(`Error processing glob ${path}:`, error);
+		throw error;
 	}
-
-	return {
-		operationResults: result.replace(match, combinedContent),
-		combinedRemainingCount,
-	};
 };

@@ -4,7 +4,7 @@ export const handleS3 = async (
 	match: string,
 	remainingLength: number,
 ) => {
-	let combinedContent = "";
+	let combinedContent = `filename:${path}:\n`;
 	let combinedRemainingCount = remainingLength;
 
 	await Bun.s3

@@ -3,13 +3,18 @@ import { TemplateType } from "./types";
 
 export const findTemplateType = async (path: string): Promise<TemplateType> => {
 	try {
-		const stats = await stat(path);
-		if (stats.isFile()) {
-			return TemplateType.File;
-		}
+		try {
+			const stats = await stat(path);
 
-		if (stats.isDirectory()) {
-			return TemplateType.Directory;
+			if (stats.isFile()) {
+				return TemplateType.File;
+			}
+
+			if (stats.isDirectory()) {
+				return TemplateType.Directory;
+			}
+		} catch (error) {
+			console.warn(JSON.stringify(error));
 		}
 
 		if (path.startsWith("s3://")) {
