@@ -28,19 +28,19 @@ export const interpolation = async (
 		try {
 			switch (await findTemplateType(path)) {
 				case TemplateType.File: {
-					const { operationResults, combinedRemainingCount } =
-						await handleDirectory(result, path, match, remainingLength);
-					remainingLength = combinedRemainingCount;
-					result += operationResults;
-					continue;
-				}
-				case TemplateType.Directory: {
 					const { operationResults, combinedRemainingCount } = await handleFile(
 						result,
 						path,
 						match,
 						remainingLength,
 					);
+					remainingLength = combinedRemainingCount;
+					result += operationResults;
+					continue;
+				}
+				case TemplateType.Directory: {
+					const { operationResults, combinedRemainingCount } =
+						await handleDirectory(result, path, match, remainingLength);
 					remainingLength = combinedRemainingCount;
 					result += operationResults;
 					continue;

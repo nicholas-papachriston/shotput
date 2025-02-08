@@ -1,17 +1,30 @@
 # shotput
 
-simple interface with ollama that uses a static prompt file and a little templating to create living prompts.
+zero dependency plug-and-play templating
 
-## prerequisites
+## features
 
-- `bun`
-- `make`
+- arbitrary source retrieval
+- arbitrary output destination
+- templating with:
+  - file paths
+  - directory paths
+  - glob patterns
+  - regex
+  - s3 paths
+  - http paths
+
+## todo
+
+- templating with functions
+- npm package
+- documentation
 
 ## usage
 
-available env vars are found in `env.sh`
+available env vars/config object are found in `src/config.ts`
 
-available commands are found in `Makefile`
+available commands for local use are found in `Makefile`
 
 in the file format of you choice, simply include the following to have the file be processed by shotput:
 
@@ -31,12 +44,7 @@ in the file format of you choice, simply include the following to have the file 
 {{\regex\/g}}
 ```
 
-## todo
+## prerequisites for local use
 
-- [X] templating with paths
-- [X] templating with globs
-- [X] templating with Bun.s3
-- [X] templating with regex
-- [] templating with functions
-- [] historical context injection
-- [] more generic http based llm api usage (bedrock, etc)
+- `bun`
+- `make`
