@@ -1,10 +1,8 @@
 export const CONFIG = {
-	baseUrl: process.env["LLM_INTERFACE_URL"] || "http://localhost:11434",
-	modelName: process.env["LLM_INTERFACE_LLM_MODEL"] || "deepseek-r1:1.5b",
-	promptPath: process.env["PROMPT_PATH"] || "./prompt.md",
-	responsesDir: process.env["RESPONSE_DIR"] || "./responses",
-	maxPromptLength: Number(process.env["MAX_PROMPT_LENGTH"]) || 100000,
-	temperature: Number(process.env["TEMPERATURE"]) || 0.7,
-	top_p: Number(process.env["TOP_P"]) || 0.9,
-	max_tokens: Number(process.env["MAX_TOKENS"]) || 1024,
+	debug: process.env["DEBUG"] === "true",
+	debugFile: process.env["DEBUG_FILE"] || "./prompt_debug.txt",
+	promptDir: process.env["PROMPT_DIR"] || "./prompts",
+	promptPath: process.env["PROMPT_PATH"] || "/prompt.md",
+	responseDir: process.env["RESPONSE_DIR"] || "./responses",
+	maxPromptLength: Number.parseInt(process.env["MAX_PROMPT_LENGTH"] ?? "") || 100000,
 };

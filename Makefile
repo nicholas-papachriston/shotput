@@ -3,6 +3,7 @@
 SHELL := /bin/bash
 
 build: install
+	tsc
 	source env.sh && bun build --compile src/index.ts --outfile ./dist/shotput
 
 dev: install

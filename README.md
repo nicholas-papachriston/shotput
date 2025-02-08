@@ -1,6 +1,6 @@
 # shotput
 
-zero dependency plug-and-play templating
+zero dependency plug-and-play prompt templating
 
 ## features
 
@@ -9,16 +9,25 @@ zero dependency plug-and-play templating
 - templating with:
   - file paths
   - directory paths
-  - glob patterns
-  - regex
-  - s3 paths
+  - functions
   - http paths
+  - glob patterns
+  - s3 paths
+    - [credential documentation](https://bun.sh/docs/api/s3#credentials)
+    - supports the following:
+      - AWS S3 - tested
+      - Cloudflare R2 - tested
+      - DigitalOcean Spaces - untested
+      - MinIO - untested
+      - Backblaze B2 - untested
+  - regex patterns
 
 ## todo
 
-- templating with functions
+- nested documents
 - npm package
 - documentation
+- refactor `findTemplateType`
 
 ## usage
 
@@ -26,7 +35,7 @@ available env vars/config object are found in `src/config.ts`
 
 available commands for local use are found in `Makefile`
 
-in the file format of you choice, simply include the following to have the file be processed by shotput:
+in the file format of you choice, simply include any combination of the following to have the file be processed by shotput:
 
 ``` sh
 {{file_path}}
@@ -37,9 +46,15 @@ in the file format of you choice, simply include the following to have the file 
 
 {{relative_dir_path}}
 
+{{TemplateType.Function:/path/to/function.js}}
+
 {{/usr/local/app/*.ts}}
 
-{{s3://path/to/file}}
+{{http://google.com}}
+
+{{s3://path/to/file.json}}
+
+{{s3://path/to/prefix/}}
 
 {{\regex\/g}}
 ```
