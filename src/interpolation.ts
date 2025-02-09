@@ -2,11 +2,15 @@ import { isAbsolute, resolve } from "node:path";
 import { CONFIG } from "./config";
 import { handleDirectory } from "./directory";
 import { handleFile } from "./file";
+import { handleFunction } from "./function";
 import { handleGlob } from "./glob";
 import { handleHttp } from "./http";
 import { handleS3 } from "./s3";
 import { findTemplateType } from "./template";
 import { TemplateType } from "./types";
+import { getLogger } from "./logger";
+
+const log = getLogger("interpolation");
 
 const resolvePath = (basePath: string, filePath: string): string =>
 	isAbsolute(filePath) ? filePath : resolve(basePath, filePath);
@@ -89,9 +93,16 @@ export const interpolation = async (
 					result += operationResults;
 					continue;
 				}
+				case TemplateType.Function: {
+					const { operationResults, combinedRemainingCount } =
+						await handleFunction(result, path, match, remainingLength);
+					remainingLength = combinedRemainingCount;
+					result += operationResults;
+					continue;
+				}
 			}
 		} catch (err) {
-			console.error(`Failed to read path ${path}:`, err);
+			log.error(`Failed to read path ${path}: ${err}`);
 			result = result.replace(match, `[Error reading ${path}]`);
 		}
 	}

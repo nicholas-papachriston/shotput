@@ -1,3 +1,5 @@
+export const FUNCTION_TEMPLATE = "TemplateType.Function:";
+
 export const handleFunction = async (
 	result: string,
 	path: string,
@@ -11,7 +13,7 @@ export const handleFunction = async (
 		};
 	}
 
-	const functionPath = path.split("TemplateType.Function:")[1];
+	const functionPath = path.split(FUNCTION_TEMPLATE)[1];
 	const functionModule = await import(functionPath);
 	const { operationResults, combinedRemainingCount } =
 		await functionModule.default(result, path, match, remainingLength);

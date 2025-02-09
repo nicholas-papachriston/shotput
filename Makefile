@@ -7,7 +7,7 @@ build: install
 	source env.sh && bun build --compile src/index.ts --outfile ./dist/shotput
 
 dev: install
-	source env.sh && bun run --watch src/index.ts
+	source env.sh && bun run src/index.ts
 
 install:
 	source env.sh && bun install

@@ -1,45 +1,52 @@
 import { stat } from "node:fs/promises";
+import { FUNCTION_TEMPLATE } from "./function";
 import { TemplateType } from "./types";
+import { getLogger } from "./logger";
+
+const log = getLogger("template");
+
+const regexIndicators = [
+	/\/.+\//, // Pattern enclosed in forward slashes
+	/[\^\$\(\)\+\{\}]/, // Common regex special characters
+];
 
 export const findTemplateType = async (path: string): Promise<TemplateType> => {
 	try {
-		try {
-			const stats = await stat(path);
+		await stat(path)
+			.then((stats) => {
+				if (stats.isFile()) {
+					return TemplateType.File;
+				}
 
-			if (stats.isFile()) {
-				return TemplateType.File;
-			}
+				if (stats.isDirectory()) {
+					return TemplateType.Directory;
+				}
+			})
+			.catch(() => log.info("Path is not a file or directory"));
 
-			if (stats.isDirectory()) {
-				return TemplateType.Directory;
-			}
-		} catch (error) {
-			console.warn(JSON.stringify(error));
-		}
-
-		if (path.startsWith("s3://")) {
-			return TemplateType.S3;
-		}
-
-		if (path.includes("*")) {
-			return TemplateType.Glob;
-		}
-
-		if (path.includes("/")) {
-			return TemplateType.Regex;
-		}
-
-		if (path.includes("TemplateType.Function:")) {
+		if (path.includes(FUNCTION_TEMPLATE)) {
 			return TemplateType.Function;
 		}
 
-		if (path.includes("http://") || path.includes("https://")) {
+		if (/[\*\?\[\]]/.test(path)) {
+			return TemplateType.Glob;
+		}
+
+		if (/^https?:\/\/.+/.test(path)) {
 			return TemplateType.Http;
+		}
+
+		if (/^s3:\/\/.+/.test(path)) {
+			return TemplateType.S3;
+		}
+
+		if (regexIndicators.some((pattern) => pattern.test(path))) {
+			return TemplateType.Regex;
 		}
 
 		return TemplateType.String;
 	} catch (error) {
-		console.log(JSON.stringify(error));
+		log.info(JSON.stringify(error));
 		return TemplateType.String;
 	}
 };

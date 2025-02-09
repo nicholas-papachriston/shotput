@@ -1,8 +1,12 @@
-# shotput
+# Shotput
 
-zero dependency plug-and-play prompt templating
+Zero dependency plug-and-play templating for JS/TS
 
-## features
+## Motivation
+
+Shotput is a simple, programmatic templating library to help manage personas, system prompts, and other text-based configurations for use in any project but particularly for Gen AI applications
+
+## Features
 
 - arbitrary source retrieval
 - arbitrary output destination
@@ -10,6 +14,9 @@ zero dependency plug-and-play prompt templating
   - file paths
   - directory paths
   - functions
+    - supports:
+      - cjs
+      - esm
   - http paths
   - glob patterns
   - s3 paths
@@ -22,22 +29,30 @@ zero dependency plug-and-play prompt templating
       - Backblaze B2 - untested
   - regex patterns
 
-## todo
+## TODO
 
-- nested documents
 - npm package
-- documentation
-- refactor `findTemplateType`
+- advanced s3/rs credential support
+- advanced s3 directory bucket support
+- nested documents
+- blob search s3/rs support
+- regex search s3/rs support
+- enhanced in-tree parrallelism before interpolation
+  - planning step to determine all files to be interpolated
+  - attempt to fetch content length of all files
+  - trim files to be interpolated based on content length
+  - fetch remaining files in parallel
+  - rate limiting + retry handling with configurable exponential backoff
 
-## usage
+## Usage
 
-available env vars/config object are found in `src/config.ts`
+Available env vars are found in `env.sh`
 
-available commands for local use are found in `Makefile`
+The config object is found in `src/config.ts`
 
-in the file format of you choice, simply include any combination of the following to have the file be processed by shotput:
+In the file format of you choice, simply include any combination of the following to have the file be processed by shotput:
 
-``` sh
+```sh
 {{file_path}}
 
 {{dir_path}}
@@ -59,7 +74,11 @@ in the file format of you choice, simply include any combination of the followin
 {{\regex\/g}}
 ```
 
-## prerequisites for local use
+!! Priority when determining what files to concatenate follows the order of the template strings in your template file !!
+
+## Prerequisites for Local Use
 
 - `bun`
 - `make`
+
+Available commands for local use are found in `Makefile`

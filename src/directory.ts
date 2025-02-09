@@ -2,15 +2,26 @@ import { mkdir } from "node:fs/promises";
 import { readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { processContent } from "./content";
+import { bucketExists } from "./s3";
+import { getLogger } from "./logger";
 
-export const ensureDirectoryExists = async (dir: string): Promise<void> => {
-	try {
-		await mkdir(dir, { recursive: true });
-	} catch (err) {
+const log = getLogger("directory");
+
+const processDirectory = async (dir: string) => {
+	if (dir.startsWith("s://")) return await bucketExists(dir);
+	await mkdir(dir, { recursive: true }).catch((err) => {
 		if ((err as { code?: string }).code !== "EEXIST") {
 			throw new Error(`Failed to create directory ${dir}: ${err}`);
 		}
-	}
+		throw err;
+	});
+};
+
+export const ensureDirectoryExists = async (
+	sourceDir: string,
+	resultsDir: string,
+): Promise<void> => {
+	Promise.all([processDirectory(sourceDir), processDirectory(resultsDir)]);
 };
 
 const getAllFiles = async (dirPath: string): Promise<string[]> => {
@@ -32,6 +43,7 @@ export const handleDirectory = async (
 	match: string,
 	remainingLength: number,
 ) => {
+	log.info(`Processing directory: ${path}`);
 	let combinedContent = "";
 	let combinedRemainingCount = remainingLength;
 	for (const file of await getAllFiles(path)) {
@@ -39,14 +51,14 @@ export const handleDirectory = async (
 		const processed = await processContent(fileContent, combinedRemainingCount);
 
 		if (processed.truncated) {
-			console.warn(`Content truncated for ${file} due to length limit`);
+			log.warn(`Content truncated for ${file} due to length limit`);
 		}
 
 		combinedContent += processed.content;
 		combinedRemainingCount -= processed.length;
 
 		if (combinedRemainingCount <= 0) {
-			console.warn("Maximum prompt length reached");
+			log.warn("Maximum template length reached");
 			break;
 		}
 	}
