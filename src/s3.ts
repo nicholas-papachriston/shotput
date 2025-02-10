@@ -1,6 +1,6 @@
 import { CONFIG } from "./config";
-import { createXmlParser } from "./xml";
 import { getLogger } from "./logger";
+import { createXmlParser } from "./xml";
 
 const log = getLogger("s3");
 

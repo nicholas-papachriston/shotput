@@ -1,7 +1,7 @@
 import { stat } from "node:fs/promises";
 import { FUNCTION_TEMPLATE } from "./function";
-import { TemplateType } from "./types";
 import { getLogger } from "./logger";
+import { TemplateType } from "./types";
 
 const log = getLogger("template");
 

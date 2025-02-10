@@ -19,5 +19,10 @@ install-clean:
 fix: install
 	bunx biome check --write .
 
+npm:
+	bun run build
+	npm login
+	npm publish
+
 test:
 	bun test src/*

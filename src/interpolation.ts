@@ -5,10 +5,10 @@ import { handleFile } from "./file";
 import { handleFunction } from "./function";
 import { handleGlob } from "./glob";
 import { handleHttp } from "./http";
+import { getLogger } from "./logger";
 import { handleS3 } from "./s3";
 import { findTemplateType } from "./template";
 import { TemplateType } from "./types";
-import { getLogger } from "./logger";
 
 const log = getLogger("interpolation");
 

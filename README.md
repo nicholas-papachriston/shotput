@@ -1,6 +1,6 @@
 # Shotput
 
-Zero dependency plug-and-play templating for JS/TS
+Zero dependency plug-and-play templating for Bun
 
 ## Motivation
 

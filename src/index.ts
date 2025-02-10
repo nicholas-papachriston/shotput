@@ -4,7 +4,9 @@ import { interpolation } from "./interpolation";
 
 const run = async () => {
 	await ensureDirectoryExists(CONFIG.responseDir, CONFIG.templateDir);
-	const template = await Bun.file(`${CONFIG.templateDir}${CONFIG.templateFile}`).text().then(interpolation);
+	const template = await Bun.file(`${CONFIG.templateDir}${CONFIG.templateFile}`)
+		.text()
+		.then(interpolation);
 	if (CONFIG.debug) await Bun.write(CONFIG.debugFile, template);
 	return template;
 };

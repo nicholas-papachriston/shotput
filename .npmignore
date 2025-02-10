@@ -1,0 +1,10 @@
+src/
+test/
+templates/
+responses/
+.vscode/
+build.ts
+bunfig.toml
+env.sh
+Makefile
+*.log
