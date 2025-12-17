@@ -11,6 +11,10 @@
  * @prop [cloudflareR2Url] - ex: <ACCOUNT_ID>.r2.cloudflarestorage.com
  * @prop [httpTimeout] - def: 30000 - HTTP request timeout in milliseconds
  * @prop [maxConcurrency] - def: 4 - maximum concurrent operations
+ * @prop [maxRetries] - def: 3 - maximum retry attempts for failed operations
+ * @prop [retryDelay] - def: 1000 - initial retry delay in milliseconds
+ * @prop [retryBackoffMultiplier] - def: 2 - exponential backoff multiplier
+ * @prop [enableContentLengthPlanning] - def: true - enable planning phase for content length detection
  * @prop [allowedBasePaths] - def: [process.cwd()] - allowed base paths for file access
  * @prop [allowedDomains] - def: [] - allowed HTTP domains (empty = all allowed)
  * @prop [allowHttp] - def: true - whether HTTP requests are allowed
@@ -30,6 +34,10 @@ export interface ShotputConfig {
 	cloudflareR2Url?: string;
 	httpTimeout?: number;
 	maxConcurrency?: number;
+	maxRetries?: number;
+	retryDelay?: number;
+	retryBackoffMultiplier?: number;
+	enableContentLengthPlanning?: boolean;
 	allowedBasePaths?: string[];
 	allowedDomains?: string[];
 	allowHttp?: boolean;
@@ -59,6 +67,10 @@ const DEFAULT_CONFIG = {
 	cloudflareR2Url: undefined,
 	httpTimeout: 30000,
 	maxConcurrency: 4,
+	maxRetries: 3,
+	retryDelay: 1000,
+	retryBackoffMultiplier: 2,
+	enableContentLengthPlanning: true,
 	allowedBasePaths: [process.cwd()],
 	allowedDomains: [],
 	allowHttp: true,
@@ -96,6 +108,18 @@ export const CONFIG = {
 	maxConcurrency:
 		Number.parseInt(process.env["MAX_CONCURRENCY"] ?? "") ||
 		DEFAULT_CONFIG.maxConcurrency,
+	maxRetries:
+		Number.parseInt(process.env["MAX_RETRIES"] ?? "") ||
+		DEFAULT_CONFIG.maxRetries,
+	retryDelay:
+		Number.parseInt(process.env["RETRY_DELAY"] ?? "") ||
+		DEFAULT_CONFIG.retryDelay,
+	retryBackoffMultiplier:
+		Number.parseFloat(process.env["RETRY_BACKOFF_MULTIPLIER"] ?? "") ||
+		DEFAULT_CONFIG.retryBackoffMultiplier,
+	enableContentLengthPlanning:
+		process.env["ENABLE_CONTENT_LENGTH_PLANNING"] !== "false" &&
+		DEFAULT_CONFIG.enableContentLengthPlanning,
 	allowedBasePaths: process.env["ALLOWED_BASE_PATHS"]
 		? process.env["ALLOWED_BASE_PATHS"].split(",")
 		: DEFAULT_CONFIG.allowedBasePaths,

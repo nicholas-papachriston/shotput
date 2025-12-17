@@ -10,9 +10,9 @@
  *   bun run examples/basic/01-simple-file.ts
  */
 
+import { mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { shotput } from "../../src/index";
-import { writeFileSync, mkdirSync } from "fs";
-import { join } from "path";
 import { getLogger } from "../../src/logger";
 
 const log = getLogger("01-simple-file");
@@ -32,19 +32,18 @@ const templatePath = join(templateDir, "template.md");
 writeFileSync(templatePath, templateContent);
 
 try {
-  const result = await shotput({
-    templateDir,
-    templateFile: "template.md",
-    responseDir: templateDir,
-    allowedBasePaths: [join(import.meta.dir, "..")],
-    debug: true,
-    debugFile: join(templateDir, "template-debug.md"),
-  });
+	const result = await shotput({
+		templateDir,
+		templateFile: "template.md",
+		responseDir: templateDir,
+		allowedBasePaths: [join(import.meta.dir, "..")],
+		debug: true,
+		debugFile: join(templateDir, "template-debug.md"),
+	});
 
-  log.info(result);
+	log.info(result.metadata);
 } catch (error) {
-  log.error(error);
-
+	log.error(error);
 }
 
 /**

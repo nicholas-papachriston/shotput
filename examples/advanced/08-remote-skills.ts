@@ -14,9 +14,9 @@
  *   bun run examples/advanced/08-remote-skills.ts
  */
 
+import { mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { shotput } from "../../src/index";
-import { writeFileSync, mkdirSync } from "fs";
-import { join } from "path";
 import { getLogger } from "../../src/logger";
 
 const log = getLogger("08-remote-skills");
@@ -61,22 +61,22 @@ const comparisonPath = join(templateDir, "comparison-template.md");
 writeFileSync(comparisonPath, comparisonTemplate);
 
 try {
-  const result = await shotput({
-    templateDir,
-    templateFile: "comparison-template.md",
-    responseDir: templateDir,
-    skillsDir,
-    allowRemoteSkills: true,
-    allowedSkillSources: ["anthropics/skills"],
-    allowHttp: true, // Required for fetching remote skills
-    allowedBasePaths: [skillsDir, templateDir, join(import.meta.dir, "..")],
-    debug: true,
-    debugFile: join(templateDir, "comparison-debug.md"),
-  });
+	const result = await shotput({
+		templateDir,
+		templateFile: "comparison-template.md",
+		responseDir: templateDir,
+		skillsDir,
+		allowRemoteSkills: true,
+		allowedSkillSources: ["anthropics/skills"],
+		allowHttp: true, // Required for fetching remote skills
+		allowedBasePaths: [skillsDir, templateDir, join(import.meta.dir, "..")],
+		debug: true,
+		debugFile: join(templateDir, "comparison-debug.md"),
+	});
 
-  log.info(result);
+	log.info(result.metadata);
 } catch (error) {
-  log.error("Comparison failed:", error);
+	log.error("Comparison failed:", error);
 }
 
 const referencesTemplate = `# Skills with References
@@ -92,23 +92,23 @@ const referencesPath = join(templateDir, "references-template.md");
 writeFileSync(referencesPath, referencesTemplate);
 
 try {
-  const result = await shotput({
-    templateDir,
-    templateFile: "references-template.md",
-    responseDir: templateDir,
-    skillsDir,
-    allowRemoteSkills: true,
-    allowedSkillSources: ["anthropics/skills"],
-    allowHttp: true,
-    maxPromptLength: 200000, // Larger limit for full skill content
-    allowedBasePaths: [skillsDir, templateDir, join(import.meta.dir, "..")],
-    debug: true,
-    debugFile: join(templateDir, "references-debug.md"),
-  });
+	const result = await shotput({
+		templateDir,
+		templateFile: "references-template.md",
+		responseDir: templateDir,
+		skillsDir,
+		allowRemoteSkills: true,
+		allowedSkillSources: ["anthropics/skills"],
+		allowHttp: true,
+		maxPromptLength: 200000, // Larger limit for full skill content
+		allowedBasePaths: [skillsDir, templateDir, join(import.meta.dir, "..")],
+		debug: true,
+		debugFile: join(templateDir, "references-debug.md"),
+	});
 
-  log.info(result);
+	log.info(result.metadata);
 } catch (error) {
-  log.error("References example failed:", error);
+	log.error("References example failed:", error);
 }
 
 const secureTemplate = `# Secure Skills Loading
@@ -122,30 +122,32 @@ const secureTemplate = `# Secure Skills Loading
 ## Would fail: Remote skills disabled
 (If allowRemoteSkills: false)
 `;
-writeFileSync(secureTemplate, secureTemplate);
+
+const secureReferencesPath = join(templateDir, "secure-template.md");
+writeFileSync(secureReferencesPath, secureTemplate);
 
 try {
-  const result = await shotput({
-    templateDir,
-    templateFile: "secure-template.md",
-    responseDir: templateDir,
-    skillsDir,
-    allowRemoteSkills: true,
-    // Only allow specific trusted organizations
-    allowedSkillSources: [
-      "anthropics/skills",
-      "myorg/skills",
-      "trusted-partner/skills"
-    ],
-    allowHttp: true,
-    allowedBasePaths: [skillsDir, templateDir, join(import.meta.dir, "..")],
-    debug: true,
-    debugFile: join(templateDir, "secure-debug.md"),
-  });
+	const result = await shotput({
+		templateDir,
+		templateFile: "secure-template.md",
+		responseDir: templateDir,
+		skillsDir,
+		allowRemoteSkills: true,
+		// Only allow specific trusted organizations
+		allowedSkillSources: [
+			"anthropics/skills",
+			"myorg/skills",
+			"trusted-partner/skills",
+		],
+		allowHttp: true,
+		allowedBasePaths: [skillsDir, templateDir, join(import.meta.dir, "..")],
+		debug: true,
+		debugFile: join(templateDir, "secure-debug.md"),
+	});
 
-  log.info(result);
+	log.info(result.metadata);
 } catch (error) {
-  log.error("Security example failed:", error);
+	log.error("Security example failed:", error);
 }
 
 /**

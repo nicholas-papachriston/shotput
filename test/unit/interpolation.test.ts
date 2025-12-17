@@ -71,7 +71,9 @@ describe("interpolation", () => {
 
 		expect(result.processedTemplate).toContain("File: filename:");
 		expect(result.processedTemplate).toContain("Hello World!");
-		expect(result.processedTemplate).toContain("Function: This is from a test function!");
+		expect(result.processedTemplate).toContain(
+			"Function: This is from a test function!",
+		);
 	});
 
 	it("should handle base path resolution", async () => {

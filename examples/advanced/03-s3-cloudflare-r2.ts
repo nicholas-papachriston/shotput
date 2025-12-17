@@ -18,9 +18,9 @@
  *   bun run examples/advanced/03-s3-cloudflare-r2.ts
  */
 
+import { mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { shotput } from "../../src/index";
-import { writeFileSync, mkdirSync } from "fs";
-import { join } from "path";
 import { getLogger } from "../../src/logger";
 
 const log = getLogger("03-s3-cloudflare-r2");
@@ -29,14 +29,16 @@ mkdirSync(templateDir, { recursive: true });
 
 // Check for Cloudflare R2 credentials
 if (!process.env["S3_ACCESS_KEY_ID"] || !process.env["S3_SECRET_ACCESS_KEY"]) {
-  log.error("Missing R2 credentials");
-  log.info("Get credentials from: Cloudflare Dashboard > R2 > Manage R2 API Tokens");
+	log.error("Missing R2 credentials");
+	log.info(
+		"Get credentials from: Cloudflare Dashboard > R2 > Manage R2 API Tokens",
+	);
 }
 
 if (!process.env["CLOUDFLARE_R2_URL"]) {
-  log.error("Missing CLOUDFLARE_R2_URL");
-  log.info("Format: account-id.r2.cloudflarestorage.com");
-  log.info("Find it in: Cloudflare Dashboard > R2 > Overview");
+	log.error("Missing CLOUDFLARE_R2_URL");
+	log.info("Format: account-id.r2.cloudflarestorage.com");
+	log.info("Find it in: Cloudflare Dashboard > R2 > Overview");
 }
 
 const r2Template = `# Cloudflare R2 Example
@@ -55,21 +57,21 @@ const templatePath = join(templateDir, "template.md");
 writeFileSync(templatePath, r2Template);
 
 try {
-  const result = await shotput({
-    templateDir,
-    templateFile: "template.md",
-    responseDir: templateDir,
-    cloudflareR2Url: process.env["CLOUDFLARE_R2_URL"],
-    s3AccessKeyId: process.env["S3_ACCESS_KEY_ID"],
-    s3SecretAccessKey: process.env["S3_SECRET_ACCESS_KEY"],
-    maxBucketFiles: 100,
-    debug: true,
-    debugFile: join(templateDir, "template-debug.md"),
-  });
+	const result = await shotput({
+		templateDir,
+		templateFile: "template.md",
+		responseDir: templateDir,
+		cloudflareR2Url: process.env["CLOUDFLARE_R2_URL"],
+		s3AccessKeyId: process.env["S3_ACCESS_KEY_ID"],
+		s3SecretAccessKey: process.env["S3_SECRET_ACCESS_KEY"],
+		maxBucketFiles: 100,
+		debug: true,
+		debugFile: join(templateDir, "template-debug.md"),
+	});
 
-  log.info(result);
+	log.info(result.metadata);
 } catch (error) {
-  log.error(error);
+	log.error(error);
 }
 
 /**

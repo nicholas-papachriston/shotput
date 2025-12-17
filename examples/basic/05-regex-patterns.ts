@@ -10,9 +10,9 @@
  *   bun run examples/basic/05-regex-patterns.ts
  */
 
+import { mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { shotput } from "../../src/index";
-import { writeFileSync, mkdirSync } from "fs";
-import { join } from "path";
 import { getLogger } from "../../src/logger";
 
 const log = getLogger("05-regex-patterns");
@@ -47,18 +47,18 @@ const templatePath = join(templateDir, "template.md");
 writeFileSync(templatePath, templateContent);
 
 try {
-  const template = await shotput({
-    templateDir,
-    templateFile: "template.md",
-    responseDir: templateDir,
-    allowedBasePaths: [join(import.meta.dir, "..")],
-    debug: true,
-    debugFile: join(templateDir, "template-debug.md"),
-  });
+	const template = await shotput({
+		templateDir,
+		templateFile: "template.md",
+		responseDir: templateDir,
+		allowedBasePaths: [join(import.meta.dir, "..")],
+		debug: true,
+		debugFile: join(templateDir, "template-debug.md"),
+	});
 
-  log.info(template);
+	log.info(template.metadata);
 
-  const complexTemplate = `# Complex Regex Patterns
+	const complexTemplate = `# Complex Regex Patterns
 
   ## Match JSON Files in Data Directory
 
@@ -75,22 +75,21 @@ try {
   Complete!
   `;
 
-  const complexTemplatePath = join(templateDir, "complex-template.md");
-  writeFileSync(complexTemplatePath, complexTemplate);
+	const complexTemplatePath = join(templateDir, "complex-template.md");
+	writeFileSync(complexTemplatePath, complexTemplate);
 
-  const complex = await shotput({
-    templateDir,
-    templateFile: "complex-template.md",
-    responseDir: templateDir,
-    allowedBasePaths: [join(import.meta.dir, "..")],
-    debug: true,
-    debugFile: join(templateDir, "complex-template-debug.md"),
-  });
+	const complex = await shotput({
+		templateDir,
+		templateFile: "complex-template.md",
+		responseDir: templateDir,
+		allowedBasePaths: [join(import.meta.dir, "..")],
+		debug: true,
+		debugFile: join(templateDir, "complex-template-debug.md"),
+	});
 
-  log.info(complex);
+	log.info(complex.metadata);
 } catch (error) {
-  log.error(error);
-
+	log.error(error);
 }
 
 /**

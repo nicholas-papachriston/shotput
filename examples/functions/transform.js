@@ -1,29 +1,24 @@
 /**
  * Sample Transform Function for Shotput
- * 
+ *
  * This function demonstrates how to create custom transformations
  * for Shotput templates. Functions receive the current result,
  * the template path, the match string, and remaining length.
- * 
+ *
  * Use in templates as:
  * {{TemplateType.Function:./functions/transform.js}}
  */
 
-export default async function transform(
-	result,
-	path,
-	match,
-	remainingLength,
-) {
+export default async function transform(result, path, match, remainingLength) {
 	// Example 1: Generate dynamic content based on current date
 	const now = new Date();
 	const timestamp = now.toISOString();
-	const dateFormatted = now.toLocaleDateString('en-US', {
-		year: 'numeric',
-		month: 'long',
-		day: 'numeric'
+	const dateFormatted = now.toLocaleDateString("en-US", {
+		year: "numeric",
+		month: "long",
+		day: "numeric",
 	});
-	
+
 	// Example 2: Generate structured content
 	const content = `
 ---
@@ -42,7 +37,7 @@ Function capabilities:
 - Can read environment variables
 - Can perform complex transformations
 
-Environment: ${process.env.NODE_ENV || 'development'}
+Environment: ${process.env.NODE_ENV || "development"}
 Current working directory: ${process.cwd()}
 
 ---
@@ -50,7 +45,7 @@ Current working directory: ${process.cwd()}
 
 	// Calculate the new remaining length
 	const newRemainingLength = remainingLength - content.length;
-	
+
 	// Return the result with the match replaced by our content
 	return {
 		operationResults: result.replace(match, content),

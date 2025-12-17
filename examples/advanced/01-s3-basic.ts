@@ -19,23 +19,23 @@
  *   bun run examples/advanced/01-s3-basic.ts
  */
 
+import { mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { shotput } from "../../src/index";
-import { writeFileSync, mkdirSync } from "fs";
-import { join } from "path";
 import { getLogger } from "../../src/logger";
 
 const log = getLogger("01-s3-basic");
 const templateDir = join(import.meta.dir, "../output/01-s3-basic");
 mkdirSync(templateDir, { recursive: true });
 
-// Check for required credentials
 if (!process.env["S3_ACCESS_KEY_ID"] || !process.env["S3_SECRET_ACCESS_KEY"]) {
-  log.error("Missing required S3 credentials. Set S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY");
-  log.info("Example: export S3_ACCESS_KEY_ID=your-key");
-  log.info("Example: export S3_SECRET_ACCESS_KEY=your-secret");
+	log.error(
+		"Missing required S3 credentials. Set S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY",
+	);
+	log.info("Example: export S3_ACCESS_KEY_ID=your-key");
+	log.info("Example: export S3_SECRET_ACCESS_KEY=your-secret");
 }
 
-// Example 1: Single S3 file
 const singleFileTemplate = `# S3 File Example
 
 ## Configuration File from S3
@@ -49,23 +49,22 @@ const singleFilePath = join(templateDir, "single-file-template.md");
 writeFileSync(singleFilePath, singleFileTemplate);
 
 try {
-  const result = await shotput({
-    templateDir,
-    templateFile: "single-file-template.md",
-    responseDir: templateDir,
-    s3AccessKeyId: process.env["S3_ACCESS_KEY_ID"],
-    s3SecretAccessKey: process.env["S3_SECRET_ACCESS_KEY"],
-    s3Region: process.env["S3_REGION"] || "us-east-1",
-    debug: true,
-    debugFile: join(templateDir, "single-file-debug.md"),
-  });
+	const result = await shotput({
+		templateDir,
+		templateFile: "single-file-template.md",
+		responseDir: templateDir,
+		s3AccessKeyId: process.env["S3_ACCESS_KEY_ID"],
+		s3SecretAccessKey: process.env["S3_SECRET_ACCESS_KEY"],
+		s3Region: process.env["S3_REGION"] || "us-east-1",
+		debug: true,
+		debugFile: join(templateDir, "single-file-debug.md"),
+	});
 
-  log.info(result);
+	log.info(result.metadata);
 } catch (error) {
-  log.error(error);
+	log.error(error);
 }
 
-// Example 2: S3 Prefix (Directory)
 const prefixTemplate = `# S3 Prefix Example
 
 ## All logs from today
@@ -78,21 +77,21 @@ const prefixPath = join(templateDir, "prefix-template.md");
 writeFileSync(prefixPath, prefixTemplate);
 
 try {
-  const result = await shotput({
-    templateDir,
-    templateFile: "prefix-template.md",
-    responseDir: templateDir,
-    s3AccessKeyId: process.env["S3_ACCESS_KEY_ID"],
-    s3SecretAccessKey: process.env["S3_SECRET_ACCESS_KEY"],
-    s3Region: process.env["S3_REGION"] || "us-east-1",
-    maxBucketFiles: 50, // Limit number of files from prefix
-    debug: true,
-    debugFile: join(templateDir, "prefix-debug.md"),
-  });
+	const result = await shotput({
+		templateDir,
+		templateFile: "prefix-template.md",
+		responseDir: templateDir,
+		s3AccessKeyId: process.env["S3_ACCESS_KEY_ID"],
+		s3SecretAccessKey: process.env["S3_SECRET_ACCESS_KEY"],
+		s3Region: process.env["S3_REGION"] || "us-east-1",
+		maxBucketFiles: 50, // Limit number of files from prefix
+		debug: true,
+		debugFile: join(templateDir, "prefix-debug.md"),
+	});
 
-  log.info(result);
+	log.info(result.metadata);
 } catch (error) {
-  log.error(error);
+	log.error(error);
 }
 
 /**

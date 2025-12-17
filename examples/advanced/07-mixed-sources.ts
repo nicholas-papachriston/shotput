@@ -10,9 +10,9 @@
  *   bun run examples/advanced/07-mixed-sources.ts
  */
 
+import { mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { shotput } from "../../src/index";
-import { writeFileSync, mkdirSync } from "fs";
-import { join } from "path";
 import { getLogger } from "../../src/logger";
 
 const log = getLogger("07-mixed-sources");
@@ -80,7 +80,9 @@ All files from data directory:
 All JSON files (using regex):
 {{data/.*\\.json$}}
 
-${process.env["S3_ACCESS_KEY_ID"] ? `
+${
+	process.env["S3_ACCESS_KEY_ID"]
+		? `
 ---
 
 ## Section 7: S3 Resources
@@ -90,7 +92,9 @@ Configuration from S3:
 
 Logs from S3 prefix:
 {{s3://my-bucket/logs/latest/}}
-` : ''}
+`
+		: ""
+}
 
 ---
 
@@ -102,7 +106,7 @@ This template combined:
 - Directory inclusion
 - Custom functions
 - HTTP resources
-${process.env["S3_ACCESS_KEY_ID"] ? '- S3 files and prefixes' : ''}
+${process.env["S3_ACCESS_KEY_ID"] ? "- S3 files and prefixes" : ""}
 - Regex patterns
 
 All processed in a single run!
@@ -112,43 +116,42 @@ const templatePath = join(templateDir, "template.md");
 writeFileSync(templatePath, mixedTemplate);
 
 try {
-  const config = {
-    templateDir,
-    templateFile: "template.md",
-    responseDir: templateDir,
+	const config = {
+		templateDir,
+		templateFile: "template.md",
+		responseDir: templateDir,
 
-    // Allow local files
-    allowedBasePaths: [dataDir, templateDir, join(import.meta.dir, "..")],
+		// Allow local files
+		allowedBasePaths: [dataDir, templateDir, join(import.meta.dir, "..")],
 
-    // Allow HTTP
-    allowHttp: true,
-    allowedDomains: ["api.github.com"],
-    httpTimeout: 10000,
+		// Allow HTTP
+		allowHttp: true,
+		allowedDomains: ["api.github.com"],
+		httpTimeout: 10000,
 
-    // Allow functions
-    allowFunctions: true,
-    allowedFunctionPaths: [dataDir],
+		// Allow functions
+		allowFunctions: true,
+		allowedFunctionPaths: [dataDir],
 
-    // S3 configuration (if available)
-    s3AccessKeyId: process.env["S3_ACCESS_KEY_ID"],
-    s3SecretAccessKey: process.env["S3_SECRET_ACCESS_KEY"],
-    s3Region: process.env["S3_REGION"] || "us-east-1",
-    maxBucketFiles: 20,
+		// S3 configuration (if available)
+		s3AccessKeyId: process.env["S3_ACCESS_KEY_ID"],
+		s3SecretAccessKey: process.env["S3_SECRET_ACCESS_KEY"],
+		s3Region: process.env["S3_REGION"] || "us-east-1",
+		maxBucketFiles: 20,
 
-    // Output limits
-    maxPromptLength: 500000,
+		// Output limits
+		maxPromptLength: 500000,
 
-    // Debugging
-    debug: true,
-    debugFile: join(templateDir, "mixed-debug.md"),
-  };
+		// Debugging
+		debug: true,
+		debugFile: join(templateDir, "mixed-debug.md"),
+	};
 
-  const result = await shotput(config);
-  
-  log.info(result);
+	const result = await shotput(config);
+
+	log.info(result.metadata);
 } catch (error) {
-  log.error("Failed to process mixed template:", error);
-
+	log.error("Failed to process mixed template:", error);
 }
 
 /**

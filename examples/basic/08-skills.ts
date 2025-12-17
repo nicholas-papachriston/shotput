@@ -11,9 +11,9 @@
  *   bun run examples/basic/08-skills.ts
  */
 
+import { mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { shotput } from "../../src/index";
-import { writeFileSync, mkdirSync } from "fs";
-import { join } from "path";
 import { getLogger } from "../../src/logger";
 
 const log = getLogger("08-skills");
@@ -50,19 +50,19 @@ const templatePath = join(templateDir, "template.md");
 writeFileSync(templatePath, templateContent);
 
 try {
-  const result = await shotput({
-    templateDir,
-    templateFile: "template.md",
-    responseDir: templateDir,
-    allowedBasePaths: [join(import.meta.dir, "..")],
-    skillsDir: join(import.meta.dir, "../skills"),
-    debug: true,
-    debugFile: join(templateDir, "template-debug.md"),
-  });
+	const result = await shotput({
+		templateDir,
+		templateFile: "template.md",
+		responseDir: templateDir,
+		allowedBasePaths: [join(import.meta.dir, "..")],
+		skillsDir: join(import.meta.dir, "../skills"),
+		debug: true,
+		debugFile: join(templateDir, "template-debug.md"),
+	});
 
-  log.info(result);
+	log.info(result.metadata);
 
-  const fullTemplate = `# Complete Skill Documentation
+	const fullTemplate = `# Complete Skill Documentation
 
 ## Main Skill Content
 
@@ -73,22 +73,22 @@ try {
 The :full suffix includes the skill's reference materials.
 `;
 
-  const fullTemplatePath = join(templateDir, "full-template.md");
-  writeFileSync(fullTemplatePath, fullTemplate);
+	const fullTemplatePath = join(templateDir, "full-template.md");
+	writeFileSync(fullTemplatePath, fullTemplate);
 
-  const fullResult = await shotput({
-    templateDir,
-    templateFile: "full-template.md",
-    responseDir: templateDir,
-    allowedBasePaths: [join(import.meta.dir, "..")],
-    skillsDir: join(import.meta.dir, "../skills"),
-    debug: true,
-    debugFile: join(templateDir, "full-template-debug.md"),
-  });
+	const fullResult = await shotput({
+		templateDir,
+		templateFile: "full-template.md",
+		responseDir: templateDir,
+		allowedBasePaths: [join(import.meta.dir, "..")],
+		skillsDir: join(import.meta.dir, "../skills"),
+		debug: true,
+		debugFile: join(templateDir, "full-template-debug.md"),
+	});
 
-  log.info(fullResult.content?.substring(0, 2000));
+	log.info(fullResult.metadata);
 
-  const multiTemplate = `# Multi-Skill Configuration
+	const multiTemplate = `# Multi-Skill Configuration
 
 ## Skill 1: Demo Skill
 
@@ -107,27 +107,27 @@ The :full suffix includes the skill's reference materials.
 Multiple skills can be combined in a single template.
 `;
 
-  const multiTemplatePath = join(templateDir, "multi-template.md");
-  writeFileSync(multiTemplatePath, multiTemplate);
+	const multiTemplatePath = join(templateDir, "multi-template.md");
+	writeFileSync(multiTemplatePath, multiTemplate);
 
-  const multiResult = await shotput({
-    templateDir,
-    templateFile: "multi-template.md",
-    responseDir: templateDir,
-    allowedBasePaths: [join(import.meta.dir, "..")],
-    skillsDir: join(import.meta.dir, "../skills"),
-    debug: true,
-    debugFile: join(templateDir, "multi-template-debug.md"),
-  });
+	const multiResult = await shotput({
+		templateDir,
+		templateFile: "multi-template.md",
+		responseDir: templateDir,
+		allowedBasePaths: [join(import.meta.dir, "..")],
+		skillsDir: join(import.meta.dir, "../skills"),
+		debug: true,
+		debugFile: join(templateDir, "multi-template-debug.md"),
+	});
 
-  log.info(multiResult);
+	log.info(multiResult.metadata);
 } catch (error) {
-  log.error(error);
-  log.error("Possible causes:");
-  log.error("- Skill not found in skillsDir");
-  log.error("- SKILL.md file missing in skill directory");
-  log.error("- Invalid skill syntax in template");
-  log.error("- skillsDir not configured");
+	log.error(error);
+	log.error("Possible causes:");
+	log.error("- Skill not found in skillsDir");
+	log.error("- SKILL.md file missing in skill directory");
+	log.error("- Invalid skill syntax in template");
+	log.error("- skillsDir not configured");
 }
 
 /**

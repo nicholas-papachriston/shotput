@@ -21,9 +21,9 @@
  *   bun run examples/advanced/02-s3-directory-buckets.ts
  */
 
+import { mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { shotput } from "../../src/index";
-import { writeFileSync, mkdirSync } from "fs";
-import { join } from "path";
 import { getLogger } from "../../src/logger";
 
 const log = getLogger("02-s3-directory-buckets");
@@ -31,8 +31,7 @@ const templateDir = join(import.meta.dir, "../output/02-s3-directory-buckets");
 mkdirSync(templateDir, { recursive: true });
 
 if (!process.env["S3_ACCESS_KEY_ID"] || !process.env["S3_SECRET_ACCESS_KEY"]) {
-  log.error("Missing S3 credentials");
-
+	log.error("Missing S3 credentials");
 }
 
 const directoryBucketTemplate = `# Directory Bucket Example
@@ -51,21 +50,20 @@ const templatePath = join(templateDir, "template.md");
 writeFileSync(templatePath, directoryBucketTemplate);
 
 try {
-  const result = await shotput({
-    templateDir,
-    templateFile: "template.md",
-    responseDir: templateDir,
-    s3AccessKeyId: process.env["S3_ACCESS_KEY_ID"],
-    s3SecretAccessKey: process.env["S3_SECRET_ACCESS_KEY"],
-    s3Region: process.env["S3_REGION"] || "us-east-1",
-    debug: true,
-    debugFile: join(templateDir, "template-debug.md"),
-  });
+	const result = await shotput({
+		templateDir,
+		templateFile: "template.md",
+		responseDir: templateDir,
+		s3AccessKeyId: process.env["S3_ACCESS_KEY_ID"],
+		s3SecretAccessKey: process.env["S3_SECRET_ACCESS_KEY"],
+		s3Region: process.env["S3_REGION"] || "us-east-1",
+		debug: true,
+		debugFile: join(templateDir, "template-debug.md"),
+	});
 
-  log.info(result);
+	log.info(result.metadata);
 } catch (error) {
-  log.error(error);
-
+	log.error(error);
 }
 
 /**

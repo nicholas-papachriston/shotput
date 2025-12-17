@@ -6,6 +6,7 @@ import { handleFunction } from "./function";
 import { handleGlob } from "./glob";
 import { handleHttp } from "./http";
 import { getLogger } from "./logger";
+import { ParallelProcessor } from "./parallelProcessor";
 import { handleS3 } from "./s3";
 import { handleSkill } from "./skill";
 import { findTemplateType } from "./template";
@@ -48,6 +49,29 @@ export const interpolation = async (
 	const matches = content.match(pattern);
 	if (!matches) return { processedTemplate: content };
 
+	// Use parallel processing if enabled and content length planning is on
+	if (CONFIG.enableContentLengthPlanning && CONFIG.maxConcurrency > 1) {
+		log.info("Using parallel processing with content length planning");
+		const processor = new ParallelProcessor(CONFIG.maxConcurrency);
+		const { content: processedContent, metadata } =
+			await processor.processTemplatesWithPlanning(
+				content,
+				basePath,
+				CONFIG.maxPromptLength,
+			);
+
+		return {
+			processedTemplate: processedContent.trim(),
+			resultMetadata: metadata.map((m) => ({
+				path: m.path,
+				type: m.type,
+				duration: m.processingTime,
+			})),
+		};
+	}
+
+	// Fall back to sequential processing
+	log.info("Using sequential processing");
 	const resultMetadata = [];
 	let remainingLength = CONFIG.maxPromptLength;
 	let result = content;

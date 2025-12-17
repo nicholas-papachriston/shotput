@@ -17,9 +17,9 @@
  *   bun run examples/advanced/05-security.ts
  */
 
+import { mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { shotput } from "../../src/index";
-import { writeFileSync, mkdirSync } from "fs";
-import { join } from "path";
 import { getLogger } from "../../src/logger";
 
 const log = getLogger("05-security");
@@ -43,19 +43,19 @@ const safeTemplatePath = join(templateDir, "safe-template.md");
 writeFileSync(safeTemplatePath, safeTemplate);
 
 try {
-  const result = await shotput({
-    templateDir,
-    templateFile: "safe-template.md",
-    responseDir: templateDir,
-    // Only allow access to the data directory
-    allowedBasePaths: [dataDir],
-    debug: true,
-    debugFile: join(templateDir, "safe-debug.md"),
-  });
+	const result = await shotput({
+		templateDir,
+		templateFile: "safe-template.md",
+		responseDir: templateDir,
+		// Only allow access to the data directory
+		allowedBasePaths: [dataDir],
+		debug: true,
+		debugFile: join(templateDir, "safe-debug.md"),
+	});
 
-  log.info(result);
+	log.info(result.metadata);
 } catch (error) {
-  log.error(error);
+	log.error(error);
 }
 
 const httpTemplate = `# HTTP Access Control
@@ -74,21 +74,21 @@ const httpTemplatePath = join(templateDir, "http-template.md");
 writeFileSync(httpTemplatePath, httpTemplate);
 
 try {
-  const result = await shotput({
-    templateDir,
-    templateFile: "http-template.md",
-    responseDir: templateDir,
-    allowHttp: true,
-    // Only allow specific domains
-    allowedDomains: ["api.github.com", "api.example.com"],
-    httpTimeout: 5000,
-    debug: true,
-    debugFile: join(templateDir, "http-debug.md"),
-  });
+	const result = await shotput({
+		templateDir,
+		templateFile: "http-template.md",
+		responseDir: templateDir,
+		allowHttp: true,
+		// Only allow specific domains
+		allowedDomains: ["api.github.com", "api.example.com"],
+		httpTimeout: 5000,
+		debug: true,
+		debugFile: join(templateDir, "http-debug.md"),
+	});
 
-  log.info(result);
+	log.info(result.metadata);
 } catch (error) {
-  log.error("HTTP validation failed:", error);
+	log.error("HTTP validation failed:", error);
 }
 
 // Create a sample function
@@ -118,21 +118,21 @@ const functionTemplatePath = join(templateDir, "function-template.md");
 writeFileSync(functionTemplatePath, functionTemplate);
 
 try {
-  const result = await shotput({
-    templateDir,
-    templateFile: "function-template.md",
-    responseDir: templateDir,
-    allowFunctions: true,
-    // Only allow functions from data directory
-    allowedFunctionPaths: [dataDir],
-    allowedBasePaths: [dataDir, templateDir],
-    debug: true,
-    debugFile: join(templateDir, "function-debug.md"),
-  });
+	const result = await shotput({
+		templateDir,
+		templateFile: "function-template.md",
+		responseDir: templateDir,
+		allowFunctions: true,
+		// Only allow functions from data directory
+		allowedFunctionPaths: [dataDir],
+		allowedBasePaths: [dataDir, templateDir],
+		debug: true,
+		debugFile: join(templateDir, "function-debug.md"),
+	});
 
-  log.info(result);
+	log.info(result.metadata);
 } catch (error) {
-  log.error("Function validation failed:", error);
+	log.error("Function validation failed:", error);
 }
 
 const skillsTemplate = `# Skills Security
@@ -151,22 +151,22 @@ const skillsTemplatePath = join(templateDir, "skills-template.md");
 writeFileSync(skillsTemplatePath, skillsTemplate);
 
 try {
-  const content = await shotput({
-    templateDir,
-    templateFile: "skills-template.md",
-    responseDir: templateDir,
-    skillsDir: join(import.meta.dir, "../skills"),
-    allowRemoteSkills: true,
-    // Only allow skills from trusted organizations
-    allowedSkillSources: ["anthropics/skills", "myorg/skills"],
-    allowedBasePaths: [dataDir, templateDir, join(import.meta.dir, "..")],
-    debug: true,
-    debugFile: join(templateDir, "skills-debug.md"),
-  });
+	const content = await shotput({
+		templateDir,
+		templateFile: "skills-template.md",
+		responseDir: templateDir,
+		skillsDir: join(import.meta.dir, "../skills"),
+		allowRemoteSkills: true,
+		// Only allow skills from trusted organizations
+		allowedSkillSources: ["anthropics/skills", "myorg/skills"],
+		allowedBasePaths: [dataDir, templateDir, join(import.meta.dir, "..")],
+		debug: true,
+		debugFile: join(templateDir, "skills-debug.md"),
+	});
 
-  log.info(content);
+	log.info(content.metadata);
 } catch (error) {
-  log.error("Skills validation:", error);
+	log.error("Skills validation:", error);
 }
 
 /**

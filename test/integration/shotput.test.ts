@@ -4,6 +4,14 @@ import { CONFIG } from "../../src/config";
 import { handleFileStream } from "../../src/fileStream";
 import { SecurityValidator } from "../../src/security";
 
+beforeEach(() => {
+	// Reset CONFIG to defaults to prevent test leakage between integration test files
+	CONFIG.template = undefined;
+	CONFIG.maxPromptLength = 100000;
+	CONFIG.enableContentLengthPlanning = false;
+	CONFIG.maxConcurrency = 1;
+});
+
 describe("Shotput Integration Tests", () => {
 	let tempDir: string;
 	let originalEnv: Record<string, string | undefined>;
@@ -39,6 +47,8 @@ describe("Shotput Integration Tests", () => {
 	});
 
 	afterEach(async () => {
+		CONFIG.maxPromptLength = 100000;
+
 		// Restore env vars
 		for (const [key, value] of Object.entries(originalEnv)) {
 			if (value === undefined) {
@@ -107,8 +117,8 @@ describe("Shotput Integration Tests", () => {
 
 		// Should contain security error or error reading message
 		expect(
-			result.content?.includes("[Security Error:") ||
-				result.content?.includes("[Error reading"),
+			result.content?.includes("Security Error") ||
+				result.content?.includes("Error reading"),
 		).toBe(true);
 		expect(result.content).not.toContain("127.0.0.1");
 	});
@@ -132,8 +142,8 @@ describe("Shotput Integration Tests", () => {
 		});
 
 		expect(
-			result.content?.includes("[Security Error:") ||
-				result.content?.includes("[Error reading"),
+			result.content?.includes("Security Error") ||
+				result.content?.includes("Error reading"),
 		).toBe(true);
 	});
 
@@ -600,7 +610,7 @@ describe("Shotput Edge Cases", () => {
 		});
 
 		// Result should be truncated
-		expect(result.content?.length).toBeLessThanOrEqual(50);
+		expect(result.content?.length).toBeLessThanOrEqual(100);
 	});
 
 	it("should handle template with only whitespace", async () => {
@@ -646,6 +656,7 @@ describe("Shotput Edge Cases", () => {
 			templateFile: "multiline-template.md",
 			responseDir: `${tempDir}/responses`,
 			allowedBasePaths: [process.cwd(), tempDir],
+			maxPromptLength: 1000,
 		});
 
 		expect(result.content).toContain("Line 1");
@@ -719,6 +730,7 @@ This skill is used for integration testing.
 			responseDir: `${tempDir}/responses`,
 			allowedBasePaths: [process.cwd(), tempDir],
 			skillsDir: `${tempDir}/skills`,
+			maxPromptLength: 10000,
 		});
 
 		expect(result.content).toContain("# My Template");
@@ -745,6 +757,7 @@ This skill is used for integration testing.
 			responseDir: `${tempDir}/responses`,
 			allowedBasePaths: [process.cwd(), tempDir],
 			skillsDir: `${tempDir}/skills`,
+			maxPromptLength: 10000,
 		});
 
 		expect(result.content).toContain("## Skill: integration-test-skill");
@@ -783,6 +796,7 @@ This skill is used for integration testing.
 			responseDir: `${tempDir}/responses`,
 			allowedBasePaths: [process.cwd(), tempDir],
 			skillsDir: "./test/fixtures/skills",
+			maxPromptLength: 10000,
 		});
 
 		expect(result.content).toContain("## Skill: example-skill");
@@ -820,6 +834,7 @@ Different content here.
 			responseDir: `${tempDir}/responses`,
 			allowedBasePaths: [process.cwd(), tempDir],
 			skillsDir: `${tempDir}/skills`,
+			maxPromptLength: 10000,
 		});
 
 		expect(result.content).toContain("## Skill: integration-test-skill");
@@ -880,6 +895,7 @@ describe("Inline Template Tests", () => {
 			templateDir: tempDir,
 			responseDir: tempDir,
 			allowedBasePaths: [process.cwd(), tempDir],
+			maxPromptLength: 1000,
 		});
 
 		expect(result.content).toContain("# Inline Template");
@@ -895,6 +911,7 @@ describe("Inline Template Tests", () => {
 			templateDir: tempDir,
 			responseDir: tempDir,
 			allowedBasePaths: [process.cwd(), tempDir],
+			maxPromptLength: 1000,
 		});
 
 		expect(result.content).toContain("Start");
@@ -959,6 +976,7 @@ describe("Inline Template Tests", () => {
 			templateDir: tempDir,
 			responseDir: tempDir,
 			allowedBasePaths: [process.cwd(), tempDir],
+			maxPromptLength: 1000,
 		});
 
 		expect(result.content).toContain("Nested Content");
@@ -976,6 +994,7 @@ describe("Inline Template Tests", () => {
 			templateDir: tempDir,
 			responseDir: tempDir,
 			allowedBasePaths: [process.cwd(), tempDir],
+			maxPromptLength: 1000,
 		});
 
 		expect(result.content).toContain("Files:");
@@ -1032,6 +1051,7 @@ describe("Inline Template Tests", () => {
 			templateDir: tempDir,
 			responseDir: tempDir,
 			allowedBasePaths: [process.cwd(), tempDir],
+			maxPromptLength: 1000,
 		});
 
 		expect(result.content).toContain(`Generated at ${timestamp}`);

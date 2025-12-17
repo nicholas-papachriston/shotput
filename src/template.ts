@@ -1,13 +1,10 @@
 import { stat } from "node:fs/promises";
 import { FUNCTION_TEMPLATE } from "./function";
-import { getLogger } from "./logger";
 import { SKILL_TEMPLATE } from "./skill";
 import { TemplateType } from "./types";
 
-const log = getLogger("template");
-
 const regexIndicators = [
-	/\/.+\//, // Pattern enclosed in forward slashes
+	/^\/.+\/[gimyus]*$/, // Pattern enclosed in forward slashes
 	/[\^\$\(\)\+\{\}]/, // Common regex special characters
 ];
 
@@ -23,7 +20,7 @@ export const findTemplateType = async (path: string): Promise<TemplateType> => {
 				return TemplateType.Directory;
 			}
 		} catch {
-			log.info("Path is not a file or directory");
+			// Ignore stat errors
 		}
 
 		if (path.startsWith(SKILL_TEMPLATE)) {
@@ -50,9 +47,13 @@ export const findTemplateType = async (path: string): Promise<TemplateType> => {
 			return TemplateType.Regex;
 		}
 
+		// Fallback for paths that don't exist yet but look like paths
+		if (path.includes("/") || path.includes("\\") || path.startsWith(".")) {
+			return TemplateType.File;
+		}
+
 		return TemplateType.String;
 	} catch (error) {
-		log.info(JSON.stringify(error));
 		return TemplateType.String;
 	}
 };

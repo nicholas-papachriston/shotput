@@ -11,9 +11,9 @@
  *   bun run examples/basic/03-directory.ts
  */
 
+import { mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { shotput } from "../../src/index";
-import { writeFileSync, mkdirSync } from "fs";
-import { join } from "path";
 import { getLogger } from "../../src/logger";
 
 const log = getLogger("03-directory");
@@ -38,40 +38,39 @@ const templatePath = join(templateDir, "template.md");
 writeFileSync(templatePath, templateContent);
 
 try {
-  const instance = await shotput({
-    templateDir,
-    templateFile: "template.md",
-    responseDir: templateDir,
-    allowedBasePaths: [join(import.meta.dir, "..")],
-    debug: true,
-    debugFile: join(templateDir, "template-debug.md"),
-  });
+	const instance = await shotput({
+		templateDir,
+		templateFile: "template.md",
+		responseDir: templateDir,
+		allowedBasePaths: [join(import.meta.dir, "..")],
+		debug: true,
+		debugFile: join(templateDir, "template-debug.md"),
+	});
 
-  log.info(instance);
+	log.info(instance.metadata);
 
-  const logsTemplate = `# Application Logs
+	const logsTemplate = `# Application Logs
 
 {{../data/logs/}}
 
 End of logs.
 `;
 
-  const logsTemplatePath = join(templateDir, "logs-template.md");
-  writeFileSync(logsTemplatePath, logsTemplate);
+	const logsTemplatePath = join(templateDir, "logs-template.md");
+	writeFileSync(logsTemplatePath, logsTemplate);
 
-  const logs = await shotput({
-    templateDir,
-    templateFile: "logs-template.md",
-    responseDir: templateDir,
-    allowedBasePaths: [join(import.meta.dir, "..")],
-    debug: true,
-    debugFile: join(templateDir, "logs-template-debug.md"),
-  });
+	const logs = await shotput({
+		templateDir,
+		templateFile: "logs-template.md",
+		responseDir: templateDir,
+		allowedBasePaths: [join(import.meta.dir, "..")],
+		debug: true,
+		debugFile: join(templateDir, "logs-template-debug.md"),
+	});
 
-  log.info(logs);
+	log.info(logs.metadata);
 } catch (error) {
-  log.error(error);
-
+	log.error(error);
 }
 
 /**

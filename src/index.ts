@@ -11,7 +11,7 @@ export interface ShotputOutput {
 	content?: string;
 	error?: Error;
 	metadata: {
-		time: number;
+		duration: number;
 		resultMetadata?: Array<{ path: string; type: string; duration: number }>;
 	};
 }
@@ -19,14 +19,8 @@ export interface ShotputOutput {
 const run = async (): Promise<ShotputOutput> => {
 	const startTime = Date.now();
 	try {
-		// Initialize security configuration
-		securityValidator.configure({
-			allowedBasePaths: CONFIG.allowedBasePaths,
-			allowedDomains: CONFIG.allowedDomains,
-			allowHttp: CONFIG.allowHttp,
-			allowFunctions: CONFIG.allowFunctions,
-			allowedFunctionPaths: CONFIG.allowedFunctionPaths,
-		});
+		// Initialize security configuration using current CONFIG
+		securityValidator.configure(CONFIG);
 
 		await ensureDirectoryExists(CONFIG.responseDir, CONFIG.templateDir);
 
@@ -44,20 +38,23 @@ const run = async (): Promise<ShotputOutput> => {
 			CONFIG.templateDir,
 		);
 
+		const duration = Date.now() - startTime;
+		const resultObject = {
+			content: processedTemplate,
+			metadata: { duration, resultMetadata },
+		};
+
 		if (CONFIG.debug) {
 			await Bun.write(CONFIG.debugFile, processedTemplate);
 			log.info(`Debug output written to ${CONFIG.debugFile}`);
 		}
 
-		return {
-			content: processedTemplate,
-			metadata: { time: Date.now() - startTime, resultMetadata },
-		};
+		return resultObject;
 	} catch (error) {
 		log.error(`Failed to process template: ${error}`);
 		return {
 			error: error as Error,
-			metadata: { time: Date.now() - startTime, resultMetadata: [] },
+			metadata: { duration: Date.now() - startTime, resultMetadata: [] },
 		};
 	}
 };
@@ -90,36 +87,16 @@ const run = async (): Promise<ShotputOutput> => {
 export function shotput(
 	config?: Partial<typeof CONFIG>,
 ): Promise<ShotputOutput> {
+	// Reset per-call template content to prevent state leakage between runs
+	CONFIG.template = undefined;
+
 	if (config) {
-		// Only allow specific configuration properties for security
-		Object.assign(CONFIG, {
-			debug: config.debug,
-			debugFile: config.debugFile,
-			template: config.template,
-			templateDir: config.templateDir,
-			templateFile: config.templateFile,
-			responseDir: config.responseDir,
-			maxPromptLength: config.maxPromptLength,
-			maxBucketFiles: config.maxBucketFiles,
-			awsS3Url: config.awsS3Url,
-			cloudflareR2Url: config.cloudflareR2Url,
-			httpTimeout: config.httpTimeout,
-			maxConcurrency: config.maxConcurrency,
-			allowedBasePaths: config.allowedBasePaths,
-			allowedDomains: config.allowedDomains,
-			allowHttp: config.allowHttp,
-			allowFunctions: config.allowFunctions,
-			allowedFunctionPaths: config.allowedFunctionPaths,
-			skillsDir: config.skillsDir,
-			allowRemoteSkills: config.allowRemoteSkills,
-			allowedSkillSources: config.allowedSkillSources,
-			s3AccessKeyId: config.s3AccessKeyId,
-			s3SecretAccessKey: config.s3SecretAccessKey,
-			s3SessionToken: config.s3SessionToken,
-			s3Region: config.s3Region,
-			s3Bucket: config.s3Bucket,
-			s3VirtualHostedStyle: config.s3VirtualHostedStyle,
-		});
+		// Update global CONFIG with provided values, ignoring undefined ones
+		for (const [key, value] of Object.entries(config)) {
+			if (value !== undefined) {
+				(CONFIG as Record<string, unknown>)[key] = value;
+			}
+		}
 	}
 
 	return run();

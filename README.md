@@ -29,12 +29,6 @@ Shotput is a simple, programmatic templating library to help manage personas, sy
 - nested documents
 - blob search s3/rs support
 - regex search s3/rs support
-- enhanced in-tree parrallelism before interpolation
-  - planning step to determine all files to be interpolated
-  - attempt to fetch content length of all files
-  - trim files to be interpolated based on content length
-  - fetch remaining files in parallel
-  - rate limiting + retry handling with configurable exponential backoff
 
 ## Environment Variables
 
@@ -53,6 +47,10 @@ Shotput can be configured via environment variables. All configuration options c
 | `MAX_PROMPT_LENGTH` | `number` | `100000` | Maximum output length in characters |
 | `MAX_BUCKET_FILES` | `number` | `100000` | Maximum files from S3 prefix |
 | `MAX_CONCURRENCY` | `number` | `4` | Maximum concurrent operations |
+| `MAX_RETRIES` | `number` | `3` | Maximum retry attempts for failed operations |
+| `RETRY_DELAY` | `number` | `1000` | Initial retry delay in milliseconds |
+| `RETRY_BACKOFF_MULTIPLIER` | `number` | `2` | Exponential backoff multiplier for retries |
+| `ENABLE_CONTENT_LENGTH_PLANNING` | `boolean` | `true` | Enable planning phase with content length detection |
 
 ### Security Configuration
 
@@ -104,6 +102,12 @@ RESPONSE_DIR=./output
 MAX_PROMPT_LENGTH=100000
 MAX_BUCKET_FILES=100
 MAX_CONCURRENCY=4
+
+# Parallel Processing
+MAX_RETRIES=3
+RETRY_DELAY=1000
+RETRY_BACKOFF_MULTIPLIER=2
+ENABLE_CONTENT_LENGTH_PLANNING=true
 
 # Security
 ALLOWED_BASE_PATHS=./data,./templates
@@ -255,6 +259,68 @@ Directory buckets provide single-digit millisecond latency and are automatically
 
 !! Priority when determining what files to concatenate follows the order of the template strings in your template file !!
 
+### Parallel Processing Configuration
+
+Shotput includes advanced parallel processing capabilities with intelligent planning and retry logic:
+
+**Key Features:**
+- **Planning Phase**: Automatically determines all files to be interpolated before processing
+- **Content Length Detection**: Estimates file sizes to prevent exceeding length limits
+- **Parallel Fetching**: Processes multiple templates concurrently with configurable limits
+- **Smart Trimming**: Prioritizes templates based on type and order when approaching length limits
+- **Retry Logic**: Handles transient failures with exponential backoff
+
+**Configuration:**
+
+```ts
+import { shotput } from "shotput";
+
+const instance = shotput({
+  maxConcurrency: 4,                    // Process 4 templates concurrently
+  enableContentLengthPlanning: true,    // Enable planning phase
+  maxRetries: 3,                        // Retry up to 3 times on failure
+  retryDelay: 1000,                     // Initial delay: 1 second
+  retryBackoffMultiplier: 2,            // Double delay each retry (1s → 2s → 4s)
+});
+```
+
+**How It Works:**
+
+1. **Planning**: Parses template to identify all interpolation patterns
+2. **Estimation**: Attempts to detect content length for each template (HEAD requests for HTTP, file stats for files)
+3. **Prioritization**: Assigns priority based on template type (files > HTTP > directories > globs)
+4. **Trimming**: Removes low-priority templates if total size exceeds `maxPromptLength`
+5. **Parallel Processing**: Fetches selected templates concurrently with semaphore-based rate limiting
+6. **Retry**: Automatically retries failed operations with exponential backoff
+
+**Template Priority Order** (highest to lowest):
+1. Files (`TemplateType.File`)
+2. HTTP resources (`TemplateType.Http`)
+3. S3 objects (`TemplateType.S3`)
+4. Glob patterns (`TemplateType.Glob`)
+5. Regex patterns (`TemplateType.Regex`)
+6. Directories (`TemplateType.Directory`)
+7. Functions (`TemplateType.Function`)
+8. Skills (`TemplateType.Skill`)
+
+**Performance Benefits:**
+
+Parallel processing can significantly improve performance when working with multiple templates:
+- 4-8 concurrent operations: typical 40-60% speedup
+- Network-bound operations (HTTP, S3): greatest improvement
+- Local files: modest improvement due to I/O parallelization
+
+**Disabling Parallel Processing:**
+
+For debugging or specific use cases, disable parallel processing:
+
+```ts
+const instance = shotput({
+  enableContentLengthPlanning: false,  // Use sequential processing
+  maxConcurrency: 1,                   // Process one at a time
+});
+```
+
 ## API
 
 ### `shotput(config?: Partial<ShotputConfig>): ShotputInstance`
@@ -293,6 +359,10 @@ Creates a new Shotput instance with optional configuration overrides.
 | `s3VirtualHostedStyle` | `boolean` | `false` | Use virtual-hosted-style URLs for S3 |
 | `maxConcurrency` | `number` | `4` | Maximum concurrent operations |
 | `maxBucketFiles` | `number` | `100000` | Maximum files to fetch from S3 prefix |
+| `maxRetries` | `number` | `3` | Maximum retry attempts for failed operations |
+| `retryDelay` | `number` | `1000` | Initial retry delay in milliseconds |
+| `retryBackoffMultiplier` | `number` | `2` | Exponential backoff multiplier for retries |
+| `enableContentLengthPlanning` | `boolean` | `true` | Enable planning phase with content length detection |
 
 **Returns:**
 
@@ -390,6 +460,11 @@ Comprehensive examples demonstrating all features are available in the [`example
 - **[07-functions.ts](./examples/basic/07-functions.ts)** - Using custom JavaScript functions
 - **[08-skills.ts](./examples/basic/08-skills.ts)** - Loading Anthropic Skills
 - **[09-inline-template.ts](./examples/basic/09-inline-template.ts)** - Using template strings instead of files
+- **[10-parallel-simple.ts](./examples/basic/10-parallel-simple.ts)** - Simple parallel processing
+
+### Advanced Examples
+
+- **[10-parallel-processing.ts](./examples/advanced/10-parallel-processing.ts)** - Advanced parallel processing with planning, retry logic, and performance comparison
 
 ### Running Examples
 

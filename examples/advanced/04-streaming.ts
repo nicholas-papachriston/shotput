@@ -16,9 +16,9 @@
  *   bun run examples/advanced/04-streaming.ts
  */
 
+import { mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { shotput } from "../../src/index";
-import { writeFileSync, mkdirSync } from "fs";
-import { join } from "path";
 import { getLogger } from "../../src/logger";
 
 const log = getLogger("04-streaming");
@@ -42,26 +42,24 @@ const templatePath = join(templateDir, "template.md");
 writeFileSync(templatePath, streamingTemplate);
 
 try {
-  const result = await shotput({
-    templateDir,
-    templateFile: "template.md",
-    responseDir: templateDir,
-    maxPromptLength: 500000, // 500KB limit
-    allowedBasePaths: [join(import.meta.dir, "..")],
-    debug: true,
-    debugFile: join(templateDir, "streaming-debug.md"),
-  });
+	const result = await shotput({
+		templateDir,
+		templateFile: "template.md",
+		responseDir: templateDir,
+		maxPromptLength: 500000, // 500KB limit
+		allowedBasePaths: [join(import.meta.dir, "..")],
+		debug: true,
+		debugFile: join(templateDir, "streaming-debug.md"),
+	});
 
-  log.info(result.content);
-
+	log.info(result.metadata);
 } catch (error) {
-  log.error(error);
-
+	log.error(error);
 }
 
 // Example 2: Streaming from S3
 if (process.env["S3_ACCESS_KEY_ID"] && process.env["S3_SECRET_ACCESS_KEY"]) {
-  const s3StreamingTemplate = `# S3 Streaming
+	const s3StreamingTemplate = `# S3 Streaming
 
 ## Large S3 File (will be streamed)
 {{s3://my-bucket/large-data/export.json}}
@@ -70,27 +68,27 @@ if (process.env["S3_ACCESS_KEY_ID"] && process.env["S3_SECRET_ACCESS_KEY"]) {
 {{s3://my-bucket/config.json}}
 `;
 
-  const s3TemplatePath = join(templateDir, "s3-streaming-template.md");
-  writeFileSync(s3TemplatePath, s3StreamingTemplate);
+	const s3TemplatePath = join(templateDir, "s3-streaming-template.md");
+	writeFileSync(s3TemplatePath, s3StreamingTemplate);
 
-  try {
-    const result = await shotput({
-      templateDir,
-      templateFile: "s3-streaming-template.md",
-      responseDir: templateDir,
-      s3AccessKeyId: process.env["S3_ACCESS_KEY_ID"],
-      s3SecretAccessKey: process.env["S3_SECRET_ACCESS_KEY"],
-      s3Region: process.env["S3_REGION"] || "us-east-1",
-      maxPromptLength: 1000000, // 1MB limit
-      debug: true,
-      debugFile: join(templateDir, "s3-streaming-debug.md"),
-    });
-    log.info(result);
-  } catch (error) {
-    log.error(error);
-  }
+	try {
+		const result = await shotput({
+			templateDir,
+			templateFile: "s3-streaming-template.md",
+			responseDir: templateDir,
+			s3AccessKeyId: process.env["S3_ACCESS_KEY_ID"],
+			s3SecretAccessKey: process.env["S3_SECRET_ACCESS_KEY"],
+			s3Region: process.env["S3_REGION"] || "us-east-1",
+			maxPromptLength: 1000000, // 1MB limit
+			debug: true,
+			debugFile: join(templateDir, "s3-streaming-debug.md"),
+		});
+		log.info(result.metadata);
+	} catch (error) {
+		log.error(error);
+	}
 } else {
-  log.info("\n=== Example 2: Skipped (no S3 credentials) ===");
+	log.info("\n=== Example 2: Skipped (no S3 credentials) ===");
 }
 
 // Example 3: Understanding truncation
@@ -103,19 +101,19 @@ const truncationPath = join(templateDir, "truncation-template.md");
 writeFileSync(truncationPath, truncationTemplate);
 
 try {
-  const result = await shotput({
-    templateDir,
-    templateFile: "truncation-template.md",
-    responseDir: templateDir,
-    maxPromptLength: 10000, // Very small limit to demonstrate truncation
-    allowedBasePaths: [join(import.meta.dir, "..")],
-    debug: true,
-    debugFile: join(templateDir, "truncation-debug.md"),
-  });
+	const result = await shotput({
+		templateDir,
+		templateFile: "truncation-template.md",
+		responseDir: templateDir,
+		maxPromptLength: 10000, // Very small limit to demonstrate truncation
+		allowedBasePaths: [join(import.meta.dir, "..")],
+		debug: true,
+		debugFile: join(templateDir, "truncation-debug.md"),
+	});
 
-  log.info(result);
+	log.info(result.metadata);
 } catch (error) {
-  log.error(error);
+	log.error(error);
 }
 
 /**

@@ -13,9 +13,9 @@
  *   bun run examples/basic/06-http.ts
  */
 
+import { mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { shotput } from "../../src/index";
-import { writeFileSync, mkdirSync } from "fs";
-import { join } from "path";
 import { getLogger } from "../../src/logger";
 
 const log = getLogger("06-http");
@@ -45,19 +45,19 @@ const templatePath = join(templateDir, "template.md");
 writeFileSync(templatePath, templateContent);
 
 try {
-  const result = await shotput({
-    templateDir,
-    templateFile: "template.md",
-    responseDir: templateDir,
-    allowedBasePaths: [join(import.meta.dir, "..")],
-    allowHttp: true, // IMPORTANT: Must enable HTTP fetching
-    debug: true,
-    debugFile: join(templateDir, "template-debug.md"),
-  });
+	const result = await shotput({
+		templateDir,
+		templateFile: "template.md",
+		responseDir: templateDir,
+		allowedBasePaths: [join(import.meta.dir, "..")],
+		allowHttp: true, // IMPORTANT: Must enable HTTP fetching
+		debug: true,
+		debugFile: join(templateDir, "template-debug.md"),
+	});
 
-  log.info(result);
+	log.info(result.metadata);
 
-  const apiTemplate = `# API Data Example
+	const apiTemplate = `# API Data Example
 
 ## User Data from API
 
@@ -76,28 +76,27 @@ try {
 API responses are included directly in the template.
 `;
 
-  const apiTemplatePath = join(templateDir, "api-template.md");
-  writeFileSync(apiTemplatePath, apiTemplate);
+	const apiTemplatePath = join(templateDir, "api-template.md");
+	writeFileSync(apiTemplatePath, apiTemplate);
 
-  const apiResult = await shotput({
-    templateDir,
-    templateFile: "api-template.md",
-    responseDir: templateDir,
-    allowedBasePaths: [join(import.meta.dir, "..")],
-    allowHttp: true,
-    debug: true,
-    debugFile: join(templateDir, "api-template-debug.md"),
-  });
+	const apiResult = await shotput({
+		templateDir,
+		templateFile: "api-template.md",
+		responseDir: templateDir,
+		allowedBasePaths: [join(import.meta.dir, "..")],
+		allowHttp: true,
+		debug: true,
+		debugFile: join(templateDir, "api-template-debug.md"),
+	});
 
-  log.info(apiResult);
+	log.info(apiResult.metadata);
 } catch (error) {
-  log.error(error);
-  log.error("Possible causes:");
-  log.error("- Network connectivity issues");
-  log.error("- URL is not accessible");
-  log.error("- allowHttp is not set to true");
-  log.error("- Remote server timeout");
-
+	log.error(error);
+	log.error("Possible causes:");
+	log.error("- Network connectivity issues");
+	log.error("- URL is not accessible");
+	log.error("- allowHttp is not set to true");
+	log.error("- Remote server timeout");
 }
 
 /**

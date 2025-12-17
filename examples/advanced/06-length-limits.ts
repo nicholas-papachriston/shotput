@@ -16,9 +16,9 @@
  *   bun run examples/advanced/06-length-limits.ts
  */
 
+import { mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { shotput } from "../../src/index";
-import { writeFileSync, mkdirSync } from "fs";
-import { join } from "path";
 import { getLogger } from "../../src/logger";
 
 const log = getLogger("06-length-limits");
@@ -52,19 +52,19 @@ const lengthTemplatePath = join(templateDir, "length-template.md");
 writeFileSync(lengthTemplatePath, lengthTemplate);
 
 try {
-  const result = await shotput({
-    templateDir,
-    templateFile: "length-template.md",
-    responseDir: templateDir,
-    maxPromptLength: 5000, // Only allow 5KB total
-    allowedBasePaths: [templateDir, join(import.meta.dir, "..")],
-    debug: true,
-    debugFile: join(templateDir, "length-debug.md"),
-  });
+	const result = await shotput({
+		templateDir,
+		templateFile: "length-template.md",
+		responseDir: templateDir,
+		maxPromptLength: 5000, // Only allow 5KB total
+		allowedBasePaths: [templateDir, join(import.meta.dir, "..")],
+		debug: true,
+		debugFile: join(templateDir, "length-debug.md"),
+	});
 
-  log.info(result);
+	log.info(result.metadata);
 } catch (error) {
-  log.error("Failed:", error);
+	log.error("Failed:", error);
 }
 
 const priorityTemplate = `# Priority Matters
@@ -86,21 +86,21 @@ const priorityTemplatePath = join(templateDir, "priority-template.md");
 writeFileSync(priorityTemplatePath, priorityTemplate);
 
 try {
-  const result = await shotput({
-    templateDir,
-    templateFile: "priority-template.md",
-    responseDir: templateDir,
-    maxPromptLength: 1000,
-    allowedBasePaths: [templateDir, join(import.meta.dir, "..")],
-  });
+	const result = await shotput({
+		templateDir,
+		templateFile: "priority-template.md",
+		responseDir: templateDir,
+		maxPromptLength: 1000,
+		allowedBasePaths: [templateDir, join(import.meta.dir, "..")],
+	});
 
-  log.info(result);
+	log.info(result.metadata);
 } catch (error) {
-  log.error("Failed:", error);
+	log.error("Failed:", error);
 }
 
 if (process.env["S3_ACCESS_KEY_ID"]) {
-  const s3Template = `# S3 Bucket Limits
+	const s3Template = `# S3 Bucket Limits
 
 ## This prefix may have hundreds of files
 {{s3://my-bucket/logs/2024/}}
@@ -108,25 +108,25 @@ if (process.env["S3_ACCESS_KEY_ID"]) {
 ## But we'll only process the first N files
 `;
 
-  const s3TemplatePath = join(templateDir, "s3-limit-template.md");
-  writeFileSync(s3TemplatePath, s3Template);
+	const s3TemplatePath = join(templateDir, "s3-limit-template.md");
+	writeFileSync(s3TemplatePath, s3Template);
 
-  try {
-    const result = await shotput({
-      templateDir,
-      templateFile: "s3-limit-template.md",
-      responseDir: templateDir,
-      s3AccessKeyId: process.env["S3_ACCESS_KEY_ID"],
-      s3SecretAccessKey: process.env["S3_SECRET_ACCESS_KEY"],
-      s3Region: process.env["S3_REGION"] || "us-east-1",
-      maxBucketFiles: 10, // Only process first 10 files
-      maxPromptLength: 50000,
-    });
+	try {
+		const result = await shotput({
+			templateDir,
+			templateFile: "s3-limit-template.md",
+			responseDir: templateDir,
+			s3AccessKeyId: process.env["S3_ACCESS_KEY_ID"],
+			s3SecretAccessKey: process.env["S3_SECRET_ACCESS_KEY"],
+			s3Region: process.env["S3_REGION"] || "us-east-1",
+			maxBucketFiles: 10, // Only process first 10 files
+			maxPromptLength: 50000,
+		});
 
-    log.info(result);
-  } catch (error) {
-    log.error("S3 example failed:", error);
-  }
+		log.info(result.metadata);
+	} catch (error) {
+		log.error("S3 example failed:", error);
+	}
 }
 
 const monitorTemplate = `# Monitor Output
@@ -140,17 +140,17 @@ const monitorTemplatePath = join(templateDir, "monitor-template.md");
 writeFileSync(monitorTemplatePath, monitorTemplate);
 
 try {
-  const result = await shotput({
-    templateDir,
-    templateFile: "monitor-template.md",
-    responseDir: templateDir,
-    maxPromptLength: 200000,
-    allowedBasePaths: [templateDir, join(import.meta.dir, "..")],
-  });
-  
-  log.info(result);
+	const result = await shotput({
+		templateDir,
+		templateFile: "monitor-template.md",
+		responseDir: templateDir,
+		maxPromptLength: 200000,
+		allowedBasePaths: [templateDir, join(import.meta.dir, "..")],
+	});
+
+	log.info(result.metadata);
 } catch (error) {
-  log.error("Failed:", error);
+	log.error("Failed:", error);
 }
 
 /**

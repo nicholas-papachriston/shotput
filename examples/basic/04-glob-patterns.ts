@@ -11,9 +11,9 @@
  *   bun run examples/basic/04-glob-patterns.ts
  */
 
+import { mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { shotput } from "../../src/index";
-import { writeFileSync, mkdirSync } from "fs";
-import { join } from "path";
 import { getLogger } from "../../src/logger";
 
 const log = getLogger("04-glob-patterns");
@@ -49,18 +49,18 @@ const templatePath = join(templateDir, "template.md");
 writeFileSync(templatePath, templateContent);
 
 try {
-  const glob = await shotput({
-    templateDir,
-    templateFile: "template.md",
-    responseDir: templateDir,
-    allowedBasePaths: [join(import.meta.dir, "..")],
-    debug: true,
-    debugFile: join(templateDir, "template-debug.md"),
-  });
+	const glob = await shotput({
+		templateDir,
+		templateFile: "template.md",
+		responseDir: templateDir,
+		allowedBasePaths: [join(import.meta.dir, "..")],
+		debug: true,
+		debugFile: join(templateDir, "template-debug.md"),
+	});
 
-  log.info(glob);
+	log.info(glob.metadata);
 
-  const specificTemplate = `# Specific Pattern Matching
+	const specificTemplate = `# Specific Pattern Matching
 
 ## Only CSV Files
 
@@ -73,22 +73,21 @@ try {
 Done!
 `;
 
-  const specificTemplatePath = join(templateDir, "specific-template.md");
-  writeFileSync(specificTemplatePath, specificTemplate);
+	const specificTemplatePath = join(templateDir, "specific-template.md");
+	writeFileSync(specificTemplatePath, specificTemplate);
 
-  const specific = await shotput({
-    templateDir,
-    templateFile: "specific-template.md",
-    responseDir: templateDir,
-    allowedBasePaths: [join(import.meta.dir, "..")],
-    debug: true,
-    debugFile: join(templateDir, "specific-template-debug.md"),
-  });
+	const specific = await shotput({
+		templateDir,
+		templateFile: "specific-template.md",
+		responseDir: templateDir,
+		allowedBasePaths: [join(import.meta.dir, "..")],
+		debug: true,
+		debugFile: join(templateDir, "specific-template-debug.md"),
+	});
 
-  log.info(specific);
+	log.info(specific.metadata);
 } catch (error) {
-  log.error(error);
-
+	log.error(error);
 }
 
 /**
