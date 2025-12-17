@@ -31,8 +31,6 @@ End of configuration.
 const templatePath = join(templateDir, "template.md");
 writeFileSync(templatePath, templateContent);
 
-log.info(templateContent);
-
 try {
   const result = await shotput({
     templateDir,
@@ -43,10 +41,7 @@ try {
     debugFile: join(templateDir, "template-debug.md"),
   });
 
-  log.info(result.content);
-
-  log.info(`Output saved to: ${join(templateDir, "response.md")}`);
-
+  log.info(result);
 } catch (error) {
   log.error(error);
 

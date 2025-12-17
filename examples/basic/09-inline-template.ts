@@ -44,7 +44,7 @@ try {
     debugFile: join(outputDir, "simple-template-debug.md"),
   });
 
-  log.info(result.content?.substring(0, 500));
+  log.info(result);
 
   const multiTemplate = `# Data Summary
 
@@ -66,7 +66,7 @@ Generated from inline template
     debugFile: join(outputDir, "multi-template-debug.md"),
   });
 
-  log.info(multiResult.content?.substring(0, 500));
+  log.info(multiResult);
 
   const timestamp = new Date().toISOString();
   const fileToInclude = "../../data/config.json";
@@ -89,7 +89,7 @@ This template was dynamically generated at runtime with embedded timestamp and c
     debugFile: join(outputDir, "dynamic-template-debug.md"),
   });
 
-  log.info(dynamicResult.content?.substring(0, 400));
+  log.info(dynamicResult);
 
   const filesToInclude = ["config.json", "users.csv", "article.md"];
   const sections = filesToInclude.map((file, index) => {

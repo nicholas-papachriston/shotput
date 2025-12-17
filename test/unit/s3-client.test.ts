@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { CONFIG } from "../../src/config";
 import {
 	extractAvailabilityZoneId,
 	getS3Endpoint,
 	isDirectoryBucketName,
 	parseS3Path,
 } from "../../src/s3-client";
-import { CONFIG } from "../../src/config";
 import type { S3Credentials } from "../../src/types";
 
 describe("s3-client", () => {

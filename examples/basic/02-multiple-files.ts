@@ -46,10 +46,8 @@ All files included successfully! The order of inclusion matches the order in the
 const templatePath = join(templateDir, "template.md");
 writeFileSync(templatePath, templateContent);
 
-log.info(templateContent);
-
 try {
-  await shotput({
+  const result = await shotput({
     templateDir,
     templateFile: "template.md",
     responseDir: templateDir,
@@ -58,7 +56,7 @@ try {
     debugFile: join(templateDir, "template-debug.md"),
   });
 
-  log.info(`Full output saved to: ${join(templateDir, "response.md")}`);
+  log.info(result);
 
 } catch (error) {
   log.error(error);

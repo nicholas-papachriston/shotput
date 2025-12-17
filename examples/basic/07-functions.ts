@@ -63,7 +63,7 @@ try {
     debugFile: join(templateDir, "template-debug.md"),
   });
 
-  log.info(result.content?.substring(0, 2000));
+  log.info(result);
 
   // Create a simple inline function
   const inlineFunctionPath = join(templateDir, "inline-function.js");
@@ -109,7 +109,7 @@ Complete!
     debugFile: join(templateDir, "inline-template-debug.md"),
   });
 
-  log.info(inlineResult.content);
+  log.info(inlineResult);
 } catch (error) {
   log.error(error);
   log.error("Possible causes:");

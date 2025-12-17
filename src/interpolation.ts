@@ -7,7 +7,6 @@ import { handleGlob } from "./glob";
 import { handleHttp } from "./http";
 import { getLogger } from "./logger";
 import { handleS3 } from "./s3";
-import { securityValidator } from "./security";
 import { handleSkill } from "./skill";
 import { findTemplateType } from "./template";
 import { TemplateType } from "./types";
@@ -37,35 +36,23 @@ const resolvePath = (basePath: string, filePath: string): string => {
 	return isAbsolute(filePath) ? filePath : resolve(basePath, filePath);
 };
 
-// Initialize security configuration on first use
-let securityInitialized = false;
-const initializeSecurity = () => {
-	if (!securityInitialized) {
-		securityValidator.configure({
-			allowedBasePaths: CONFIG.allowedBasePaths,
-			allowedDomains: CONFIG.allowedDomains,
-			allowHttp: CONFIG.allowHttp,
-			allowFunctions: CONFIG.allowFunctions,
-			allowedFunctionPaths: CONFIG.allowedFunctionPaths,
-		});
-		securityInitialized = true;
-	}
-};
+interface InterpolationResults {
+	processedTemplate: string;
+	resultMetadata?: Array<{ path: string; type: string; duration: number }>;
+}
 
 export const interpolation = async (
 	content: string,
 	basePath: string = process.cwd(),
-): Promise<string> => {
-	// Initialize security configuration
-	initializeSecurity();
-
+): Promise<InterpolationResults> => {
 	const matches = content.match(pattern);
-	if (!matches) return content;
+	if (!matches) return { processedTemplate: content };
 
+	const resultMetadata = [];
 	let remainingLength = CONFIG.maxPromptLength;
 	let result = content;
-
 	for (const match of matches) {
+		const startTime = Date.now();
 		const path = resolvePath(basePath, match.slice(2, -2).trim());
 
 		try {
@@ -81,6 +68,11 @@ export const interpolation = async (
 					);
 					remainingLength = combinedRemainingCount;
 					result = operationResults;
+					resultMetadata.push({
+						path,
+						type: templateType,
+						duration: Date.now() - startTime,
+					});
 					continue;
 				}
 				case TemplateType.Directory: {
@@ -99,6 +91,11 @@ export const interpolation = async (
 					);
 					remainingLength = combinedRemainingCount;
 					result = operationResults;
+					resultMetadata.push({
+						path,
+						type: templateType,
+						duration: Date.now() - startTime,
+					});
 					continue;
 				}
 				case TemplateType.Regex: {
@@ -110,6 +107,11 @@ export const interpolation = async (
 					);
 					remainingLength = combinedRemainingCount;
 					result = operationResults;
+					resultMetadata.push({
+						path,
+						type: templateType,
+						duration: Date.now() - startTime,
+					});
 					continue;
 				}
 				case TemplateType.S3: {
@@ -121,6 +123,11 @@ export const interpolation = async (
 					);
 					remainingLength = combinedRemainingCount;
 					result = operationResults;
+					resultMetadata.push({
+						path,
+						type: templateType,
+						duration: Date.now() - startTime,
+					});
 					continue;
 				}
 				case TemplateType.Http: {
@@ -132,6 +139,11 @@ export const interpolation = async (
 					);
 					remainingLength = combinedRemainingCount;
 					result = operationResults;
+					resultMetadata.push({
+						path,
+						type: templateType,
+						duration: Date.now() - startTime,
+					});
 					continue;
 				}
 				case TemplateType.Function: {
@@ -145,6 +157,11 @@ export const interpolation = async (
 						);
 					remainingLength = combinedRemainingCount;
 					result = operationResults;
+					resultMetadata.push({
+						path,
+						type: templateType,
+						duration: Date.now() - startTime,
+					});
 					continue;
 				}
 				case TemplateType.Skill: {
@@ -152,10 +169,20 @@ export const interpolation = async (
 						await handleSkill(result, path, match, remainingLength);
 					remainingLength = combinedRemainingCount;
 					result = operationResults;
+					resultMetadata.push({
+						path,
+						type: templateType,
+						duration: Date.now() - startTime,
+					});
 					continue;
 				}
 				default: {
 					log.warn(`Unknown template type: ${templateType} for path: ${path}`);
+					resultMetadata.push({
+						path,
+						type: templateType,
+						duration: Date.now() - startTime,
+					});
 					continue;
 				}
 			}
@@ -165,5 +192,5 @@ export const interpolation = async (
 		}
 	}
 
-	return result.trim();
+	return { processedTemplate: result.trim(), resultMetadata };
 };

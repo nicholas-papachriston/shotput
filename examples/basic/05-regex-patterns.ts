@@ -46,9 +46,6 @@ Regex patterns provide powerful, flexible file matching!
 const templatePath = join(templateDir, "template.md");
 writeFileSync(templatePath, templateContent);
 
-log.info("Template created with regex patterns:");
-log.info(templateContent);
-
 try {
   const template = await shotput({
     templateDir,
@@ -59,9 +56,7 @@ try {
     debugFile: join(templateDir, "template-debug.md"),
   });
 
-  log.info(template.content);
-
-  log.info(`Full output saved to: ${join(templateDir, "response.md")}`);
+  log.info(template);
 
   const complexTemplate = `# Complex Regex Patterns
 
@@ -92,9 +87,7 @@ try {
     debugFile: join(templateDir, "complex-template-debug.md"),
   });
 
-  log.info(complex.content);
-
-  log.info(`Full output saved to: ${join(templateDir, "complex-response.md")}`);
+  log.info(complex);
 } catch (error) {
   log.error(error);
 

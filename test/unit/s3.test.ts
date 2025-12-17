@@ -5,7 +5,7 @@ import { SecurityValidator } from "../../src/security";
 
 describe("s3", () => {
 	let validator: SecurityValidator;
-	
+
 	// Save original CONFIG values
 	const originalCloudflareR2Url = CONFIG.cloudflareR2Url;
 	const originalAwsS3Url = CONFIG.awsS3Url;
@@ -16,7 +16,7 @@ describe("s3", () => {
 		CONFIG.cloudflareR2Url = undefined;
 		CONFIG.awsS3Url = "s3.amazonaws.com";
 		CONFIG.s3Region = undefined;
-		
+
 		validator = SecurityValidator.getInstance();
 		validator.configure({
 			allowedBasePaths: [process.cwd()],
@@ -24,7 +24,7 @@ describe("s3", () => {
 			allowFunctions: false,
 		});
 	});
-	
+
 	afterEach(() => {
 		// Restore original CONFIG values
 		CONFIG.cloudflareR2Url = originalCloudflareR2Url;

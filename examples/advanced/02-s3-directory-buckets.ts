@@ -51,8 +51,6 @@ const templatePath = join(templateDir, "template.md");
 writeFileSync(templatePath, directoryBucketTemplate);
 
 try {
-  const startTime = Date.now();
-
   const result = await shotput({
     templateDir,
     templateFile: "template.md",
@@ -64,10 +62,7 @@ try {
     debugFile: join(templateDir, "template-debug.md"),
   });
 
-  const totalTime = Date.now() - startTime;
-
-  log.info(result.content);
-  log.info(`Total processing time: ${totalTime}ms`);
+  log.info(result);
 } catch (error) {
   log.error(error);
 

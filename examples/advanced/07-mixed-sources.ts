@@ -20,7 +20,6 @@ const templateDir = join(import.meta.dir, "../output/07-mixed-sources");
 const dataDir = join(import.meta.dir, "../data");
 mkdirSync(templateDir, { recursive: true });
 
-// Create a custom function
 const transformFunction = `
 export default async function(result, path, match, remainingLength) {
   const timestamp = new Date().toISOString();
@@ -144,15 +143,9 @@ try {
     debugFile: join(templateDir, "mixed-debug.md"),
   };
 
-  log.info("Processing template with mixed sources...");
-  const startTime = Date.now();
-
   const result = await shotput(config);
-
-  const totalTime = Date.now() - startTime;
-
-  log.info(`✓ Processing completed in ${totalTime}ms`);
-  log.info(result.content?.slice(0, 500));
+  
+  log.info(result);
 } catch (error) {
   log.error("Failed to process mixed template:", error);
 

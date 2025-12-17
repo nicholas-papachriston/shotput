@@ -37,7 +37,6 @@ Note: Directory paths must end with a trailing slash (/) to be recognized as dir
 const templatePath = join(templateDir, "template.md");
 writeFileSync(templatePath, templateContent);
 
-
 try {
   const instance = await shotput({
     templateDir,
@@ -48,7 +47,7 @@ try {
     debugFile: join(templateDir, "template-debug.md"),
   });
 
-  log.info(instance.content);
+  log.info(instance);
 
   const logsTemplate = `# Application Logs
 
@@ -69,7 +68,7 @@ End of logs.
     debugFile: join(templateDir, "logs-template-debug.md"),
   });
 
-  log.info(logs.content);
+  log.info(logs);
 } catch (error) {
   log.error(error);
 

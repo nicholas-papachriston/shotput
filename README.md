@@ -26,8 +26,6 @@ Shotput is a simple, programmatic templating library to help manage personas, sy
 ## TODO
 
 - npm package
-- ✅ advanced s3/rs credential support ([docs](./docs/s3-advanced-features.md))
-- ✅ advanced s3 directory bucket support ([docs](./docs/s3-advanced-features.md))
 - nested documents
 - blob search s3/rs support
 - regex search s3/rs support

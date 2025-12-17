@@ -33,7 +33,6 @@ if (!process.env["S3_ACCESS_KEY_ID"] || !process.env["S3_SECRET_ACCESS_KEY"]) {
   log.error("Missing required S3 credentials. Set S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY");
   log.info("Example: export S3_ACCESS_KEY_ID=your-key");
   log.info("Example: export S3_SECRET_ACCESS_KEY=your-secret");
-
 }
 
 // Example 1: Single S3 file
@@ -61,8 +60,7 @@ try {
     debugFile: join(templateDir, "single-file-debug.md"),
   });
 
-  log.info(`Content preview:\n${result?.content?.slice(0, 200)}...`);
-
+  log.info(result);
 } catch (error) {
   log.error(error);
 }
@@ -92,8 +90,7 @@ try {
     debugFile: join(templateDir, "prefix-debug.md"),
   });
 
-  log.info(result.content);
-
+  log.info(result);
 } catch (error) {
   log.error(error);
 }

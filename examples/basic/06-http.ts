@@ -55,7 +55,7 @@ try {
     debugFile: join(templateDir, "template-debug.md"),
   });
 
-  log.info(result.content?.substring(0, 2000));
+  log.info(result);
 
   const apiTemplate = `# API Data Example
 

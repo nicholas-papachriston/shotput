@@ -53,7 +53,7 @@ try {
     debugFile: join(templateDir, "safe-debug.md"),
   });
 
-  log.info(result.content);
+  log.info(result);
 } catch (error) {
   log.error(error);
 }
@@ -86,7 +86,7 @@ try {
     debugFile: join(templateDir, "http-debug.md"),
   });
 
-  log.info(result.content);
+  log.info(result);
 } catch (error) {
   log.error("HTTP validation failed:", error);
 }
@@ -130,7 +130,7 @@ try {
     debugFile: join(templateDir, "function-debug.md"),
   });
 
-  log.info(result.content);
+  log.info(result);
 } catch (error) {
   log.error("Function validation failed:", error);
 }
@@ -151,7 +151,7 @@ const skillsTemplatePath = join(templateDir, "skills-template.md");
 writeFileSync(skillsTemplatePath, skillsTemplate);
 
 try {
-  const { content } = await shotput({
+  const content = await shotput({
     templateDir,
     templateFile: "skills-template.md",
     responseDir: templateDir,
@@ -168,49 +168,6 @@ try {
 } catch (error) {
   log.error("Skills validation:", error);
 }
-
-// Example 5: Complete Secure Configuration
-log.info("\n=== Example 5: Complete Secure Configuration ===");
-
-const secureConfig = {
-  templateDir,
-  templateFile: "safe-template.md",
-  responseDir: templateDir,
-
-  // File access restrictions
-  allowedBasePaths: [dataDir, templateDir],
-
-  // HTTP restrictions
-  allowHttp: true,
-  allowedDomains: ["api.github.com"],
-  httpTimeout: 10000,
-
-  // Function restrictions
-  allowFunctions: true,
-  allowedFunctionPaths: [dataDir],
-
-  // Skills restrictions
-  skillsDir: join(import.meta.dir, "../skills"),
-  allowRemoteSkills: false, // Disable remote skills for maximum security
-
-  // Length limits
-  maxPromptLength: 100000,
-  maxBucketFiles: 50,
-
-  // S3 (if needed)
-  s3AccessKeyId: process.env["S3_ACCESS_KEY_ID"],
-  s3SecretAccessKey: process.env["S3_SECRET_ACCESS_KEY"],
-  s3Region: process.env["S3_REGION"],
-
-  debug: false, // Disable debug output in production
-};
-
-log.info("Secure configuration example:");
-log.info(`  File access: ${secureConfig.allowedBasePaths.length} allowed paths`);
-log.info(`  HTTP: ${secureConfig.allowHttp ? 'enabled' : 'disabled'} (${secureConfig.allowedDomains?.length || 0} allowed domains)`);
-log.info(`  Functions: ${secureConfig.allowFunctions ? 'enabled' : 'disabled'}`);
-log.info(`  Remote skills: ${secureConfig.allowRemoteSkills ? 'enabled' : 'disabled'}`);
-log.info(`  Max output: ${secureConfig.maxPromptLength} characters`);
 
 /**
  * Key Takeaways:

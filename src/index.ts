@@ -10,9 +10,14 @@ const log = getLogger("shotput");
 export interface ShotputOutput {
 	content?: string;
 	error?: Error;
+	metadata: {
+		time: number;
+		resultMetadata?: Array<{ path: string; type: string; duration: number }>;
+	};
 }
 
 const run = async (): Promise<ShotputOutput> => {
+	const startTime = Date.now();
 	try {
 		// Initialize security configuration
 		securityValidator.configure({
@@ -34,7 +39,7 @@ const run = async (): Promise<ShotputOutput> => {
 			templateContent = await Bun.file(templatePath).text();
 		}
 
-		const processedTemplate = await interpolation(
+		const { processedTemplate, resultMetadata } = await interpolation(
 			templateContent,
 			CONFIG.templateDir,
 		);
@@ -44,10 +49,16 @@ const run = async (): Promise<ShotputOutput> => {
 			log.info(`Debug output written to ${CONFIG.debugFile}`);
 		}
 
-		return { content: processedTemplate };
+		return {
+			content: processedTemplate,
+			metadata: { time: Date.now() - startTime, resultMetadata },
+		};
 	} catch (error) {
 		log.error(`Failed to process template: ${error}`);
-		return { error: error as Error };
+		return {
+			error: error as Error,
+			metadata: { time: Date.now() - startTime, resultMetadata: [] },
+		};
 	}
 };
 

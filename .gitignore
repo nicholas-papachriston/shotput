@@ -4,6 +4,8 @@ coverage/
 build/
 dist/
 out/
+responses/
+templates/
 examples/output/
 cdk.out/
 cdk.context.json
@@ -18,5 +20,3 @@ actions-runner/
 fonts
 *.zip
 bun
-responses
-template*

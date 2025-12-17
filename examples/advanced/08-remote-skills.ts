@@ -25,7 +25,6 @@ const skillsDir = join(import.meta.dir, "../skills");
 mkdirSync(templateDir, { recursive: true });
 mkdirSync(skillsDir, { recursive: true });
 
-// Create a local skill for comparison
 const localSkillContent = `# Local Skill Example
 
 This is a local skill stored in the skills directory.
@@ -75,7 +74,7 @@ try {
     debugFile: join(templateDir, "comparison-debug.md"),
   });
 
-  log.info(result.content);
+  log.info(result);
 } catch (error) {
   log.error("Comparison failed:", error);
 }
@@ -107,7 +106,7 @@ try {
     debugFile: join(templateDir, "references-debug.md"),
   });
 
-  log.info(result.content);
+  log.info(result);
 } catch (error) {
   log.error("References example failed:", error);
 }
@@ -144,7 +143,7 @@ try {
     debugFile: join(templateDir, "secure-debug.md"),
   });
 
-  log.info(result.content);
+  log.info(result);
 } catch (error) {
   log.error("Security example failed:", error);
 }

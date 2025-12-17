@@ -48,8 +48,6 @@ const templatePath = join(templateDir, "template.md");
 
 writeFileSync(templatePath, templateContent);
 
-log.info(templateContent);
-
 try {
   const glob = await shotput({
     templateDir,
@@ -60,9 +58,7 @@ try {
     debugFile: join(templateDir, "template-debug.md"),
   });
 
-  log.info(glob.content);
-
-  log.info(`Full output saved to: ${join(templateDir, "response.md")}`);
+  log.info(glob);
 
   const specificTemplate = `# Specific Pattern Matching
 
@@ -89,9 +85,7 @@ Done!
     debugFile: join(templateDir, "specific-template-debug.md"),
   });
 
-  log.info(specific.content);
-
-  log.info(`Full output saved to: ${join(templateDir, "specific-response.md")}`);
+  log.info(specific);
 } catch (error) {
   log.error(error);
 

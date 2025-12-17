@@ -25,7 +25,6 @@ const log = getLogger("06-length-limits");
 const templateDir = join(import.meta.dir, "../output/06-length-limits");
 mkdirSync(templateDir, { recursive: true });
 
-// Create sample files of different sizes
 const smallFile = "Small content.\n";
 const mediumFile = "Medium content line.\n".repeat(100); // ~2KB
 const largeFile = "Large content line.\n".repeat(5000); // ~100KB
@@ -63,7 +62,7 @@ try {
     debugFile: join(templateDir, "length-debug.md"),
   });
 
-  log.info(result.content);
+  log.info(result);
 } catch (error) {
   log.error("Failed:", error);
 }
@@ -95,7 +94,7 @@ try {
     allowedBasePaths: [templateDir, join(import.meta.dir, "..")],
   });
 
-  log.info(result.content);
+  log.info(result);
 } catch (error) {
   log.error("Failed:", error);
 }
@@ -124,46 +123,11 @@ if (process.env["S3_ACCESS_KEY_ID"]) {
       maxPromptLength: 50000,
     });
 
-    log.info(result.content);
+    log.info(result);
   } catch (error) {
     log.error("S3 example failed:", error);
   }
 }
-
-const strategies = [
-  {
-    name: "Small prompts (chat-style)",
-    maxPromptLength: 4000,
-    maxBucketFiles: 5,
-    useCase: "Chat conversations, quick queries",
-  },
-  {
-    name: "Medium prompts (standard)",
-    maxPromptLength: 100000,
-    maxBucketFiles: 50,
-    useCase: "Code analysis, documentation generation",
-  },
-  {
-    name: "Large prompts (comprehensive)",
-    maxPromptLength: 500000,
-    maxBucketFiles: 200,
-    useCase: "Full codebase context, extensive analysis",
-  },
-  {
-    name: "Maximum (use with caution)",
-    maxPromptLength: 2000000,
-    maxBucketFiles: 1000,
-    useCase: "Complete data dumps, migrations",
-  },
-];
-
-log.info("Configuration strategies for different use cases:");
-strategies.forEach(strategy => {
-  log.info(`\n${strategy.name}:`);
-  log.info(`  maxPromptLength: ${strategy.maxPromptLength.toLocaleString()}`);
-  log.info(`  maxBucketFiles: ${strategy.maxBucketFiles}`);
-  log.info(`  Use case: ${strategy.useCase}`);
-});
 
 const monitorTemplate = `# Monitor Output
 
@@ -184,7 +148,7 @@ try {
     allowedBasePaths: [templateDir, join(import.meta.dir, "..")],
   });
   
-  log.info(result.content);
+  log.info(result);
 } catch (error) {
   log.error("Failed:", error);
 }

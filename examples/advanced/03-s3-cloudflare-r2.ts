@@ -31,14 +31,12 @@ mkdirSync(templateDir, { recursive: true });
 if (!process.env["S3_ACCESS_KEY_ID"] || !process.env["S3_SECRET_ACCESS_KEY"]) {
   log.error("Missing R2 credentials");
   log.info("Get credentials from: Cloudflare Dashboard > R2 > Manage R2 API Tokens");
-
 }
 
 if (!process.env["CLOUDFLARE_R2_URL"]) {
   log.error("Missing CLOUDFLARE_R2_URL");
   log.info("Format: account-id.r2.cloudflarestorage.com");
   log.info("Find it in: Cloudflare Dashboard > R2 > Overview");
-
 }
 
 const r2Template = `# Cloudflare R2 Example
@@ -69,10 +67,9 @@ try {
     debugFile: join(templateDir, "template-debug.md"),
   });
 
-  log.info(result.content);
+  log.info(result);
 } catch (error) {
   log.error(error);
-
 }
 
 /**

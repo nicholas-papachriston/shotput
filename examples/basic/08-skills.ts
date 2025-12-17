@@ -17,11 +17,9 @@ import { join } from "path";
 import { getLogger } from "../../src/logger";
 
 const log = getLogger("08-skills");
-// Setup: Create template directory
 const templateDir = join(import.meta.dir, "../output/08-skills");
 mkdirSync(templateDir, { recursive: true });
 
-// Step 1: Create a template that uses skills
 const templateContent = `# AI Assistant Configuration
 
 ## Core Instructions (from Skill)
@@ -62,7 +60,7 @@ try {
     debugFile: join(templateDir, "template-debug.md"),
   });
 
-  log.info(result.content?.substring(0, 2000));
+  log.info(result);
 
   const fullTemplate = `# Complete Skill Documentation
 
@@ -122,7 +120,7 @@ Multiple skills can be combined in a single template.
     debugFile: join(templateDir, "multi-template-debug.md"),
   });
 
-  log.info(multiResult.content);
+  log.info(multiResult);
 } catch (error) {
   log.error(error);
   log.error("Possible causes:");
@@ -130,7 +128,6 @@ Multiple skills can be combined in a single template.
   log.error("- SKILL.md file missing in skill directory");
   log.error("- Invalid skill syntax in template");
   log.error("- skillsDir not configured");
-
 }
 
 /**

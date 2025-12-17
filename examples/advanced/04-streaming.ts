@@ -25,14 +25,10 @@ const log = getLogger("04-streaming");
 const templateDir = join(import.meta.dir, "../output/04-streaming");
 mkdirSync(templateDir, { recursive: true });
 
-// Create a large sample file (2MB) for demonstration
 const largeContent = "Large file content line.\n".repeat(80000); // ~2MB
 const largeFilePath = join(templateDir, "large-file.txt");
 writeFileSync(largeFilePath, largeContent);
 
-log.info(`Created sample large file: ${(largeContent.length / 1024 / 1024).toFixed(2)}MB`);
-
-// Example 1: Streaming with length limit
 const streamingTemplate = `# Streaming Example
 
 ## Large Local File (will be streamed)
@@ -44,8 +40,6 @@ const streamingTemplate = `# Streaming Example
 
 const templatePath = join(templateDir, "template.md");
 writeFileSync(templatePath, streamingTemplate);
-
-log.info("=== Example 1: Automatic Streaming ===");
 
 try {
   const result = await shotput({
@@ -67,8 +61,6 @@ try {
 
 // Example 2: Streaming from S3
 if (process.env["S3_ACCESS_KEY_ID"] && process.env["S3_SECRET_ACCESS_KEY"]) {
-  log.info("\n=== Example 2: Streaming from S3 ===");
-
   const s3StreamingTemplate = `# S3 Streaming
 
 ## Large S3 File (will be streamed)
@@ -93,7 +85,7 @@ if (process.env["S3_ACCESS_KEY_ID"] && process.env["S3_SECRET_ACCESS_KEY"]) {
       debug: true,
       debugFile: join(templateDir, "s3-streaming-debug.md"),
     });
-    log.info(result.content);
+    log.info(result);
   } catch (error) {
     log.error(error);
   }
@@ -121,7 +113,7 @@ try {
     debugFile: join(templateDir, "truncation-debug.md"),
   });
 
-  log.info(result.content);
+  log.info(result);
 } catch (error) {
   log.error(error);
 }
