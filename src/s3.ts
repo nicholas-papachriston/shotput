@@ -1,14 +1,30 @@
 import { CONFIG } from "./config";
 import { getLogger } from "./logger";
+import { getS3File, parseS3Path } from "./s3-client";
+import { SecurityError, securityValidator } from "./security";
+import type { S3Credentials } from "./types";
 import { createXmlParser } from "./xml";
 
 const log = getLogger("s3");
 
-export const getStorageServiceUrl = (bucket: string, key?: string) => {
+export const getStorageServiceUrl = (
+	bucket: string,
+	key?: string,
+	isDirectoryBucket = false,
+	availabilityZoneId?: string,
+) => {
 	if (CONFIG.cloudflareR2Url) {
 		return `https://${CONFIG.cloudflareR2Url}/${bucket}${key ? `/${key}` : ""}`;
 	}
-	return `https://${bucket}.${CONFIG.awsS3Url}{${key ? `/${key}` : ""}}`;
+
+	// Directory buckets use S3 Express endpoints
+	if (isDirectoryBucket && availabilityZoneId) {
+		const region = CONFIG.s3Region || "us-east-1";
+		return `https://${bucket}.s3express-${availabilityZoneId}.${region}.amazonaws.com${key ? `/${key}` : ""}`;
+	}
+
+	// Standard buckets
+	return `https://${bucket}.${CONFIG.awsS3Url}${key ? `/${key}` : ""}`;
 };
 
 const handleObject = async (
@@ -16,11 +32,19 @@ const handleObject = async (
 	path: string,
 	match: string,
 	remainingLength: number,
+	credentials?: Partial<S3Credentials>,
 ) => {
 	let combinedContent = `filename:${path}:\n`;
 	let combinedRemainingCount = remainingLength;
 
-	const fileStream = Bun.s3.file(path).stream();
+	const s3FileOrClient = getS3File(path, credentials);
+
+	// Type guard: getS3File returns S3File when path has a key
+	if (!("stream" in s3FileOrClient)) {
+		throw new Error(`Invalid S3 path for file operation: ${path}`);
+	}
+
+	const fileStream = s3FileOrClient.stream();
 
 	for await (const chunk of fileStream) {
 		combinedContent += chunk.toString();
@@ -60,11 +84,16 @@ const handleObjectPrefix = async (
 	path: string,
 	match: string,
 	remainingLength: number,
+	credentials?: Partial<S3Credentials>,
 ) => {
 	const maxItems = CONFIG.maxBucketFiles;
-	const s3Url = new URL(path);
-	const bucket = s3Url.hostname.split(".")[0];
-	const prefix = s3Url.pathname.slice(1);
+	const bucketInfo = parseS3Path(path);
+	const {
+		bucket,
+		key: prefix,
+		isDirectoryBucket,
+		availabilityZoneId,
+	} = bucketInfo;
 	const xmlParser = createXmlParser();
 
 	let combinedContent = "";
@@ -74,9 +103,11 @@ const handleObjectPrefix = async (
 
 	do {
 		// Build URL with pagination token if present
-		const listUrl = new URL(`https://${getStorageServiceUrl(bucket)}`);
+		const listUrl = new URL(
+			`https://${getStorageServiceUrl(bucket, undefined, isDirectoryBucket, availabilityZoneId)}`,
+		);
 		listUrl.searchParams.append("list-type", "2");
-		listUrl.searchParams.append("prefix", prefix);
+		listUrl.searchParams.append("prefix", prefix || "");
 		if (continuationToken) {
 			listUrl.searchParams.append("continuation-token", continuationToken);
 		}
@@ -109,6 +140,7 @@ const handleObjectPrefix = async (
 				`s3://${bucket}/${key}`,
 				match,
 				remainingLength,
+				credentials,
 			);
 
 			if (object.combinedRemainingCount <= 0) {
@@ -134,11 +166,18 @@ const handleObjectPrefix = async (
 
 export const bucketExists = async (
 	uncleanBucketString: string,
+	_credentials?: Partial<S3Credentials>,
 ): Promise<void> => {
-	const bucket = uncleanBucketString.replace("s//", "").split("/")[0];
-	await fetch(`https://${getStorageServiceUrl(bucket)}`, {
-		method: "HEAD",
-	}).catch((err) => {
+	const cleanPath = uncleanBucketString.replace("s//", "s3://");
+	const bucketInfo = parseS3Path(cleanPath);
+	const { bucket, isDirectoryBucket, availabilityZoneId } = bucketInfo;
+
+	await fetch(
+		`https://${getStorageServiceUrl(bucket, undefined, isDirectoryBucket, availabilityZoneId)}`,
+		{
+			method: "HEAD",
+		},
+	).catch((err) => {
 		if (err instanceof Error && err.message.includes("Failed to fetch")) {
 			throw new Error(`Bucket ${bucket} does not exist`);
 		}
@@ -148,16 +187,64 @@ export const bucketExists = async (
 
 /**
  * @param path - S3 path. e.g. s3://bucket-name/prefix/ or s3://bucket-name/prefix/file.txt
+ * @param credentials - Optional S3 credentials to override defaults
  */
 export const handleS3 = async (
 	result: string,
 	path: string,
 	match: string,
 	remainingLength: number,
+	credentials?: Partial<S3Credentials>,
 ) => {
 	log.info(`Handling S3 path: ${path}`);
-	if (path.endsWith("/")) {
-		return await handleObjectPrefix(result, path, match, remainingLength);
+
+	try {
+		// Security validation
+		securityValidator.validateS3Path(path);
+
+		// Parse the path to check for directory buckets
+		const bucketInfo = parseS3Path(path);
+		if (bucketInfo.isDirectoryBucket) {
+			log.info(
+				`Detected directory bucket: ${bucketInfo.bucket} (AZ: ${bucketInfo.availabilityZoneId})`,
+			);
+		}
+
+		if (path.endsWith("/")) {
+			return await handleObjectPrefix(
+				result,
+				path,
+				match,
+				remainingLength,
+				credentials,
+			);
+		}
+		return await handleObject(
+			result,
+			path,
+			match,
+			remainingLength,
+			credentials,
+		);
+	} catch (error) {
+		if (error instanceof SecurityError) {
+			log.error(`Security error for S3 path ${path}: ${error.message}`);
+			return {
+				operationResults: result.replace(
+					match,
+					`[Security Error: ${error.message}]`,
+				),
+				combinedRemainingCount: remainingLength,
+			};
+		}
+
+		log.error(`Failed to process S3 path ${path}: ${error}`);
+		return {
+			operationResults: result.replace(
+				match,
+				`[Error reading S3 path: ${error}]`,
+			),
+			combinedRemainingCount: remainingLength,
+		};
 	}
-	return await handleObject(result, path, match, remainingLength);
 };

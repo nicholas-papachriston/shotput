@@ -7,19 +7,58 @@ import { handleGlob } from "./glob";
 import { handleHttp } from "./http";
 import { getLogger } from "./logger";
 import { handleS3 } from "./s3";
+import { securityValidator } from "./security";
+import { handleSkill } from "./skill";
 import { findTemplateType } from "./template";
 import { TemplateType } from "./types";
 
 const log = getLogger("interpolation");
 
-const resolvePath = (basePath: string, filePath: string): string =>
-	isAbsolute(filePath) ? filePath : resolve(basePath, filePath);
+const pattern = /\{\{([^}]+)\}\}/g;
+
+// Prefixes that should NOT have path resolution applied
+const SPECIAL_PREFIXES = [
+	"skill:",
+	"TemplateType.Function:",
+	"http://",
+	"https://",
+	"s3://",
+];
+
+const shouldResolvePath = (filePath: string): boolean => {
+	return !SPECIAL_PREFIXES.some((prefix) => filePath.startsWith(prefix));
+};
+
+const resolvePath = (basePath: string, filePath: string): string => {
+	// Don't resolve paths for special template types
+	if (!shouldResolvePath(filePath)) {
+		return filePath;
+	}
+	return isAbsolute(filePath) ? filePath : resolve(basePath, filePath);
+};
+
+// Initialize security configuration on first use
+let securityInitialized = false;
+const initializeSecurity = () => {
+	if (!securityInitialized) {
+		securityValidator.configure({
+			allowedBasePaths: CONFIG.allowedBasePaths,
+			allowedDomains: CONFIG.allowedDomains,
+			allowHttp: CONFIG.allowHttp,
+			allowFunctions: CONFIG.allowFunctions,
+			allowedFunctionPaths: CONFIG.allowedFunctionPaths,
+		});
+		securityInitialized = true;
+	}
+};
 
 export const interpolation = async (
 	content: string,
 	basePath: string = process.cwd(),
 ): Promise<string> => {
-	const pattern = /\{\{([^}]+)\}\}/g;
+	// Initialize security configuration
+	initializeSecurity();
+
 	const matches = content.match(pattern);
 	if (!matches) return content;
 
@@ -30,7 +69,9 @@ export const interpolation = async (
 		const path = resolvePath(basePath, match.slice(2, -2).trim());
 
 		try {
-			switch (await findTemplateType(path)) {
+			const templateType = await findTemplateType(path);
+
+			switch (templateType) {
 				case TemplateType.File: {
 					const { operationResults, combinedRemainingCount } = await handleFile(
 						result,
@@ -39,14 +80,14 @@ export const interpolation = async (
 						remainingLength,
 					);
 					remainingLength = combinedRemainingCount;
-					result += operationResults;
+					result = operationResults;
 					continue;
 				}
 				case TemplateType.Directory: {
 					const { operationResults, combinedRemainingCount } =
 						await handleDirectory(result, path, match, remainingLength);
 					remainingLength = combinedRemainingCount;
-					result += operationResults;
+					result = operationResults;
 					continue;
 				}
 				case TemplateType.Glob: {
@@ -57,7 +98,7 @@ export const interpolation = async (
 						remainingLength,
 					);
 					remainingLength = combinedRemainingCount;
-					result += operationResults;
+					result = operationResults;
 					continue;
 				}
 				case TemplateType.Regex: {
@@ -68,7 +109,7 @@ export const interpolation = async (
 						remainingLength,
 					);
 					remainingLength = combinedRemainingCount;
-					result += operationResults;
+					result = operationResults;
 					continue;
 				}
 				case TemplateType.S3: {
@@ -79,7 +120,7 @@ export const interpolation = async (
 						remainingLength,
 					);
 					remainingLength = combinedRemainingCount;
-					result += operationResults;
+					result = operationResults;
 					continue;
 				}
 				case TemplateType.Http: {
@@ -90,14 +131,31 @@ export const interpolation = async (
 						remainingLength,
 					);
 					remainingLength = combinedRemainingCount;
-					result += operationResults;
+					result = operationResults;
 					continue;
 				}
 				case TemplateType.Function: {
 					const { operationResults, combinedRemainingCount } =
-						await handleFunction(result, path, match, remainingLength);
+						await handleFunction(
+							result,
+							path,
+							match,
+							remainingLength,
+							basePath,
+						);
 					remainingLength = combinedRemainingCount;
-					result += operationResults;
+					result = operationResults;
+					continue;
+				}
+				case TemplateType.Skill: {
+					const { operationResults, combinedRemainingCount } =
+						await handleSkill(result, path, match, remainingLength);
+					remainingLength = combinedRemainingCount;
+					result = operationResults;
+					continue;
+				}
+				default: {
+					log.warn(`Unknown template type: ${templateType} for path: ${path}`);
 					continue;
 				}
 			}

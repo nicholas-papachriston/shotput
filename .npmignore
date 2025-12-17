@@ -2,6 +2,8 @@ src/
 test/
 templates/
 responses/
+examples/
+scripts/
 .vscode/
 build.ts
 bunfig.toml

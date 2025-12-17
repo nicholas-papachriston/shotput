@@ -1,0 +1,11 @@
+id,name,email,role,department,join_date,active,location
+1,Alice Johnson,alice.johnson@example.com,Engineer,Engineering,2022-03-15,true,San Francisco
+2,Bob Smith,bob.smith@example.com,Manager,Product,2021-07-22,true,New York
+3,Carol Williams,carol.williams@example.com,Designer,Design,2023-01-10,true,Austin
+4,David Brown,david.brown@example.com,Engineer,Engineering,2022-11-03,true,Seattle
+5,Eve Davis,eve.davis@example.com,Analyst,Data,2023-05-18,true,Boston
+6,Frank Miller,frank.miller@example.com,Engineer,Engineering,2020-09-12,false,Chicago
+7,Grace Wilson,grace.wilson@example.com,Manager,Operations,2021-04-25,true,Denver
+8,Henry Moore,henry.moore@example.com,Designer,Design,2022-08-30,true,Portland
+9,Iris Taylor,iris.taylor@example.com,Engineer,Infrastructure,2023-02-14,true,Miami
+10,Jack Anderson,jack.anderson@example.com,Analyst,Data,2022-06-07,true,Atlanta

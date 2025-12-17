@@ -1,6 +1,7 @@
 import { stat } from "node:fs/promises";
 import { FUNCTION_TEMPLATE } from "./function";
 import { getLogger } from "./logger";
+import { SKILL_TEMPLATE } from "./skill";
 import { TemplateType } from "./types";
 
 const log = getLogger("template");
@@ -12,17 +13,22 @@ const regexIndicators = [
 
 export const findTemplateType = async (path: string): Promise<TemplateType> => {
 	try {
-		await stat(path)
-			.then((stats) => {
-				if (stats.isFile()) {
-					return TemplateType.File;
-				}
+		try {
+			const stats = await stat(path);
+			if (stats.isFile()) {
+				return TemplateType.File;
+			}
 
-				if (stats.isDirectory()) {
-					return TemplateType.Directory;
-				}
-			})
-			.catch(() => log.info("Path is not a file or directory"));
+			if (stats.isDirectory()) {
+				return TemplateType.Directory;
+			}
+		} catch {
+			log.info("Path is not a file or directory");
+		}
+
+		if (path.startsWith(SKILL_TEMPLATE)) {
+			return TemplateType.Skill;
+		}
 
 		if (path.includes(FUNCTION_TEMPLATE)) {
 			return TemplateType.Function;

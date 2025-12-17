@@ -4,24 +4,24 @@ import { join } from "node:path";
 import { processContent } from "./content";
 import { getLogger } from "./logger";
 import { bucketExists } from "./s3";
+import { SecurityError, securityValidator } from "./security";
 
 const log = getLogger("directory");
 
 const processDirectory = async (dir: string) => {
 	if (dir.startsWith("s://")) return await bucketExists(dir);
-	await mkdir(dir, { recursive: true }).catch((err) => {
-		if ((err as { code?: string }).code !== "EEXIST") {
-			throw new Error(`Failed to create directory ${dir}: ${err}`);
-		}
-		throw err;
-	});
+	// mkdir with recursive: true doesn't throw EEXIST, so no need to catch
+	await mkdir(dir, { recursive: true });
 };
 
 export const ensureDirectoryExists = async (
 	sourceDir: string,
 	resultsDir: string,
 ): Promise<void> => {
-	Promise.all([processDirectory(sourceDir), processDirectory(resultsDir)]);
+	await Promise.all([
+		processDirectory(sourceDir),
+		processDirectory(resultsDir),
+	]);
 };
 
 const getAllFiles = async (dirPath: string): Promise<string[]> => {
@@ -44,27 +44,56 @@ export const handleDirectory = async (
 	remainingLength: number,
 ) => {
 	log.info(`Processing directory: ${path}`);
-	let combinedContent = "";
-	let combinedRemainingCount = remainingLength;
-	for (const file of await getAllFiles(path)) {
-		const fileContent = `filename:${path}:\n${await Bun.file(file).text()}\n`;
-		const processed = await processContent(fileContent, combinedRemainingCount);
 
-		if (processed.truncated) {
-			log.warn(`Content truncated for ${file} due to length limit`);
+	try {
+		// Security validation
+		const validatedPath = securityValidator.validatePath(path);
+
+		let combinedContent = "";
+		let combinedRemainingCount = remainingLength;
+		for (const file of await getAllFiles(validatedPath)) {
+			if (combinedRemainingCount <= 0) {
+				log.warn("Maximum template length reached");
+				break;
+			}
+
+			const fileContent = `filename:${file}:\n${await Bun.file(file).text()}\n`;
+			const processed = await processContent(
+				fileContent,
+				combinedRemainingCount,
+			);
+
+			if (processed.truncated) {
+				log.warn(`Content truncated for ${file} due to length limit`);
+			}
+
+			combinedContent += processed.content;
+			combinedRemainingCount = processed.remainingLength;
 		}
 
-		combinedContent += processed.content;
-		combinedRemainingCount -= processed.length;
-
-		if (combinedRemainingCount <= 0) {
-			log.warn("Maximum template length reached");
-			break;
+		return {
+			operationResults: result.replace(match, combinedContent),
+			combinedRemainingCount,
+		};
+	} catch (error) {
+		if (error instanceof SecurityError) {
+			log.error(`Security error for directory ${path}: ${error.message}`);
+			return {
+				operationResults: result.replace(
+					match,
+					`[Security Error: ${error.message}]`,
+				),
+				combinedRemainingCount: remainingLength,
+			};
 		}
+
+		log.error(`Failed to process directory ${path}: ${error}`);
+		return {
+			operationResults: result.replace(
+				match,
+				`[Error reading directory ${path}]`,
+			),
+			combinedRemainingCount: remainingLength,
+		};
 	}
-
-	return {
-		operationResults: result.replace(match, combinedContent),
-		combinedRemainingCount,
-	};
 };

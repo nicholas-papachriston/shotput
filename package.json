@@ -14,7 +14,16 @@
 	},
 	"scripts": {
 		"build": "bun build.ts && tsc --emitDeclarationOnly",
-		"prepublishOnly": "bun run build"
+		"test": "bun test",
+		"test:unit": "bun test test/unit",
+		"test:integration": "bun test test/integration",
+		"test:watch": "bun test --watch",
+		"test:coverage": "bun test --coverage",
+		"examples": "bun run examples/index.ts",
+		"fix": "bunx biome check --fix --unsafe .",
+		"lint": "bunx biome check .",
+		"typecheck": "tsc --noEmit",
+		"prepublishOnly": "bun run build && bun run test"
 	},
 	"keywords": ["bun", "node", "prompt engineering", "templating", "llm"],
 	"author": "https://github.com/nicholas-papachriston",

@@ -3,7 +3,7 @@ await Bun.build({
 	outdir: "./dist",
 	minify: true,
 	sourcemap: "external",
-	target: "node",
+	target: "bun",
 	naming: {
 		entry: "index.js",
 		chunk: "[name].[hash].js",

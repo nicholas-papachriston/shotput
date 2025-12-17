@@ -1,9 +1,0 @@
-export DEBUG="true"
-export DEBUG_FILE="./templates/template_debug.txt"
-export TEMPLATE_DIR="./templates"
-export TEMPLATE_PATH="/template.md"
-export RESPONSE_DIR="./responses"
-export MAX_PROMPT_LENGTH=100000
-export MAX_BUCKET_FILES=100
-export AWS_S3_URL="s3.amazonaws.com"
-export CLOUDFLARE_R2_URL="<ACCOUNT_ID>.r2.cloudflarestorage.com"

@@ -1,0 +1,13 @@
+{
+	"appName": "Shotput Example",
+	"version": "1.0.0",
+	"features": {
+		"s3": true,
+		"http": true,
+		"streaming": true
+	},
+	"settings": {
+		"maxFileSize": 5242880,
+		"timeout": 30000
+	}
+}
