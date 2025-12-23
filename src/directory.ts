@@ -1,98 +1,103 @@
-import { mkdir } from "node:fs/promises";
-import { readdir } from "node:fs/promises";
+import { mkdir, readdir, stat } from "node:fs/promises";
 import { join } from "node:path";
-import { processContent } from "./content";
+import type { ShotputConfig } from "./config";
+import { handleFile } from "./file";
 import { getLogger } from "./logger";
-import { bucketExists } from "./s3";
-import { SecurityError, securityValidator } from "./security";
+import { SecurityError, validatePath } from "./security";
 
 const log = getLogger("directory");
 
-const processDirectory = async (dir: string) => {
-	if (dir.startsWith("s://")) return await bucketExists(dir);
-	// mkdir with recursive: true doesn't throw EEXIST, so no need to catch
-	await mkdir(dir, { recursive: true });
+/**
+ * Ensures that the specified directories exist, creating them if necessary.
+ */
+export const ensureDirectoryExists = async (...dirs: string[]) => {
+	for (const dir of dirs) {
+		try {
+			await mkdir(dir, { recursive: true });
+		} catch (error) {
+			const err = error as { code?: string };
+			if (err.code !== "EEXIST") {
+				throw error;
+			}
+		}
+	}
 };
 
-export const ensureDirectoryExists = async (
-	sourceDir: string,
-	resultsDir: string,
-): Promise<void> => {
-	await Promise.all([
-		processDirectory(sourceDir),
-		processDirectory(resultsDir),
-	]);
-};
-
-const getAllFiles = async (dirPath: string): Promise<string[]> => {
-	const files = await readdir(dirPath, { withFileTypes: true });
-
-	const paths = await Promise.all(
-		files.map(async (file) => {
-			const path = join(dirPath, file.name);
-			return file.isDirectory() ? getAllFiles(path) : [path];
-		}),
-	);
-
-	return paths.flat();
-};
-
+/**
+ * Handles directory interpolation by reading all files and subdirectories.
+ */
 export const handleDirectory = async (
+	config: ShotputConfig,
 	result: string,
 	path: string,
 	match: string,
 	remainingLength: number,
-) => {
+): Promise<{ operationResults: string; combinedRemainingCount: number }> => {
 	log.info(`Processing directory: ${path}`);
 
 	try {
 		// Security validation
-		const validatedPath = securityValidator.validatePath(path);
+		const validatedPath = validatePath(config, path);
 
-		let combinedContent = "";
-		let combinedRemainingCount = remainingLength;
-		for (const file of await getAllFiles(validatedPath)) {
-			if (combinedRemainingCount <= 0) {
+		const entries = await readdir(validatedPath);
+		let currentRemaining = remainingLength;
+		let directoryContent = "";
+
+		for (const entry of entries) {
+			if (currentRemaining <= 0) {
 				log.warn("Maximum template length reached");
 				break;
 			}
 
-			const fileContent = `filename:${file}:\n${await Bun.file(file).text()}\n`;
-			const processed = await processContent(
-				fileContent,
-				combinedRemainingCount,
-			);
+			const entryPath = join(validatedPath, entry);
+			const entryStats = await stat(entryPath);
 
-			if (processed.truncated) {
-				log.warn(`Content truncated for ${file} due to length limit`);
+			if (entryStats.isDirectory()) {
+				// Recursively handle subdirectories
+				// We pass an empty string as 'result' and 'match' to just get the content back
+				const subDirResult = await handleDirectory(
+					config,
+					"",
+					entryPath,
+					"",
+					currentRemaining,
+				);
+				directoryContent += subDirResult.operationResults;
+				currentRemaining = subDirResult.combinedRemainingCount;
+			} else {
+				// Handle file
+				// Use a placeholder to extract only the file content
+				const placeholder = `__SHOTPUT_FILE_${entry}__`;
+				const fileResult = await handleFile(
+					config,
+					placeholder,
+					entryPath,
+					placeholder,
+					currentRemaining,
+				);
+				directoryContent += fileResult.operationResults;
+				currentRemaining = fileResult.combinedRemainingCount;
 			}
-
-			combinedContent += processed.content;
-			combinedRemainingCount = processed.remainingLength;
 		}
 
+		// If match is provided, replace it in the original result.
+		// Otherwise (recursive call), return the content directly.
+		const operationResults = match
+			? result.replace(match, directoryContent)
+			: directoryContent;
+
 		return {
-			operationResults: result.replace(match, combinedContent),
-			combinedRemainingCount,
+			operationResults,
+			combinedRemainingCount: currentRemaining,
 		};
 	} catch (error) {
-		if (error instanceof SecurityError) {
-			log.error(`Security error for directory ${path}: ${error.message}`);
-			return {
-				operationResults: result.replace(
-					match,
-					`[Security Error: ${error.message}]`,
-				),
-				combinedRemainingCount: remainingLength,
-			};
-		}
-
 		log.error(`Failed to process directory ${path}: ${error}`);
+		const errorMsg =
+			error instanceof SecurityError
+				? `[Security Error: ${error.message}]`
+				: `[Error processing directory ${path}]`;
 		return {
-			operationResults: result.replace(
-				match,
-				`[Error reading directory ${path}]`,
-			),
+			operationResults: match ? result.replace(match, errorMsg) : errorMsg,
 			combinedRemainingCount: remainingLength,
 		};
 	}

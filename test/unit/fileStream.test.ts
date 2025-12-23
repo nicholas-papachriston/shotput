@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { createConfig } from "../../src/config";
 import { handleFileStream } from "../../src/fileStream";
-import { SecurityValidator } from "../../src/security";
 
 describe("handleFileStream", () => {
 	let tempDir: string;
@@ -8,13 +8,6 @@ describe("handleFileStream", () => {
 	beforeEach(async () => {
 		tempDir = `${process.cwd()}/test-temp-filestream-${Date.now()}`;
 		await Bun.$`mkdir -p ${tempDir}`;
-
-		const validator = SecurityValidator.getInstance();
-		validator.configure({
-			allowedBasePaths: [process.cwd(), tempDir],
-			allowHttp: false,
-			allowFunctions: false,
-		});
 	});
 
 	afterEach(async () => {
@@ -28,6 +21,7 @@ describe("handleFileStream", () => {
 	it("should successfully process a valid file using stream", async () => {
 		const testContent = "Hello World! This is a test file.";
 		await Bun.write(`${tempDir}/test.txt`, testContent);
+		const config = createConfig({ allowedBasePaths: [process.cwd(), tempDir] });
 
 		const result = "Before {{file}} After";
 		const path = `${tempDir}/test.txt`;
@@ -35,6 +29,7 @@ describe("handleFileStream", () => {
 		const remainingLength = 1000;
 
 		const response = await handleFileStream(
+			config,
 			result,
 			path,
 			match,
@@ -49,12 +44,14 @@ describe("handleFileStream", () => {
 	});
 
 	it("should handle file not found error", async () => {
+		const config = createConfig({ allowedBasePaths: [process.cwd(), tempDir] });
 		const result = "Content: {{file}}";
 		const path = `${tempDir}/nonexistent.txt`;
 		const match = "{{file}}";
 		const remainingLength = 1000;
 
 		const response = await handleFileStream(
+			config,
 			result,
 			path,
 			match,
@@ -67,6 +64,7 @@ describe("handleFileStream", () => {
 	});
 
 	it("should truncate content when length limit is reached", async () => {
+		const config = createConfig({ allowedBasePaths: [process.cwd(), tempDir] });
 		const largeContent = "x".repeat(1000);
 		await Bun.write(`${tempDir}/large.txt`, largeContent);
 
@@ -76,6 +74,7 @@ describe("handleFileStream", () => {
 		const remainingLength = 100;
 
 		const response = await handleFileStream(
+			config,
 			result,
 			path,
 			match,
@@ -88,8 +87,7 @@ describe("handleFileStream", () => {
 	});
 
 	it("should block path traversal attempts", async () => {
-		const validator = SecurityValidator.getInstance();
-		validator.configure({
+		const restrictedConfig = createConfig({
 			allowedBasePaths: [tempDir],
 			allowHttp: false,
 			allowFunctions: false,
@@ -101,6 +99,7 @@ describe("handleFileStream", () => {
 		const remainingLength = 1000;
 
 		const response = await handleFileStream(
+			restrictedConfig,
 			result,
 			path,
 			match,
@@ -112,8 +111,7 @@ describe("handleFileStream", () => {
 	});
 
 	it("should block paths outside allowed base paths", async () => {
-		const validator = SecurityValidator.getInstance();
-		validator.configure({
+		const restrictedConfig = createConfig({
 			allowedBasePaths: [tempDir],
 			allowHttp: false,
 			allowFunctions: false,
@@ -125,6 +123,7 @@ describe("handleFileStream", () => {
 		const remainingLength = 1000;
 
 		const response = await handleFileStream(
+			restrictedConfig,
 			result,
 			path,
 			match,
@@ -136,6 +135,7 @@ describe("handleFileStream", () => {
 	});
 
 	it("should handle zero remaining length", async () => {
+		const config = createConfig({ allowedBasePaths: [process.cwd(), tempDir] });
 		await Bun.write(`${tempDir}/test.txt`, "Some content");
 
 		const result = "Before {{file}} After";
@@ -144,6 +144,7 @@ describe("handleFileStream", () => {
 		const remainingLength = 0;
 
 		const response = await handleFileStream(
+			config,
 			result,
 			path,
 			match,
@@ -154,6 +155,7 @@ describe("handleFileStream", () => {
 	});
 
 	it("should handle empty file", async () => {
+		const config = createConfig({ allowedBasePaths: [process.cwd(), tempDir] });
 		await Bun.write(`${tempDir}/empty.txt`, "");
 
 		const result = "Before {{file}} After";
@@ -162,6 +164,7 @@ describe("handleFileStream", () => {
 		const remainingLength = 1000;
 
 		const response = await handleFileStream(
+			config,
 			result,
 			path,
 			match,
@@ -173,6 +176,7 @@ describe("handleFileStream", () => {
 	});
 
 	it("should preserve file path in output", async () => {
+		const config = createConfig({ allowedBasePaths: [process.cwd(), tempDir] });
 		await Bun.write(`${tempDir}/named.txt`, "content");
 
 		const result = "{{file}}";
@@ -181,6 +185,7 @@ describe("handleFileStream", () => {
 		const remainingLength = 1000;
 
 		const response = await handleFileStream(
+			config,
 			result,
 			path,
 			match,
@@ -193,6 +198,7 @@ describe("handleFileStream", () => {
 	});
 
 	it("should handle multiline content", async () => {
+		const config = createConfig({ allowedBasePaths: [process.cwd(), tempDir] });
 		const multilineContent = "Line 1\nLine 2\nLine 3\nLine 4";
 		await Bun.write(`${tempDir}/multiline.txt`, multilineContent);
 
@@ -202,6 +208,7 @@ describe("handleFileStream", () => {
 		const remainingLength = 1000;
 
 		const response = await handleFileStream(
+			config,
 			result,
 			path,
 			match,
@@ -215,6 +222,7 @@ describe("handleFileStream", () => {
 	});
 
 	it("should handle special characters in content", async () => {
+		const config = createConfig({ allowedBasePaths: [process.cwd(), tempDir] });
 		const specialContent = "Special: !@#$%^&*()_+-=[]{}|;':\",./<>?";
 		await Bun.write(`${tempDir}/special.txt`, specialContent);
 
@@ -224,6 +232,7 @@ describe("handleFileStream", () => {
 		const remainingLength = 1000;
 
 		const response = await handleFileStream(
+			config,
 			result,
 			path,
 			match,
@@ -234,6 +243,7 @@ describe("handleFileStream", () => {
 	});
 
 	it("should handle UTF-8 content", async () => {
+		const config = createConfig({ allowedBasePaths: [process.cwd(), tempDir] });
 		const utf8Content = "UTF-8 content: test";
 		await Bun.write(`${tempDir}/utf8.txt`, utf8Content);
 
@@ -243,6 +253,7 @@ describe("handleFileStream", () => {
 		const remainingLength = 1000;
 
 		const response = await handleFileStream(
+			config,
 			result,
 			path,
 			match,
@@ -253,6 +264,7 @@ describe("handleFileStream", () => {
 	});
 
 	it("should handle partial truncation correctly", async () => {
+		const config = createConfig({ allowedBasePaths: [process.cwd(), tempDir] });
 		const content = "abcdefghijklmnopqrstuvwxyz";
 		await Bun.write(`${tempDir}/alphabet.txt`, content);
 
@@ -263,6 +275,7 @@ describe("handleFileStream", () => {
 		const remainingLength = 20;
 
 		const response = await handleFileStream(
+			config,
 			result,
 			path,
 			match,
@@ -274,6 +287,7 @@ describe("handleFileStream", () => {
 	});
 
 	it("should replace the correct match placeholder", async () => {
+		const config = createConfig({ allowedBasePaths: [process.cwd(), tempDir] });
 		await Bun.write(`${tempDir}/test.txt`, "replaced");
 
 		const result = "Start {{other}} {{file}} {{another}} End";
@@ -282,6 +296,7 @@ describe("handleFileStream", () => {
 		const remainingLength = 1000;
 
 		const response = await handleFileStream(
+			config,
 			result,
 			path,
 			match,
@@ -294,6 +309,7 @@ describe("handleFileStream", () => {
 	});
 
 	it("should handle very large remaining length", async () => {
+		const config = createConfig({ allowedBasePaths: [process.cwd(), tempDir] });
 		const content = "Small content";
 		await Bun.write(`${tempDir}/small.txt`, content);
 
@@ -303,6 +319,7 @@ describe("handleFileStream", () => {
 		const remainingLength = 1000000;
 
 		const response = await handleFileStream(
+			config,
 			result,
 			path,
 			match,
@@ -314,6 +331,7 @@ describe("handleFileStream", () => {
 	});
 
 	it("should handle file with tabs and mixed whitespace", async () => {
+		const config = createConfig({ allowedBasePaths: [process.cwd(), tempDir] });
 		const content = "Column1\tColumn2\tColumn3\n  indented  \n\ttabbed";
 		await Bun.write(`${tempDir}/whitespace.txt`, content);
 
@@ -323,6 +341,7 @@ describe("handleFileStream", () => {
 		const remainingLength = 1000;
 
 		const response = await handleFileStream(
+			config,
 			result,
 			path,
 			match,
@@ -334,6 +353,7 @@ describe("handleFileStream", () => {
 	});
 
 	it("should handle file with Windows line endings", async () => {
+		const config = createConfig({ allowedBasePaths: [process.cwd(), tempDir] });
 		const content = "Line 1\r\nLine 2\r\nLine 3";
 		await Bun.write(`${tempDir}/windows.txt`, content);
 
@@ -343,6 +363,7 @@ describe("handleFileStream", () => {
 		const remainingLength = 1000;
 
 		const response = await handleFileStream(
+			config,
 			result,
 			path,
 			match,
@@ -355,6 +376,7 @@ describe("handleFileStream", () => {
 	});
 
 	it("should correctly calculate remaining length after processing", async () => {
+		const config = createConfig({ allowedBasePaths: [process.cwd(), tempDir] });
 		const content = "12345678901234567890"; // 20 characters
 		await Bun.write(`${tempDir}/counted.txt`, content);
 
@@ -364,6 +386,7 @@ describe("handleFileStream", () => {
 		const remainingLength = 1000;
 
 		const response = await handleFileStream(
+			config,
 			result,
 			path,
 			match,
@@ -375,6 +398,7 @@ describe("handleFileStream", () => {
 	});
 
 	it("should handle absolute path correctly", async () => {
+		const config = createConfig({ allowedBasePaths: [process.cwd(), tempDir] });
 		const content = "Absolute path content";
 		const absolutePath = `${tempDir}/absolute.txt`;
 		await Bun.write(absolutePath, content);
@@ -384,6 +408,7 @@ describe("handleFileStream", () => {
 		const remainingLength = 1000;
 
 		const response = await handleFileStream(
+			config,
 			result,
 			absolutePath,
 			match,
@@ -395,6 +420,7 @@ describe("handleFileStream", () => {
 	});
 
 	it("should handle file with JSON content", async () => {
+		const config = createConfig({ allowedBasePaths: [process.cwd(), tempDir] });
 		const jsonContent = '{"key": "value", "number": 123, "array": [1, 2, 3]}';
 		await Bun.write(`${tempDir}/data.json`, jsonContent);
 
@@ -404,6 +430,7 @@ describe("handleFileStream", () => {
 		const remainingLength = 1000;
 
 		const response = await handleFileStream(
+			config,
 			result,
 			path,
 			match,
@@ -415,6 +442,7 @@ describe("handleFileStream", () => {
 	});
 
 	it("should handle file with code content", async () => {
+		const config = createConfig({ allowedBasePaths: [process.cwd(), tempDir] });
 		const codeContent = `function hello() {
 	console.log("Hello, World!");
 	return true;
@@ -427,6 +455,7 @@ describe("handleFileStream", () => {
 		const remainingLength = 1000;
 
 		const response = await handleFileStream(
+			config,
 			result,
 			path,
 			match,

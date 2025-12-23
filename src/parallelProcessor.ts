@@ -1,5 +1,6 @@
 import { isAbsolute, resolve } from "node:path";
-import { CONFIG } from "./config";
+import type { ShotputConfig } from "./config";
+import { handleFunction } from "./function";
 import { getLogger } from "./logger";
 import { Semaphore } from "./semaphore";
 import { findTemplateType } from "./template";
@@ -12,6 +13,7 @@ interface TemplateTask {
 	type: TemplateType;
 	path: string;
 	match: string;
+	basePath?: string;
 	originalIndex: number;
 	estimatedLength?: number;
 	priority: number;
@@ -34,14 +36,15 @@ export class ParallelProcessor {
 	private processedTemplates: TemplateResult[] = [];
 	private startTime = 0;
 	private retryConfig: RetryConfig;
+	private config: ShotputConfig;
 
-	constructor(maxConcurrency = 4, retryConfig?: Partial<RetryConfig>) {
-		this.semaphore = new Semaphore(maxConcurrency);
+	constructor(config: ShotputConfig) {
+		this.config = config;
+		this.semaphore = new Semaphore(config.maxConcurrency);
 		this.retryConfig = {
-			maxRetries: retryConfig?.maxRetries ?? CONFIG.maxRetries ?? 3,
-			initialDelay: retryConfig?.initialDelay ?? CONFIG.retryDelay ?? 1000,
-			backoffMultiplier:
-				retryConfig?.backoffMultiplier ?? CONFIG.retryBackoffMultiplier ?? 2,
+			maxRetries: config.maxRetries,
+			initialDelay: config.retryDelay,
+			backoffMultiplier: config.retryBackoffMultiplier,
 		};
 	}
 
@@ -67,7 +70,13 @@ export class ParallelProcessor {
 			const path = this.resolvePath(basePath, rawPath);
 
 			try {
-				const templateType = await findTemplateType(path);
+				const templateType = await findTemplateType(path, rawPath);
+
+				// Skip unknown/string types to allow them to remain in the template
+				// This prevents things like {{markers}} from being replaced by error messages
+				if (templateType === TemplateType.String) {
+					continue;
+				}
 
 				tasks.push({
 					type: templateType,
@@ -78,13 +87,7 @@ export class ParallelProcessor {
 				});
 			} catch (error) {
 				log.warn(`Failed to determine template type for ${path}: ${error}`);
-				tasks.push({
-					type: TemplateType.String,
-					path,
-					match,
-					originalIndex: i,
-					priority: 999,
-				});
+				// Don't add to tasks if type is unknown or failed
 			}
 		}
 
@@ -128,7 +131,7 @@ export class ParallelProcessor {
 				case TemplateType.Http: {
 					const response = await fetch(task.path, {
 						method: "HEAD",
-						signal: AbortSignal.timeout(CONFIG.httpTimeout ?? 30000),
+						signal: AbortSignal.timeout(this.config.httpTimeout),
 					});
 					const contentLength = response.headers.get("content-length");
 					return contentLength ? Number.parseInt(contentLength, 10) : 0;
@@ -156,7 +159,7 @@ export class ParallelProcessor {
 		tasks: TemplateTask[],
 		onProgress?: (progress: ProcessingProgress) => void,
 	): Promise<TemplateTask[]> {
-		if (!CONFIG.enableContentLengthPlanning) {
+		if (!this.config.enableContentLengthPlanning) {
 			return tasks;
 		}
 
@@ -197,7 +200,7 @@ export class ParallelProcessor {
 			0,
 		);
 		log.info(
-			`Total estimated content length: ${totalEstimatedLength} bytes, max allowed: ${CONFIG.maxPromptLength}`,
+			`Total estimated content length: ${totalEstimatedLength} bytes, max allowed: ${this.config.maxPromptLength}`,
 		);
 
 		return tasksWithLengths;
@@ -283,15 +286,33 @@ export class ParallelProcessor {
 		const startTime = Date.now();
 
 		const operation = async () => {
-			const handler = await this.getHandler(task.type);
+			// Handle function type specially due to extra basePath parameter
+			let operationResults: string;
+			let combinedRemainingCount: number;
 
-			// Pass only the match as content so we can extract just the replacement
-			const { operationResults, combinedRemainingCount } = await handler(
-				task.match,
-				task.path,
-				task.match,
-				remainingLength,
-			);
+			if (task.type === TemplateType.Function) {
+				const result = await handleFunction(
+					this.config,
+					task.match,
+					task.path,
+					task.match,
+					remainingLength,
+					task.basePath || process.cwd(),
+				);
+				operationResults = result.operationResults;
+				combinedRemainingCount = result.combinedRemainingCount;
+			} else {
+				const handler = await this.getHandler(task.type);
+				const result = await handler(
+					this.config,
+					task.match,
+					task.path,
+					task.match,
+					remainingLength,
+				);
+				operationResults = result.operationResults;
+				combinedRemainingCount = result.combinedRemainingCount;
+			}
 
 			// The operationResults should be just the replacement content
 			// since we passed only the match as the input
@@ -369,7 +390,7 @@ export class ParallelProcessor {
 
 		// Step 3: Trim based on content length
 		log.info("Step 3: Trimming by content length...");
-		const selectedTasks = CONFIG.enableContentLengthPlanning
+		const selectedTasks = this.config.enableContentLengthPlanning
 			? this.trimTasksByLength(tasksWithLengths, maxLength)
 			: tasksWithLengths;
 
@@ -448,7 +469,7 @@ export class ParallelProcessor {
 	private resolvePath(basePath: string, filePath: string): string {
 		const SPECIAL_PREFIXES = [
 			"skill:",
-			"function:",
+			"TemplateType.Function:",
 			"http://",
 			"https://",
 			"s3://",
@@ -492,8 +513,9 @@ export class ParallelProcessor {
 				return handler.handleHttp;
 			}
 			case TemplateType.Function: {
-				const handler = await import("./function");
-				return handler.handleFunction;
+				// Function handler is handled specially in processSingleTemplate
+				// due to its extra basePath parameter
+				throw new Error("Function handler should be called directly");
 			}
 			case TemplateType.Skill: {
 				const handler = await import("./skill");

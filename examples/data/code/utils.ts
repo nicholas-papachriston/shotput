@@ -145,7 +145,7 @@ export async function retry<T>(
 	maxAttempts = 3,
 	delayMs = 1000,
 ): Promise<T> {
-	let lastError: Error;
+	let lastError: Error | undefined;
 
 	for (let attempt = 1; attempt <= maxAttempts; attempt++) {
 		try {
@@ -158,7 +158,7 @@ export async function retry<T>(
 		}
 	}
 
-	throw lastError!;
+	throw lastError || new Error("Unknown error during retry");
 }
 
 /**
@@ -186,7 +186,7 @@ export function deepMerge<T extends object>(target: T, source: Partial<T>): T {
 	const result = { ...target };
 
 	for (const key in source) {
-		if (source.hasOwnProperty(key)) {
+		if (Object.hasOwn(source, key)) {
 			const sourceValue = source[key];
 			const targetValue = result[key];
 
@@ -197,9 +197,12 @@ export function deepMerge<T extends object>(target: T, source: Partial<T>): T {
 				typeof targetValue === "object" &&
 				targetValue !== null
 			) {
-				result[key] = deepMerge(targetValue, sourceValue as any);
+				result[key] = deepMerge(
+					targetValue,
+					sourceValue as Partial<T[Extract<keyof T, string>]>,
+				) as T[Extract<keyof T, string>];
 			} else {
-				result[key] = sourceValue as any;
+				result[key] = sourceValue as T[Extract<keyof T, string>];
 			}
 		}
 	}
@@ -246,7 +249,7 @@ export function formatBytes(bytes: number, decimals = 2): string {
 /**
  * Debounces a function call
  */
-export function debounce<T extends (...args: any[]) => any>(
+export function debounce<T extends (...args: never[]) => unknown>(
 	fn: T,
 	delayMs: number,
 ): (...args: Parameters<T>) => void {
@@ -261,7 +264,7 @@ export function debounce<T extends (...args: any[]) => any>(
 /**
  * Throttles a function call
  */
-export function throttle<T extends (...args: any[]) => any>(
+export function throttle<T extends (...args: never[]) => unknown>(
 	fn: T,
 	limitMs: number,
 ): (...args: Parameters<T>) => void {
@@ -271,7 +274,9 @@ export function throttle<T extends (...args: any[]) => any>(
 		if (!inThrottle) {
 			fn(...args);
 			inThrottle = true;
-			setTimeout(() => (inThrottle = false), limitMs);
+			setTimeout(() => {
+				inThrottle = false;
+			}, limitMs);
 		}
 	};
 }

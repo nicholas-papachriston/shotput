@@ -1,5 +1,5 @@
 import { S3Client } from "bun";
-import { CONFIG } from "./config";
+import type { ShotputConfig } from "./config";
 import { getLogger } from "./logger";
 import type { S3BucketInfo, S3Credentials } from "./types";
 
@@ -53,6 +53,7 @@ export const extractAvailabilityZoneId = (
 export const getS3Endpoint = (
 	bucketInfo: S3BucketInfo,
 	credentials: S3Credentials,
+	config: ShotputConfig,
 ): string | undefined => {
 	// If endpoint is explicitly provided, use it
 	if (credentials.endpoint) {
@@ -60,19 +61,19 @@ export const getS3Endpoint = (
 	}
 
 	// Use configured Cloudflare R2 or AWS S3 URL
-	if (CONFIG.cloudflareR2Url) {
-		return `https://${CONFIG.cloudflareR2Url}`;
+	if (config.cloudflareR2Url) {
+		return `https://${config.cloudflareR2Url}`;
 	}
 
 	// For directory buckets, construct the S3 Express endpoint
 	if (bucketInfo.isDirectoryBucket && bucketInfo.availabilityZoneId) {
-		const region = credentials.region || CONFIG.s3Region || "us-east-1";
+		const region = credentials.region || config.s3Region || "us-east-1";
 		return `https://${bucketInfo.bucket}.s3express-${bucketInfo.availabilityZoneId}.${region}.amazonaws.com`;
 	}
 
 	// For standard AWS S3 buckets
-	if (credentials.region || CONFIG.s3Region) {
-		const region = credentials.region || CONFIG.s3Region;
+	if (credentials.region || config.s3Region) {
+		const region = credentials.region || config.s3Region;
 		if (credentials.virtualHostedStyle) {
 			return `https://${bucketInfo.bucket}.s3.${region}.amazonaws.com`;
 		}
@@ -80,8 +81,8 @@ export const getS3Endpoint = (
 	}
 
 	// Default to configured AWS S3 URL
-	if (CONFIG.awsS3Url) {
-		return `https://${CONFIG.awsS3Url}`;
+	if (config.awsS3Url) {
+		return `https://${config.awsS3Url}`;
 	}
 
 	return undefined;
@@ -92,24 +93,25 @@ export const getS3Endpoint = (
  */
 export const createS3Client = (
 	bucketInfo: S3BucketInfo,
+	config: ShotputConfig,
 	overrideCredentials?: Partial<S3Credentials>,
 ): S3Client => {
 	const credentials: S3Credentials = {
 		accessKeyId:
-			overrideCredentials?.accessKeyId || CONFIG.s3AccessKeyId || undefined,
+			overrideCredentials?.accessKeyId || config.s3AccessKeyId || undefined,
 		secretAccessKey:
 			overrideCredentials?.secretAccessKey ||
-			CONFIG.s3SecretAccessKey ||
+			config.s3SecretAccessKey ||
 			undefined,
 		sessionToken:
-			overrideCredentials?.sessionToken || CONFIG.s3SessionToken || undefined,
-		region: overrideCredentials?.region || CONFIG.s3Region || undefined,
+			overrideCredentials?.sessionToken || config.s3SessionToken || undefined,
+		region: overrideCredentials?.region || config.s3Region || undefined,
 		bucket: bucketInfo.bucket,
 		virtualHostedStyle:
-			overrideCredentials?.virtualHostedStyle ?? CONFIG.s3VirtualHostedStyle,
+			overrideCredentials?.virtualHostedStyle ?? config.s3VirtualHostedStyle,
 		endpoint:
 			overrideCredentials?.endpoint ||
-			getS3Endpoint(bucketInfo, overrideCredentials || {}),
+			getS3Endpoint(bucketInfo, overrideCredentials || {}, config),
 	};
 
 	log.info(
@@ -138,10 +140,11 @@ export const createS3Client = (
  */
 export const getS3File = (
 	path: string,
+	config: ShotputConfig,
 	overrideCredentials?: Partial<S3Credentials>,
 ) => {
 	const bucketInfo = parseS3Path(path);
-	const client = createS3Client(bucketInfo, overrideCredentials);
+	const client = createS3Client(bucketInfo, config, overrideCredentials);
 
 	// If there's a key, return a file reference
 	if (bucketInfo.key) {

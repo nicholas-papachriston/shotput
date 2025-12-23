@@ -1,72 +1,73 @@
 import { isAbsolute, resolve } from "node:path";
+import type { ShotputConfig } from "./config";
 import { getLogger } from "./logger";
-import { SecurityError, securityValidator } from "./security";
+import { SecurityError, validateFunction } from "./security";
 
 const log = getLogger("function");
 
 export const FUNCTION_TEMPLATE = "TemplateType.Function:";
 
+/**
+ * Handles custom function interpolation by dynamically importing and executing a JavaScript function.
+ *
+ * @param config - The current shotput configuration
+ * @param result - The current template content
+ * @param path - The path to the function file
+ * @param match - The original template marker
+ * @param remainingLength - The character budget remaining for this run
+ * @param basePath - The base directory for resolving relative paths
+ */
 export const handleFunction = async (
+	config: ShotputConfig,
 	result: string,
 	path: string,
 	match: string,
 	remainingLength: number,
-	basePath?: string,
-) => {
-	if (remainingLength <= 0) {
-		return {
-			operationResults: result,
-			combinedRemainingCount: remainingLength,
-		};
-	}
-
-	let functionPath = path.split(FUNCTION_TEMPLATE)[1];
-
-	// Resolve relative paths using the provided basePath
-	if (basePath && !isAbsolute(functionPath)) {
-		functionPath = resolve(basePath, functionPath);
-	}
+	basePath: string,
+): Promise<{ operationResults: string; combinedRemainingCount: number }> => {
+	log.info(`Executing function: ${path}`);
 
 	try {
-		// Security validation
-		const validatedPath = securityValidator.validateFunction(functionPath);
+		// Remove the prefix if present to get the actual file path
+		const functionPath = path.startsWith(FUNCTION_TEMPLATE)
+			? path.slice(FUNCTION_TEMPLATE.length)
+			: path;
 
-		log.info(`Executing function: ${validatedPath}`);
+		// Resolve path relative to the base path if it's not absolute
+		const resolvedPath = isAbsolute(functionPath)
+			? functionPath
+			: resolve(basePath, functionPath);
 
-		const functionModule = await import(validatedPath);
+		// Security validation to ensure the function is allowed to run
+		validateFunction(config, resolvedPath);
 
-		// Validate that the module has a default export that's a function
-		if (typeof functionModule.default !== "function") {
-			throw new Error(
-				`Function module must export a default function: ${validatedPath}`,
-			);
+		// Import the function module
+		const module = await import(resolvedPath);
+		const fn = module.default || module;
+
+		if (typeof fn !== "function") {
+			throw new Error(`Default export of ${resolvedPath} is not a function`);
 		}
 
-		const { operationResults, combinedRemainingCount } =
-			await functionModule.default(result, path, match, remainingLength);
+		// Execute the function. It should return { operationResults, combinedRemainingCount }
+		const functionResult = await fn(result, path, match, remainingLength);
 
-		// Validate the return value
-		if (typeof operationResults !== "string") {
-			throw new Error(
-				`Function must return a string as operationResults: ${validatedPath}`,
-			);
-		}
-
-		if (typeof combinedRemainingCount !== "number") {
-			throw new Error(
-				`Function must return a number as combinedRemainingCount: ${validatedPath}`,
-			);
+		if (
+			!functionResult ||
+			typeof functionResult !== "object" ||
+			!("operationResults" in functionResult)
+		) {
+			throw new Error(`Function ${path} did not return expected result format`);
 		}
 
 		return {
-			operationResults,
-			combinedRemainingCount,
+			operationResults: functionResult.operationResults,
+			combinedRemainingCount:
+				functionResult.combinedRemainingCount ?? remainingLength,
 		};
 	} catch (error) {
 		if (error instanceof SecurityError) {
-			log.error(
-				`Security error for function ${functionPath}: ${error.message}`,
-			);
+			log.error(`Security error for function ${path}: ${error.message}`);
 			return {
 				operationResults: result.replace(
 					match,
@@ -76,11 +77,11 @@ export const handleFunction = async (
 			};
 		}
 
-		log.error(`Failed to execute function ${functionPath}: ${error}`);
+		log.error(`Failed to execute function ${path}: ${error}`);
 		return {
 			operationResults: result.replace(
 				match,
-				`[Error executing function: ${error}]`,
+				`[Error executing function ${path}]`,
 			),
 			combinedRemainingCount: remainingLength,
 		};

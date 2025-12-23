@@ -1,250 +1,129 @@
-import { CONFIG } from "./config";
+import type { ShotputConfig } from "./config";
+import { processContent } from "./content";
 import { getLogger } from "./logger";
-import { getS3File, parseS3Path } from "./s3-client";
-import { SecurityError, securityValidator } from "./security";
-import type { S3Credentials } from "./types";
-import { createXmlParser } from "./xml";
+import { getS3File } from "./s3-client";
+import { SecurityError, validateS3Path } from "./security";
 
 const log = getLogger("s3");
 
-export const getStorageServiceUrl = (
-	bucket: string,
-	key?: string,
-	isDirectoryBucket = false,
-	availabilityZoneId?: string,
-) => {
-	if (CONFIG.cloudflareR2Url) {
-		return `https://${CONFIG.cloudflareR2Url}/${bucket}${key ? `/${key}` : ""}`;
-	}
-
-	// Directory buckets use S3 Express endpoints
-	if (isDirectoryBucket && availabilityZoneId) {
-		const region = CONFIG.s3Region || "us-east-1";
-		return `https://${bucket}.s3express-${availabilityZoneId}.${region}.amazonaws.com${key ? `/${key}` : ""}`;
-	}
-
-	// Standard buckets
-	return `https://${bucket}.${CONFIG.awsS3Url}${key ? `/${key}` : ""}`;
-};
-
-const handleObject = async (
-	result: string,
-	path: string,
-	match: string,
-	remainingLength: number,
-	credentials?: Partial<S3Credentials>,
-) => {
-	let combinedContent = `filename:${path}:\n`;
-	let combinedRemainingCount = remainingLength;
-
-	const s3FileOrClient = getS3File(path, credentials);
-
-	// Type guard: getS3File returns S3File when path has a key
-	if (!("stream" in s3FileOrClient)) {
-		throw new Error(`Invalid S3 path for file operation: ${path}`);
-	}
-
-	const fileStream = s3FileOrClient.stream();
-
-	for await (const chunk of fileStream) {
-		combinedContent += chunk.toString();
-	}
-
-	combinedRemainingCount -= combinedContent.length;
-
-	return {
-		operationResults: result.replace(match, combinedContent),
-		combinedRemainingCount,
-	};
-};
-
-interface ListObjectsResponse {
-	keys: string[];
-	nextContinuationToken?: string;
+interface S3Path {
+	bucket: string;
+	key: string;
+	isPrefix: boolean;
 }
 
-const parseS3ListResponse = (
-	xmlParser: ReturnType<typeof createXmlParser>,
-	listXml: string,
-): ListObjectsResponse => {
-	const keys = xmlParser.parseS3ListResponse(listXml);
-	const parser = xmlParser.parse(listXml);
-	const nextContinuationToken = parser.children.find(
-		(child) => child.tag === "NextContinuationToken",
-	)?.text;
-
-	return {
-		keys,
-		nextContinuationToken,
-	};
-};
-
-const handleObjectPrefix = async (
-	result: string,
-	path: string,
-	match: string,
-	remainingLength: number,
-	credentials?: Partial<S3Credentials>,
-) => {
-	const maxItems = CONFIG.maxBucketFiles;
-	const bucketInfo = parseS3Path(path);
-	const {
-		bucket,
-		key: prefix,
-		isDirectoryBucket,
-		availabilityZoneId,
-	} = bucketInfo;
-	const xmlParser = createXmlParser();
-
-	let combinedContent = "";
-	let combinedRemainingCount = remainingLength;
-	let processedItems = 0;
-	let continuationToken: string | undefined;
-
-	do {
-		// Build URL with pagination token if present
-		const listUrl = new URL(
-			`https://${getStorageServiceUrl(bucket, undefined, isDirectoryBucket, availabilityZoneId)}`,
-		);
-		listUrl.searchParams.append("list-type", "2");
-		listUrl.searchParams.append("prefix", prefix || "");
-		if (continuationToken) {
-			listUrl.searchParams.append("continuation-token", continuationToken);
-		}
-
-		const listResponse = await fetch(listUrl.toString());
-
-		if (!listResponse.ok) {
-			throw new Error(
-				`Failed to list objects in prefix ${path}: ${listResponse.statusText}`,
-			);
-		}
-
-		const listXml = await listResponse.text();
-		const { keys, nextContinuationToken } = parseS3ListResponse(
-			xmlParser,
-			listXml,
-		);
-
-		for (const key of keys) {
-			if (!key) continue;
-			if (combinedRemainingCount <= 0 || processedItems >= maxItems) {
-				return {
-					operationResults: result.replace(match, combinedContent),
-					combinedRemainingCount,
-				};
-			}
-
-			const object = await handleObject(
-				result,
-				`s3://${bucket}/${key}`,
-				match,
-				remainingLength,
-				credentials,
-			);
-
-			if (object.combinedRemainingCount <= 0) {
-				return {
-					operationResults: result.replace(match, combinedContent),
-					combinedRemainingCount,
-				};
-			}
-
-			combinedContent += object.operationResults;
-			combinedRemainingCount = object.combinedRemainingCount;
-			processedItems++;
-		}
-
-		continuationToken = nextContinuationToken;
-	} while (continuationToken && processedItems < maxItems);
-
-	return {
-		operationResults: result.replace(match, combinedContent),
-		combinedRemainingCount,
-	};
-};
-
-export const bucketExists = async (
-	uncleanBucketString: string,
-	_credentials?: Partial<S3Credentials>,
-): Promise<void> => {
-	const cleanPath = uncleanBucketString.replace("s//", "s3://");
-	const bucketInfo = parseS3Path(cleanPath);
-	const { bucket, isDirectoryBucket, availabilityZoneId } = bucketInfo;
-
-	await fetch(
-		`https://${getStorageServiceUrl(bucket, undefined, isDirectoryBucket, availabilityZoneId)}`,
-		{
-			method: "HEAD",
-		},
-	).catch((err) => {
-		if (err instanceof Error && err.message.includes("Failed to fetch")) {
-			throw new Error(`Bucket ${bucket} does not exist`);
-		}
-		throw err;
-	});
+/**
+ * Parses an S3 URL (s3://bucket/key) into its components.
+ */
+const parseS3Path = (path: string): S3Path => {
+	const url = new URL(path);
+	const bucket = url.hostname;
+	// Remove leading slash from pathname to get the key
+	const key = url.pathname.startsWith("/")
+		? url.pathname.slice(1)
+		: url.pathname;
+	const isPrefix = path.endsWith("/");
+	return { bucket, key, isPrefix };
 };
 
 /**
- * @param path - S3 path. e.g. s3://bucket-name/prefix/ or s3://bucket-name/prefix/file.txt
- * @param credentials - Optional S3 credentials to override defaults
+ * Handles S3 resource interpolation. Supports both single objects and prefixes (directories).
+ *
+ * @param config - The current shotput configuration
+ * @param result - The current template content being processed
+ * @param path - The s3:// URL to interpolate
+ * @param match - The original template marker to replace
+ * @param remainingLength - The remaining character budget for this run
  */
 export const handleS3 = async (
+	config: ShotputConfig,
 	result: string,
 	path: string,
 	match: string,
 	remainingLength: number,
-	credentials?: Partial<S3Credentials>,
-) => {
-	log.info(`Handling S3 path: ${path}`);
+): Promise<{ operationResults: string; combinedRemainingCount: number }> => {
+	log.info(`Handling S3 resource: ${path}`);
 
 	try {
 		// Security validation
-		securityValidator.validateS3Path(path);
+		validateS3Path(config, path);
 
-		// Parse the path to check for directory buckets
-		const bucketInfo = parseS3Path(path);
-		if (bucketInfo.isDirectoryBucket) {
-			log.info(
-				`Detected directory bucket: ${bucketInfo.bucket} (AZ: ${bucketInfo.availabilityZoneId})`,
-			);
-		}
+		const { bucket, key, isPrefix } = parseS3Path(path);
 
-		if (path.endsWith("/")) {
-			return await handleObjectPrefix(
-				result,
-				path,
-				match,
-				remainingLength,
-				credentials,
-			);
-		}
-		return await handleObject(
-			result,
-			path,
-			match,
-			remainingLength,
-			credentials,
-		);
-	} catch (error) {
-		if (error instanceof SecurityError) {
-			log.error(`Security error for S3 path ${path}: ${error.message}`);
+		if (isPrefix) {
+			// Handle S3 prefix by listing objects
+			// For now, we'll return an error since Bun's S3Client doesn't expose listObjects
+			log.warn(`S3 prefix listing not yet implemented for ${path}`);
+			const errorMsg = `[Error reading ${path}: S3 prefix listing not yet supported]`;
 			return {
-				operationResults: result.replace(
-					match,
-					`[Security Error: ${error.message}]`,
-				),
+				operationResults: result.replace(match, errorMsg),
 				combinedRemainingCount: remainingLength,
 			};
 		}
 
-		log.error(`Failed to process S3 path ${path}: ${error}`);
+		// Handle single S3 object
+		const s3File = getS3File(path, config);
+
+		// getS3File returns an S3File when there's a key
+		if (
+			!key ||
+			typeof (s3File as unknown as { text?: () => Promise<string> }).text !==
+				"function"
+		) {
+			throw new Error(`Invalid S3 path or missing key: ${path}`);
+		}
+
+		const content = await (
+			s3File as unknown as { text: () => Promise<string> }
+		).text();
+		const fileHeader = `s3://${bucket}/${key}:\n`;
+		const processed = await processContent(
+			fileHeader + content,
+			remainingLength,
+		);
+
+		if (processed.truncated) {
+			log.warn(`Content truncated for ${path} due to length limit`);
+		}
+
 		return {
-			operationResults: result.replace(
-				match,
-				`[Error reading S3 path: ${error}]`,
-			),
+			operationResults: result.replace(match, processed.content),
+			combinedRemainingCount: processed.remainingLength,
+		};
+	} catch (error) {
+		log.error(`Failed to process S3 path ${path}: ${error}`);
+		const errorMsg =
+			error instanceof SecurityError
+				? `[Security Error: ${error.message}]`
+				: `[Error reading ${path}]`;
+		return {
+			operationResults: result.replace(match, errorMsg),
 			combinedRemainingCount: remainingLength,
 		};
+	}
+};
+
+/**
+ * Checks if a bucket exists.
+ * Note: This is a helper that can be used by other parts of the system if needed.
+ */
+export const bucketExists = async (
+	config: ShotputConfig,
+	path: string,
+): Promise<boolean> => {
+	try {
+		const s3File = getS3File(path, config);
+		// Try to check if the file/bucket exists by attempting to get metadata
+		if (
+			typeof (s3File as unknown as { exists?: () => Promise<boolean> })
+				.exists === "function"
+		) {
+			return await (
+				s3File as unknown as { exists: () => Promise<boolean> }
+			).exists();
+		}
+		return false;
+	} catch {
+		return false;
 	}
 };

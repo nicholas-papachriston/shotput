@@ -60,6 +60,8 @@ These examples demonstrate advanced features and patterns:
 6. **[Length Limits](./advanced/06-length-limits.ts)** - Managing output size
 7. **[Mixed Sources](./advanced/07-mixed-sources.ts)** - Combining multiple source types
 8. **[Remote Skills](./advanced/08-remote-skills.ts)** - Loading skills from GitHub
+9. **[Parallel Processing](./advanced/09-parallel-processing.ts)** - Advanced concurrency features
+10. **[Nested Templates](./advanced/10-nested-templates.ts)** - Recursive template interpolation
 
 ## Feature Matrix
 
@@ -75,6 +77,7 @@ These examples demonstrate advanced features and patterns:
 | S3 prefixes | - | 01 | `{{s3://bucket/prefix/}}` |
 | S3 directory buckets | - | 02 | `{{s3://name--az--x-s3/file}}` |
 | Cloudflare R2 | - | 03 | `{{s3://bucket/file}}` |
+| Nested templates | - | 10 | `{{./file-with-markers.txt}}` |
 | Custom functions | 07 | - | `{{TemplateType.Function:/path/fn.js}}` |
 | Local skills | 08 | - | `{{skill:skill-name}}` |
 | Remote skills | - | 08 | `{{skill:github:org/repo/skill}}` |

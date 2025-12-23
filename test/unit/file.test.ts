@@ -1,27 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { createConfig } from "../../src/config";
 import { handleFile } from "../../src/file";
-import { SecurityValidator } from "../../src/security";
 
 // Threshold for streaming (must match the value in file.ts)
 const STREAM_THRESHOLD_BYTES = 1024 * 1024; // 1MB
 
 describe("handleFile", () => {
-	beforeEach(() => {
-		const validator = SecurityValidator.getInstance();
-		validator.configure({
-			allowedBasePaths: [process.cwd()],
-			allowHttp: true,
-			allowFunctions: false,
-		});
-	});
-
-	afterEach(() => {
-		const validator = SecurityValidator.getInstance();
-		validator.configure({
-			allowedBasePaths: [process.cwd()],
-			allowHttp: true,
-			allowFunctions: false,
-		});
+	const testConfig = createConfig({
+		allowedBasePaths: [process.cwd()],
+		allowHttp: true,
+		allowFunctions: false,
 	});
 
 	it("should successfully process a valid file", async () => {
@@ -30,7 +18,13 @@ describe("handleFile", () => {
 		const match = "{{test/fixtures/test.txt}}";
 		const remainingLength = 1000;
 
-		const response = await handleFile(result, path, match, remainingLength);
+		const response = await handleFile(
+			testConfig,
+			result,
+			path,
+			match,
+			remainingLength,
+		);
 
 		expect(response.operationResults).toContain("Hello filename:");
 		expect(response.operationResults).toContain("Hello World!");
@@ -44,7 +38,13 @@ describe("handleFile", () => {
 		const match = "{{test/fixtures/nonexistent.txt}}";
 		const remainingLength = 1000;
 
-		const response = await handleFile(result, path, match, remainingLength);
+		const response = await handleFile(
+			testConfig,
+			result,
+			path,
+			match,
+			remainingLength,
+		);
 
 		expect(response.operationResults).toContain("[Error reading");
 		expect(response.combinedRemainingCount).toBe(remainingLength);
@@ -56,7 +56,13 @@ describe("handleFile", () => {
 		const match = "{{test/fixtures/large-file.txt}}";
 		const remainingLength = 50; // Very small limit
 
-		const response = await handleFile(result, path, match, remainingLength);
+		const response = await handleFile(
+			testConfig,
+			result,
+			path,
+			match,
+			remainingLength,
+		);
 
 		expect(response.combinedRemainingCount).toBe(0);
 		expect(response.operationResults.length).toBeLessThan(
@@ -70,7 +76,13 @@ describe("handleFile", () => {
 		const match = "{{../../../etc/passwd}}";
 		const remainingLength = 1000;
 
-		const response = await handleFile(result, path, match, remainingLength);
+		const response = await handleFile(
+			testConfig,
+			result,
+			path,
+			match,
+			remainingLength,
+		);
 
 		expect(response.operationResults).toContain("[Security Error:");
 		expect(response.combinedRemainingCount).toBe(remainingLength);
@@ -82,7 +94,13 @@ describe("handleFile", () => {
 		const match = "{{/etc/passwd}}";
 		const remainingLength = 1000;
 
-		const response = await handleFile(result, path, match, remainingLength);
+		const response = await handleFile(
+			testConfig,
+			result,
+			path,
+			match,
+			remainingLength,
+		);
 
 		expect(response.operationResults).toContain("[Security Error:");
 		expect(response.combinedRemainingCount).toBe(remainingLength);
@@ -94,7 +112,13 @@ describe("handleFile", () => {
 		const match = "{{test/fixtures/test.txt}}";
 		const remainingLength = 0;
 
-		const response = await handleFile(result, path, match, remainingLength);
+		const response = await handleFile(
+			testConfig,
+			result,
+			path,
+			match,
+			remainingLength,
+		);
 
 		expect(response.operationResults).toContain("Hello !");
 		expect(response.combinedRemainingCount).toBe(0);
@@ -107,13 +131,6 @@ describe("handleFile with large files (streaming)", () => {
 	beforeEach(async () => {
 		tempDir = `${process.cwd()}/test-temp-largefile-${Date.now()}`;
 		await Bun.$`mkdir -p ${tempDir}`;
-
-		const validator = SecurityValidator.getInstance();
-		validator.configure({
-			allowedBasePaths: [process.cwd(), tempDir],
-			allowHttp: false,
-			allowFunctions: false,
-		});
 	});
 
 	afterEach(async () => {
@@ -125,6 +142,10 @@ describe("handleFile with large files (streaming)", () => {
 	});
 
 	it("should use streaming for files larger than threshold", async () => {
+		const config = createConfig({
+			allowedBasePaths: [process.cwd(), tempDir],
+		});
+
 		// Create a file larger than 1MB
 		const largeContent = "x".repeat(STREAM_THRESHOLD_BYTES + 1000);
 		await Bun.write(`${tempDir}/large.txt`, largeContent);
@@ -134,7 +155,13 @@ describe("handleFile with large files (streaming)", () => {
 		const match = "{{file}}";
 		const remainingLength = 10000;
 
-		const response = await handleFile(result, path, match, remainingLength);
+		const response = await handleFile(
+			config,
+			result,
+			path,
+			match,
+			remainingLength,
+		);
 
 		// Should process successfully using streaming
 		expect(response.operationResults).toContain("filename:");
@@ -144,6 +171,10 @@ describe("handleFile with large files (streaming)", () => {
 	});
 
 	it("should not use streaming for files smaller than threshold", async () => {
+		const config = createConfig({
+			allowedBasePaths: [process.cwd(), tempDir],
+		});
+
 		// Create a file smaller than 1MB
 		const smallContent = "Small file content";
 		await Bun.write(`${tempDir}/small.txt`, smallContent);
@@ -153,7 +184,13 @@ describe("handleFile with large files (streaming)", () => {
 		const match = "{{file}}";
 		const remainingLength = 10000;
 
-		const response = await handleFile(result, path, match, remainingLength);
+		const response = await handleFile(
+			config,
+			result,
+			path,
+			match,
+			remainingLength,
+		);
 
 		// Should process successfully without streaming
 		expect(response.operationResults).toContain("filename:");
@@ -161,6 +198,10 @@ describe("handleFile with large files (streaming)", () => {
 	});
 
 	it("should handle large file with truncation", async () => {
+		const config = createConfig({
+			allowedBasePaths: [process.cwd(), tempDir],
+		});
+
 		// Create a file larger than 1MB
 		const largeContent = "y".repeat(STREAM_THRESHOLD_BYTES + 5000);
 		await Bun.write(`${tempDir}/large-truncate.txt`, largeContent);
@@ -170,7 +211,13 @@ describe("handleFile with large files (streaming)", () => {
 		const match = "{{file}}";
 		const remainingLength = 100; // Small limit to force truncation
 
-		const response = await handleFile(result, path, match, remainingLength);
+		const response = await handleFile(
+			config,
+			result,
+			path,
+			match,
+			remainingLength,
+		);
 
 		// Should truncate content
 		expect(response.combinedRemainingCount).toBe(0);
@@ -178,8 +225,7 @@ describe("handleFile with large files (streaming)", () => {
 	});
 
 	it("should handle security error for large file outside allowed paths", async () => {
-		const validator = SecurityValidator.getInstance();
-		validator.configure({
+		const restrictedConfig = createConfig({
 			allowedBasePaths: [tempDir],
 			allowHttp: false,
 			allowFunctions: false,
@@ -191,7 +237,13 @@ describe("handleFile with large files (streaming)", () => {
 		const match = "{{file}}";
 		const remainingLength = 10000;
 
-		const response = await handleFile(result, path, match, remainingLength);
+		const response = await handleFile(
+			restrictedConfig,
+			result,
+			path,
+			match,
+			remainingLength,
+		);
 
 		expect(response.operationResults).toContain("[Security Error:");
 	});

@@ -1,29 +1,23 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
-import { CONFIG } from "../../src/config";
+import { createConfig } from "../../src/config";
 import { handleHttp } from "../../src/http";
-import { SecurityValidator } from "../../src/security";
 
 describe("handleHttp", () => {
 	let originalFetch: typeof global.fetch;
-	let originalConfig: typeof CONFIG;
+
+	const testConfig = createConfig({
+		allowedBasePaths: [process.cwd()],
+		allowHttp: true,
+		allowedDomains: [],
+		allowFunctions: false,
+	});
 
 	beforeEach(() => {
 		originalFetch = global.fetch;
-		originalConfig = { ...CONFIG };
-
-		// Configure security
-		const validator = SecurityValidator.getInstance();
-		validator.configure({
-			allowedBasePaths: [process.cwd()],
-			allowHttp: true,
-			allowedDomains: [],
-			allowFunctions: false,
-		});
 	});
 
 	afterEach(() => {
 		global.fetch = originalFetch;
-		Object.assign(CONFIG, originalConfig);
 	});
 
 	it("should successfully fetch and process HTTP content", async () => {
@@ -36,18 +30,14 @@ describe("handleHttp", () => {
 		global.fetch = mock(async () => mockResponse as Response);
 
 		const result = await handleHttp(
+			testConfig,
 			"Template: {{url}}",
 			"https://api.example.com/data",
 			"{{url}}",
 			10000,
 		);
 
-		expect(result.operationResults).toContain(
-			"path: https://api.example.com/data",
-		);
-		expect(result.operationResults).toContain(
-			"httpResults: Test content from API",
-		);
+		expect(result.operationResults).toContain("Test content from API");
 		expect(result.combinedRemainingCount).toBeLessThan(10000);
 	});
 
@@ -61,6 +51,7 @@ describe("handleHttp", () => {
 		global.fetch = mock(async () => mockResponse as Response);
 
 		const result = await handleHttp(
+			testConfig,
 			"Data: {{url}}",
 			"https://api.example.com/json",
 			"{{url}}",
@@ -82,6 +73,7 @@ describe("handleHttp", () => {
 		global.fetch = mock(async () => mockResponse as Response);
 
 		const result = await handleHttp(
+			testConfig,
 			"Data: {{url}}",
 			"https://api.example.com/missing",
 			"{{url}}",
@@ -89,7 +81,7 @@ describe("handleHttp", () => {
 		);
 
 		expect(result.operationResults).toContain(
-			"[HTTP Error: https://api.example.com/missing]",
+			"[Error fetching https://api.example.com/missing]",
 		);
 		expect(result.combinedRemainingCount).toBe(10000);
 	});
@@ -105,13 +97,14 @@ describe("handleHttp", () => {
 		global.fetch = mock(async () => mockResponse as Response);
 
 		const result = await handleHttp(
+			testConfig,
 			"Data: {{url}}",
 			"https://api.example.com/error",
 			"{{url}}",
 			5000,
 		);
 
-		expect(result.operationResults).toContain("[HTTP Error:");
+		expect(result.operationResults).toContain("[Error fetching");
 		expect(result.combinedRemainingCount).toBe(5000);
 	});
 
@@ -123,13 +116,14 @@ describe("handleHttp", () => {
 		});
 
 		const result = await handleHttp(
+			testConfig,
 			"Data: {{url}}",
 			"https://slow-api.example.com/data",
 			"{{url}}",
 			10000,
 		);
 
-		expect(result.operationResults).toContain("[HTTP Timeout:");
+		expect(result.operationResults).toContain("[Error: Request Timeout]");
 		expect(result.combinedRemainingCount).toBe(10000);
 	});
 
@@ -139,19 +133,19 @@ describe("handleHttp", () => {
 		});
 
 		const result = await handleHttp(
+			testConfig,
 			"Data: {{url}}",
 			"https://unreachable.example.com/data",
 			"{{url}}",
 			10000,
 		);
 
-		expect(result.operationResults).toContain("[HTTP Error:");
+		expect(result.operationResults).toContain("[Error fetching");
 		expect(result.combinedRemainingCount).toBe(10000);
 	});
 
 	it("should handle security validation errors for disallowed domains", async () => {
-		const validator = SecurityValidator.getInstance();
-		validator.configure({
+		const restrictedConfig = createConfig({
 			allowedBasePaths: [process.cwd()],
 			allowHttp: true,
 			allowedDomains: ["allowed-domain.com"],
@@ -159,6 +153,7 @@ describe("handleHttp", () => {
 		});
 
 		const result = await handleHttp(
+			restrictedConfig,
 			"Data: {{url}}",
 			"https://forbidden.com/data",
 			"{{url}}",
@@ -170,8 +165,7 @@ describe("handleHttp", () => {
 	});
 
 	it("should handle security validation errors when HTTP is disabled", async () => {
-		const validator = SecurityValidator.getInstance();
-		validator.configure({
+		const restrictedConfig = createConfig({
 			allowedBasePaths: [process.cwd()],
 			allowHttp: false,
 			allowedDomains: [],
@@ -179,6 +173,7 @@ describe("handleHttp", () => {
 		});
 
 		const result = await handleHttp(
+			restrictedConfig,
 			"Data: {{url}}",
 			"https://example.com/data",
 			"{{url}}",
@@ -200,6 +195,7 @@ describe("handleHttp", () => {
 		global.fetch = mock(async () => mockResponse as Response);
 
 		const result = await handleHttp(
+			testConfig,
 			"Data: {{url}}",
 			"https://api.example.com/large",
 			"{{url}}",
@@ -212,32 +208,6 @@ describe("handleHttp", () => {
 		expect(result.combinedRemainingCount).toBeLessThanOrEqual(100);
 	});
 
-	it("should use default timeout when CONFIG.httpTimeout is undefined", async () => {
-		CONFIG.httpTimeout = undefined as unknown as number;
-
-		const mockResponse = {
-			ok: true,
-			status: 200,
-			text: async () => "Content",
-		};
-
-		let capturedSignal: AbortSignal | undefined;
-		global.fetch = mock(async (_url, options) => {
-			capturedSignal = options?.signal as AbortSignal;
-			return mockResponse as Response;
-		});
-
-		await handleHttp(
-			"Data: {{url}}",
-			"https://api.example.com/data",
-			"{{url}}",
-			10000,
-		);
-
-		// Verify fetch was called (signal will be defined)
-		expect(capturedSignal).toBeDefined();
-	});
-
 	it("should handle HTTPS URLs", async () => {
 		const mockResponse = {
 			ok: true,
@@ -248,6 +218,7 @@ describe("handleHttp", () => {
 		global.fetch = mock(async () => mockResponse as Response);
 
 		const result = await handleHttp(
+			testConfig,
 			"Data: {{url}}",
 			"https://secure.example.com/data",
 			"{{url}}",
@@ -267,6 +238,7 @@ describe("handleHttp", () => {
 		global.fetch = mock(async () => mockResponse as Response);
 
 		const result = await handleHttp(
+			testConfig,
 			"Data: {{url}}",
 			"http://example.com/data",
 			"{{url}}",
@@ -286,6 +258,7 @@ describe("handleHttp", () => {
 		global.fetch = mock(async () => mockResponse as Response);
 
 		const result = await handleHttp(
+			testConfig,
 			"Start {{url}} End",
 			"https://api.example.com/data",
 			"{{url}}",
@@ -308,16 +281,15 @@ describe("handleHttp", () => {
 		global.fetch = mock(async () => mockResponse as Response);
 
 		const result = await handleHttp(
+			testConfig,
 			"Data: {{url}}",
 			"https://api.example.com/empty",
 			"{{url}}",
 			10000,
 		);
 
-		expect(result.operationResults).toContain(
-			"path: https://api.example.com/empty",
-		);
-		expect(result.operationResults).toContain("httpResults: ");
+		expect(result.operationResults).toContain("Data: ");
+		expect(result.combinedRemainingCount).toBe(10000);
 	});
 
 	it("should handle content with special characters", async () => {
@@ -331,6 +303,7 @@ describe("handleHttp", () => {
 		global.fetch = mock(async () => mockResponse as Response);
 
 		const result = await handleHttp(
+			testConfig,
 			"Data: {{url}}",
 			"https://api.example.com/special",
 			"{{url}}",

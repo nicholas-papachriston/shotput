@@ -8,7 +8,10 @@ const regexIndicators = [
 	/[\^\$\(\)\+\{\}]/, // Common regex special characters
 ];
 
-export const findTemplateType = async (path: string): Promise<TemplateType> => {
+export const findTemplateType = async (
+	path: string,
+	rawPath?: string,
+): Promise<TemplateType> => {
 	try {
 		try {
 			const stats = await stat(path);
@@ -48,7 +51,13 @@ export const findTemplateType = async (path: string): Promise<TemplateType> => {
 		}
 
 		// Fallback for paths that don't exist yet but look like paths
-		if (path.includes("/") || path.includes("\\") || path.startsWith(".")) {
+		// Use rawPath if provided to avoid treating simple strings as files
+		const pathToTest = rawPath ?? path;
+		if (
+			pathToTest.includes("/") ||
+			pathToTest.includes("\\") ||
+			pathToTest.startsWith(".")
+		) {
 			return TemplateType.File;
 		}
 

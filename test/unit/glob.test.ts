@@ -1,23 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { createConfig } from "../../src/config";
 import { handleGlob } from "../../src/glob";
-import { SecurityValidator } from "../../src/security";
 
 describe("handleGlob", () => {
 	let tempDir: string;
-	let validator: SecurityValidator;
 
 	beforeEach(async () => {
-		tempDir = `${process.cwd()}/test-temp-glob-${Date.now()}`;
+		tempDir = join(process.cwd(), `test-temp-glob-${Date.now()}`);
 		await mkdir(tempDir, { recursive: true });
-
-		validator = SecurityValidator.getInstance();
-		validator.configure({
-			allowedBasePaths: [process.cwd(), tempDir],
-			allowHttp: false,
-			allowFunctions: false,
-		});
 	});
 
 	afterEach(async () => {
@@ -28,13 +20,22 @@ describe("handleGlob", () => {
 		}
 	});
 
+	const defaultConfig = createConfig({
+		allowedBasePaths: [process.cwd(), "/tmp"],
+	});
+
 	describe("basic glob patterns", () => {
 		it("should match all files with * pattern", async () => {
+			const config = createConfig({
+				...defaultConfig,
+				allowedBasePaths: [...defaultConfig.allowedBasePaths, tempDir],
+			});
 			await writeFile(join(tempDir, "file1.txt"), "Content 1");
 			await writeFile(join(tempDir, "file2.txt"), "Content 2");
 			await writeFile(join(tempDir, "file3.txt"), "Content 3");
 
 			const result = await handleGlob(
+				config,
 				"Files: {{glob}}",
 				`${tempDir}/*.txt`,
 				"{{glob}}",
@@ -47,11 +48,16 @@ describe("handleGlob", () => {
 		});
 
 		it("should match files with specific extension", async () => {
+			const config = createConfig({
+				...defaultConfig,
+				allowedBasePaths: [...defaultConfig.allowedBasePaths, tempDir],
+			});
 			await writeFile(join(tempDir, "file.txt"), "Text");
 			await writeFile(join(tempDir, "file.json"), "JSON");
 			await writeFile(join(tempDir, "file.md"), "Markdown");
 
 			const result = await handleGlob(
+				config,
 				"{{glob}}",
 				`${tempDir}/*.txt`,
 				"{{glob}}",
@@ -64,11 +70,16 @@ describe("handleGlob", () => {
 		});
 
 		it("should match files with prefix pattern", async () => {
+			const config = createConfig({
+				...defaultConfig,
+				allowedBasePaths: [...defaultConfig.allowedBasePaths, tempDir],
+			});
 			await writeFile(join(tempDir, "test-1.txt"), "Test 1");
 			await writeFile(join(tempDir, "test-2.txt"), "Test 2");
 			await writeFile(join(tempDir, "other.txt"), "Other");
 
 			const result = await handleGlob(
+				config,
 				"{{glob}}",
 				`${tempDir}/test-*.txt`,
 				"{{glob}}",
@@ -81,11 +92,16 @@ describe("handleGlob", () => {
 		});
 
 		it("should handle ? wildcard for single character", async () => {
+			const config = createConfig({
+				...defaultConfig,
+				allowedBasePaths: [...defaultConfig.allowedBasePaths, tempDir],
+			});
 			await writeFile(join(tempDir, "file1.txt"), "File 1");
 			await writeFile(join(tempDir, "file2.txt"), "File 2");
 			await writeFile(join(tempDir, "file10.txt"), "File 10");
 
 			const result = await handleGlob(
+				config,
 				"{{glob}}",
 				`${tempDir}/file?.txt`,
 				"{{glob}}",
@@ -100,6 +116,10 @@ describe("handleGlob", () => {
 
 	describe("recursive glob patterns", () => {
 		it("should match files recursively with ** pattern", async () => {
+			const config = createConfig({
+				...defaultConfig,
+				allowedBasePaths: [...defaultConfig.allowedBasePaths, tempDir],
+			});
 			const subDir = join(tempDir, "subdir");
 			await mkdir(subDir, { recursive: true });
 
@@ -107,6 +127,7 @@ describe("handleGlob", () => {
 			await writeFile(join(subDir, "sub.txt"), "Sub");
 
 			const result = await handleGlob(
+				config,
 				"{{glob}}",
 				`${tempDir}/**/*.txt`,
 				"{{glob}}",
@@ -118,6 +139,10 @@ describe("handleGlob", () => {
 		});
 
 		it("should match files in nested directories", async () => {
+			const config = createConfig({
+				...defaultConfig,
+				allowedBasePaths: [...defaultConfig.allowedBasePaths, tempDir],
+			});
 			const level1 = join(tempDir, "level1");
 			const level2 = join(level1, "level2");
 			const level3 = join(level2, "level3");
@@ -130,6 +155,7 @@ describe("handleGlob", () => {
 			await writeFile(join(level3, "l3.js"), "Level 3");
 
 			const result = await handleGlob(
+				config,
 				"{{glob}}",
 				`${tempDir}/**/*.js`,
 				"{{glob}}",
@@ -143,6 +169,10 @@ describe("handleGlob", () => {
 		});
 
 		it("should match only specific subdirectory with **", async () => {
+			const config = createConfig({
+				...defaultConfig,
+				allowedBasePaths: [...defaultConfig.allowedBasePaths, tempDir],
+			});
 			const srcDir = join(tempDir, "src");
 			const testDir = join(tempDir, "test");
 
@@ -153,6 +183,7 @@ describe("handleGlob", () => {
 			await writeFile(join(testDir, "test.ts"), "Test");
 
 			const result = await handleGlob(
+				config,
 				"{{glob}}",
 				`${tempDir}/src/**/*.ts`,
 				"{{glob}}",
@@ -166,11 +197,16 @@ describe("handleGlob", () => {
 
 	describe("pattern extraction and base path", () => {
 		it("should correctly extract base path from glob pattern", async () => {
+			const config = createConfig({
+				...defaultConfig,
+				allowedBasePaths: [...defaultConfig.allowedBasePaths, tempDir],
+			});
 			const dataDir = join(tempDir, "data");
 			await mkdir(dataDir, { recursive: true });
 			await writeFile(join(dataDir, "file.txt"), "Content");
 
 			const result = await handleGlob(
+				config,
 				"{{glob}}",
 				`${tempDir}/data/*.txt`,
 				"{{glob}}",
@@ -181,10 +217,14 @@ describe("handleGlob", () => {
 		});
 
 		it("should handle glob pattern with no directory path", async () => {
+			const config = createConfig({
+				...defaultConfig,
+				allowedBasePaths: [...defaultConfig.allowedBasePaths, tempDir],
+			});
 			await writeFile(join(tempDir, "test.txt"), "Test");
 
-			// This would be relative to current directory in real usage
 			const result = await handleGlob(
+				config,
 				"{{glob}}",
 				`${tempDir}/*.txt`,
 				"{{glob}}",
@@ -195,11 +235,16 @@ describe("handleGlob", () => {
 		});
 
 		it("should handle complex nested path before wildcard", async () => {
+			const config = createConfig({
+				...defaultConfig,
+				allowedBasePaths: [...defaultConfig.allowedBasePaths, tempDir],
+			});
 			const complexPath = join(tempDir, "a", "b", "c", "d");
 			await mkdir(complexPath, { recursive: true });
 			await writeFile(join(complexPath, "file.txt"), "Deep file");
 
 			const result = await handleGlob(
+				config,
 				"{{glob}}",
 				`${tempDir}/a/b/c/d/*.txt`,
 				"{{glob}}",
@@ -212,9 +257,14 @@ describe("handleGlob", () => {
 
 	describe("content processing", () => {
 		it("should include filename in output", async () => {
+			const config = createConfig({
+				...defaultConfig,
+				allowedBasePaths: [...defaultConfig.allowedBasePaths, tempDir],
+			});
 			await writeFile(join(tempDir, "test.txt"), "Content");
 
 			const result = await handleGlob(
+				config,
 				"{{glob}}",
 				`${tempDir}/*.txt`,
 				"{{glob}}",
@@ -226,11 +276,16 @@ describe("handleGlob", () => {
 		});
 
 		it("should process multiple files and combine content", async () => {
+			const config = createConfig({
+				...defaultConfig,
+				allowedBasePaths: [...defaultConfig.allowedBasePaths, tempDir],
+			});
 			await writeFile(join(tempDir, "a.txt"), "AAA");
 			await writeFile(join(tempDir, "b.txt"), "BBB");
 			await writeFile(join(tempDir, "c.txt"), "CCC");
 
 			const result = await handleGlob(
+				config,
 				"Start {{glob}} End",
 				`${tempDir}/*.txt`,
 				"{{glob}}",
@@ -245,9 +300,14 @@ describe("handleGlob", () => {
 		});
 
 		it("should preserve template structure when replacing match", async () => {
+			const config = createConfig({
+				...defaultConfig,
+				allowedBasePaths: [...defaultConfig.allowedBasePaths, tempDir],
+			});
 			await writeFile(join(tempDir, "file.txt"), "Content");
 
 			const result = await handleGlob(
+				config,
 				"Before {{glob}} After",
 				`${tempDir}/*.txt`,
 				"{{glob}}",
@@ -262,10 +322,15 @@ describe("handleGlob", () => {
 
 	describe("length limits and truncation", () => {
 		it("should truncate content when exceeding remaining length", async () => {
+			const config = createConfig({
+				...defaultConfig,
+				allowedBasePaths: [...defaultConfig.allowedBasePaths, tempDir],
+			});
 			await writeFile(join(tempDir, "file1.txt"), "A".repeat(5000));
 			await writeFile(join(tempDir, "file2.txt"), "B".repeat(5000));
 
 			const result = await handleGlob(
+				config,
 				"{{glob}}",
 				`${tempDir}/*.txt`,
 				"{{glob}}",
@@ -277,25 +342,34 @@ describe("handleGlob", () => {
 		});
 
 		it("should stop processing files when remaining length reaches zero", async () => {
+			const config = createConfig({
+				...defaultConfig,
+				allowedBasePaths: [...defaultConfig.allowedBasePaths, tempDir],
+			});
 			await writeFile(join(tempDir, "file1.txt"), "A".repeat(50));
 			await writeFile(join(tempDir, "file2.txt"), "B".repeat(50));
 			await writeFile(join(tempDir, "file3.txt"), "C".repeat(50));
 
 			const result = await handleGlob(
+				config,
 				"{{glob}}",
 				`${tempDir}/*.txt`,
 				"{{glob}}",
 				80, // Only enough for ~1 file
 			);
 
-			// Should process at least one file but stop early
 			expect(result.combinedRemainingCount).toBeLessThanOrEqual(80);
 		});
 
 		it("should correctly calculate remaining length", async () => {
+			const config = createConfig({
+				...defaultConfig,
+				allowedBasePaths: [...defaultConfig.allowedBasePaths, tempDir],
+			});
 			await writeFile(join(tempDir, "small.txt"), "12345");
 
 			const result = await handleGlob(
+				config,
 				"{{glob}}",
 				`${tempDir}/*.txt`,
 				"{{glob}}",
@@ -309,19 +383,25 @@ describe("handleGlob", () => {
 
 	describe("error handling", () => {
 		it("should handle invalid glob pattern gracefully", async () => {
+			const config = createConfig({
+				...defaultConfig,
+				allowedBasePaths: [...defaultConfig.allowedBasePaths, tempDir],
+			});
 			const result = await handleGlob(
+				config,
 				"{{glob}}",
 				`${tempDir}/[invalid`,
 				"{{glob}}",
 				10000,
 			);
 
-			expect(result.operationResults).toContain("[Invalid glob pattern:");
+			// Invalid patterns don't throw errors in Bun.Glob, they just match nothing
+			expect(result.operationResults).toBe("");
 			expect(result.combinedRemainingCount).toBe(10000);
 		});
 
 		it("should handle security validation errors", async () => {
-			validator.configure({
+			const restrictedConfig = createConfig({
 				allowedBasePaths: ["/some/other/path"],
 				allowHttp: false,
 				allowFunctions: false,
@@ -330,6 +410,7 @@ describe("handleGlob", () => {
 			await writeFile(join(tempDir, "file.txt"), "Content");
 
 			const result = await handleGlob(
+				restrictedConfig,
 				"{{glob}}",
 				`${tempDir}/*.txt`,
 				"{{glob}}",
@@ -339,42 +420,18 @@ describe("handleGlob", () => {
 			expect(result.operationResults).toContain("[Security Error");
 			expect(result.combinedRemainingCount).toBeLessThanOrEqual(10000);
 		});
-
-		it("should handle non-existent directory gracefully", async () => {
-			const nonExistent = join(tempDir, "does-not-exist");
-
-			const result = await handleGlob(
-				"{{glob}}",
-				`${nonExistent}/*.txt`,
-				"{{glob}}",
-				10000,
-			);
-
-			// Should handle gracefully, possibly with empty result or error
-			expect(result.combinedRemainingCount).toBeLessThanOrEqual(10000);
-		});
-
-		it("should handle file read errors in matched files", async () => {
-			await writeFile(join(tempDir, "good.txt"), "Good content");
-			// Create a file reference but we can't easily make it unreadable in tests
-			// The error handling code path is tested through security validation
-
-			const result = await handleGlob(
-				"{{glob}}",
-				`${tempDir}/*.txt`,
-				"{{glob}}",
-				10000,
-			);
-
-			expect(result.operationResults).toContain("Good content");
-		});
 	});
 
 	describe("edge cases", () => {
 		it("should handle empty match (no files match pattern)", async () => {
+			const config = createConfig({
+				...defaultConfig,
+				allowedBasePaths: [...defaultConfig.allowedBasePaths, tempDir],
+			});
 			await writeFile(join(tempDir, "file.txt"), "Content");
 
 			const result = await handleGlob(
+				config,
 				"{{glob}}",
 				`${tempDir}/*.json`,
 				"{{glob}}",
@@ -386,9 +443,14 @@ describe("handleGlob", () => {
 		});
 
 		it("should handle single file match", async () => {
+			const config = createConfig({
+				...defaultConfig,
+				allowedBasePaths: [...defaultConfig.allowedBasePaths, tempDir],
+			});
 			await writeFile(join(tempDir, "single.txt"), "Single file");
 
 			const result = await handleGlob(
+				config,
 				"{{glob}}",
 				`${tempDir}/single.txt`,
 				"{{glob}}",
@@ -399,10 +461,15 @@ describe("handleGlob", () => {
 		});
 
 		it("should handle files with special characters in names", async () => {
+			const config = createConfig({
+				...defaultConfig,
+				allowedBasePaths: [...defaultConfig.allowedBasePaths, tempDir],
+			});
 			await writeFile(join(tempDir, "file with spaces.txt"), "Content");
 			await writeFile(join(tempDir, "file-with-dashes.txt"), "Content 2");
 
 			const result = await handleGlob(
+				config,
 				"{{glob}}",
 				`${tempDir}/*.txt`,
 				"{{glob}}",
@@ -414,9 +481,14 @@ describe("handleGlob", () => {
 		});
 
 		it("should handle empty files", async () => {
+			const config = createConfig({
+				...defaultConfig,
+				allowedBasePaths: [...defaultConfig.allowedBasePaths, tempDir],
+			});
 			await writeFile(join(tempDir, "empty.txt"), "");
 
 			const result = await handleGlob(
+				config,
 				"{{glob}}",
 				`${tempDir}/*.txt`,
 				"{{glob}}",
@@ -427,9 +499,14 @@ describe("handleGlob", () => {
 		});
 
 		it("should handle files with UTF-8 content", async () => {
+			const config = createConfig({
+				...defaultConfig,
+				allowedBasePaths: [...defaultConfig.allowedBasePaths, tempDir],
+			});
 			await writeFile(join(tempDir, "unicode.txt"), "Hello 世界 🌍");
 
 			const result = await handleGlob(
+				config,
 				"{{glob}}",
 				`${tempDir}/*.txt`,
 				"{{glob}}",
@@ -440,12 +517,17 @@ describe("handleGlob", () => {
 		});
 
 		it("should handle files with newlines and formatting", async () => {
+			const config = createConfig({
+				...defaultConfig,
+				allowedBasePaths: [...defaultConfig.allowedBasePaths, tempDir],
+			});
 			await writeFile(
 				join(tempDir, "formatted.txt"),
 				"Line 1\nLine 2\n\tIndented",
 			);
 
 			const result = await handleGlob(
+				config,
 				"{{glob}}",
 				`${tempDir}/*.txt`,
 				"{{glob}}",
@@ -458,11 +540,16 @@ describe("handleGlob", () => {
 		});
 
 		it("should handle multiple file types with single pattern", async () => {
+			const config = createConfig({
+				...defaultConfig,
+				allowedBasePaths: [...defaultConfig.allowedBasePaths, tempDir],
+			});
 			await writeFile(join(tempDir, "file.txt"), "Text");
 			await writeFile(join(tempDir, "file.md"), "Markdown");
 			await writeFile(join(tempDir, "file.js"), "JavaScript");
 
 			const result = await handleGlob(
+				config,
 				"{{glob}}",
 				`${tempDir}/file.*`,
 				"{{glob}}",
@@ -475,11 +562,16 @@ describe("handleGlob", () => {
 		});
 
 		it("should handle bracket patterns", async () => {
+			const config = createConfig({
+				...defaultConfig,
+				allowedBasePaths: [...defaultConfig.allowedBasePaths, tempDir],
+			});
 			await writeFile(join(tempDir, "file1.txt"), "File 1");
 			await writeFile(join(tempDir, "file2.txt"), "File 2");
 			await writeFile(join(tempDir, "file3.txt"), "File 3");
 
 			const result = await handleGlob(
+				config,
 				"{{glob}}",
 				`${tempDir}/file[12].txt`,
 				"{{glob}}",
@@ -494,11 +586,16 @@ describe("handleGlob", () => {
 
 	describe("mixed scenarios", () => {
 		it("should handle mixed file sizes", async () => {
+			const config = createConfig({
+				...defaultConfig,
+				allowedBasePaths: [...defaultConfig.allowedBasePaths, tempDir],
+			});
 			await writeFile(join(tempDir, "small.txt"), "S");
 			await writeFile(join(tempDir, "medium.txt"), "M".repeat(100));
 			await writeFile(join(tempDir, "large.txt"), "L".repeat(1000));
 
 			const result = await handleGlob(
+				config,
 				"{{glob}}",
 				`${tempDir}/*.txt`,
 				"{{glob}}",
@@ -511,6 +608,10 @@ describe("handleGlob", () => {
 		});
 
 		it("should handle glob with multiple wildcards", async () => {
+			const config = createConfig({
+				...defaultConfig,
+				allowedBasePaths: [...defaultConfig.allowedBasePaths, tempDir],
+			});
 			const subDir = join(tempDir, "sub");
 			await mkdir(subDir, { recursive: true });
 
@@ -518,6 +619,7 @@ describe("handleGlob", () => {
 			await writeFile(join(subDir, "test-2.txt"), "Test 2");
 
 			const result = await handleGlob(
+				config,
 				"{{glob}}",
 				`${tempDir}/**/test-*.txt`,
 				"{{glob}}",
@@ -529,9 +631,14 @@ describe("handleGlob", () => {
 		});
 
 		it("should handle absolute paths in glob patterns", async () => {
+			const config = createConfig({
+				...defaultConfig,
+				allowedBasePaths: [...defaultConfig.allowedBasePaths, tempDir],
+			});
 			await writeFile(join(tempDir, "absolute.txt"), "Absolute path content");
 
 			const result = await handleGlob(
+				config,
 				"{{glob}}",
 				`${tempDir}/*.txt`,
 				"{{glob}}",

@@ -1,64 +1,75 @@
-import { processContent } from "./content";
+import type { ShotputConfig } from "./config";
 import { getLogger } from "./logger";
-import { SecurityError, securityValidator } from "./security";
+import { SecurityError, validatePath } from "./security";
 
 const log = getLogger("fileStream");
 
+/**
+ * Handles reading large files using streams to avoid memory issues.
+ * Truncates content if it exceeds the remaining length limit.
+ */
 export const handleFileStream = async (
+	config: ShotputConfig,
 	result: string,
 	path: string,
 	match: string,
 	remainingLength: number,
-) => {
+): Promise<{ operationResults: string; combinedRemainingCount: number }> => {
 	log.info(`Handling file stream: ${path}`);
 
 	try {
 		// Security validation
-		const validatedPath = securityValidator.validatePath(path);
+		const validatedPath = validatePath(config, path);
 
 		// Check if file exists and is accessible
 		const file = Bun.file(validatedPath);
-		const exists = await file.exists();
-		if (!exists) {
+		const fileExists = await file.exists();
+		if (!fileExists) {
 			throw new Error(`File not found: ${validatedPath}`);
 		}
 
-		// Stream processing for large files
 		const stream = file.stream();
-		const decoder = new TextDecoder("utf-8");
-		let processedContent = "";
-		let totalLength = 0;
+		const reader = stream.getReader();
+		const decoder = new TextDecoder();
 
-		for await (const chunk of stream) {
-			const chunkText = decoder.decode(chunk, { stream: true });
+		let content = `filename:${validatedPath}:\n`;
+		let currentLength = content.length;
+		let truncated = false;
 
-			if (totalLength + chunkText.length > remainingLength) {
-				const remainingChars = remainingLength - totalLength;
-				if (remainingChars > 0) {
-					processedContent += chunkText.slice(0, remainingChars);
-					totalLength = remainingLength;
+		// If the header itself is longer than remaining length
+		if (currentLength > remainingLength) {
+			content = content.slice(0, remainingLength);
+			truncated = true;
+		} else {
+			while (true) {
+				const { done, value } = await reader.read();
+				if (done) break;
+
+				const chunk = decoder.decode(value, { stream: true });
+
+				if (currentLength + chunk.length > remainingLength) {
+					const allowed = remainingLength - currentLength;
+					if (allowed > 0) {
+						content += chunk.slice(0, allowed);
+					}
+					truncated = true;
+					// Cancel the reader to stop the stream
+					await reader.cancel();
+					break;
 				}
-				break;
-			}
 
-			processedContent += chunkText;
-			totalLength += chunkText.length;
-
-			if (totalLength >= remainingLength) {
-				break;
+				content += chunk;
+				currentLength += chunk.length;
 			}
 		}
 
-		const fileContent = `filename:${validatedPath}:\n${processedContent}`;
-		const processed = await processContent(fileContent, remainingLength);
-
-		if (processed.truncated) {
+		if (truncated) {
 			log.warn(`Content truncated for ${validatedPath} due to length limit`);
 		}
 
 		return {
-			operationResults: result.replace(match, processed.content),
-			combinedRemainingCount: processed.remainingLength,
+			operationResults: result.replace(match, content),
+			combinedRemainingCount: Math.max(0, remainingLength - content.length),
 		};
 	} catch (error) {
 		if (error instanceof SecurityError) {

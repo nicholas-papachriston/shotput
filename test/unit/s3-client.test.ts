@@ -1,5 +1,5 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { CONFIG } from "../../src/config";
+import { describe, expect, test } from "bun:test";
+import { createConfig } from "../../src/config";
 import {
 	extractAvailabilityZoneId,
 	getS3Endpoint,
@@ -9,24 +9,6 @@ import {
 import type { S3Credentials } from "../../src/types";
 
 describe("s3-client", () => {
-	// Save original CONFIG values
-	const originalCloudflareR2Url = CONFIG.cloudflareR2Url;
-	const originalAwsS3Url = CONFIG.awsS3Url;
-	const originalS3Region = CONFIG.s3Region;
-
-	beforeEach(() => {
-		// Reset CONFIG to known state for tests
-		CONFIG.cloudflareR2Url = undefined;
-		CONFIG.awsS3Url = "s3.amazonaws.com";
-		CONFIG.s3Region = undefined;
-	});
-
-	afterEach(() => {
-		// Restore original CONFIG values
-		CONFIG.cloudflareR2Url = originalCloudflareR2Url;
-		CONFIG.awsS3Url = originalAwsS3Url;
-		CONFIG.s3Region = originalS3Region;
-	});
 	describe("parseS3Path", () => {
 		test("parses standard bucket with key", () => {
 			const result = parseS3Path("s3://my-bucket/path/to/file.json");
@@ -165,6 +147,7 @@ describe("s3-client", () => {
 
 	describe("getS3Endpoint", () => {
 		test("uses explicit endpoint when provided", () => {
+			const config = createConfig({ cloudflareR2Url: undefined });
 			const bucketInfo = {
 				bucket: "my-bucket",
 				isDirectoryBucket: false,
@@ -174,11 +157,12 @@ describe("s3-client", () => {
 				endpoint: "https://custom.s3.example.com",
 			};
 
-			const endpoint = getS3Endpoint(bucketInfo, credentials);
+			const endpoint = getS3Endpoint(bucketInfo, credentials, config);
 			expect(endpoint).toBe("https://custom.s3.example.com");
 		});
 
 		test("generates S3 Express endpoint for directory buckets", () => {
+			const config = createConfig({ cloudflareR2Url: undefined });
 			const bucketInfo = {
 				bucket: "my-data--use1-az4--x-s3",
 				isDirectoryBucket: true,
@@ -189,13 +173,14 @@ describe("s3-client", () => {
 				region: "us-east-1",
 			};
 
-			const endpoint = getS3Endpoint(bucketInfo, credentials);
+			const endpoint = getS3Endpoint(bucketInfo, credentials, config);
 			expect(endpoint).toBe(
 				"https://my-data--use1-az4--x-s3.s3express-use1-az4.us-east-1.amazonaws.com",
 			);
 		});
 
 		test("uses default region for directory buckets without explicit region", () => {
+			const config = createConfig({ cloudflareR2Url: undefined });
 			const bucketInfo = {
 				bucket: "logs--usw2-az1--x-s3",
 				isDirectoryBucket: true,
@@ -204,11 +189,12 @@ describe("s3-client", () => {
 
 			const credentials: S3Credentials = {};
 
-			const endpoint = getS3Endpoint(bucketInfo, credentials);
+			const endpoint = getS3Endpoint(bucketInfo, credentials, config);
 			expect(endpoint).toContain("us-east-1"); // Default region
 		});
 
 		test("generates virtual-hosted-style endpoint when enabled", () => {
+			const config = createConfig({ cloudflareR2Url: undefined });
 			const bucketInfo = {
 				bucket: "my-bucket",
 				isDirectoryBucket: false,
@@ -219,11 +205,12 @@ describe("s3-client", () => {
 				virtualHostedStyle: true,
 			};
 
-			const endpoint = getS3Endpoint(bucketInfo, credentials);
+			const endpoint = getS3Endpoint(bucketInfo, credentials, config);
 			expect(endpoint).toBe("https://my-bucket.s3.us-west-2.amazonaws.com");
 		});
 
 		test("generates path-style endpoint for standard buckets", () => {
+			const config = createConfig({ cloudflareR2Url: undefined });
 			const bucketInfo = {
 				bucket: "my-bucket",
 				isDirectoryBucket: false,
@@ -231,14 +218,17 @@ describe("s3-client", () => {
 
 			const credentials: S3Credentials = {
 				region: "eu-central-1",
-				virtualHostedStyle: false,
 			};
 
-			const endpoint = getS3Endpoint(bucketInfo, credentials);
+			const endpoint = getS3Endpoint(bucketInfo, credentials, config);
 			expect(endpoint).toBe("https://s3.eu-central-1.amazonaws.com");
 		});
 
 		test("falls back to default AWS S3 URL when no endpoint info available", () => {
+			const config = createConfig({
+				cloudflareR2Url: undefined,
+				s3Region: undefined,
+			});
 			const bucketInfo = {
 				bucket: "my-bucket",
 				isDirectoryBucket: false,
@@ -246,12 +236,12 @@ describe("s3-client", () => {
 
 			const credentials: S3Credentials = {};
 
-			// This falls back to CONFIG.awsS3Url in the actual implementation
-			const endpoint = getS3Endpoint(bucketInfo, credentials);
+			const endpoint = getS3Endpoint(bucketInfo, credentials, config);
 			expect(endpoint).toBe("https://s3.amazonaws.com");
 		});
 
 		test("handles directory bucket with different regions", () => {
+			const config = createConfig({ cloudflareR2Url: undefined });
 			const bucketInfo = {
 				bucket: "data--apne1-az3--x-s3",
 				isDirectoryBucket: true,
@@ -262,7 +252,7 @@ describe("s3-client", () => {
 				region: "ap-northeast-1",
 			};
 
-			const endpoint = getS3Endpoint(bucketInfo, credentials);
+			const endpoint = getS3Endpoint(bucketInfo, credentials, config);
 			expect(endpoint).toBe(
 				"https://data--apne1-az3--x-s3.s3express-apne1-az3.ap-northeast-1.amazonaws.com",
 			);
@@ -271,6 +261,7 @@ describe("s3-client", () => {
 
 	describe("integration scenarios", () => {
 		test("parses and generates endpoint for standard S3 bucket", () => {
+			const config = createConfig({ cloudflareR2Url: undefined });
 			const path = "s3://my-bucket/data/file.json";
 			const bucketInfo = parseS3Path(path);
 
@@ -280,12 +271,13 @@ describe("s3-client", () => {
 				region: "us-east-1",
 			};
 
-			const endpoint = getS3Endpoint(bucketInfo, credentials);
+			const endpoint = getS3Endpoint(bucketInfo, credentials, config);
 			expect(endpoint).toBe("https://s3.us-east-1.amazonaws.com");
 		});
 
 		test("parses and generates endpoint for directory bucket", () => {
-			const path = "s3://logs--use1-az4--x-s3/app/error.log";
+			const config = createConfig({ cloudflareR2Url: undefined });
+			const path = "s3://logs--use1-az4--x-s3/2024/01/app.log";
 			const bucketInfo = parseS3Path(path);
 
 			expect(bucketInfo.isDirectoryBucket).toBe(true);
@@ -295,7 +287,7 @@ describe("s3-client", () => {
 				region: "us-east-1",
 			};
 
-			const endpoint = getS3Endpoint(bucketInfo, credentials);
+			const endpoint = getS3Endpoint(bucketInfo, credentials, config);
 			expect(endpoint).toBe(
 				"https://logs--use1-az4--x-s3.s3express-use1-az4.us-east-1.amazonaws.com",
 			);

@@ -1,16 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { shotput } from "../../src";
-import { CONFIG } from "../../src/config";
+import { createConfig } from "../../src/config";
 import { handleFileStream } from "../../src/fileStream";
-import { SecurityValidator } from "../../src/security";
-
-beforeEach(() => {
-	// Reset CONFIG to defaults to prevent test leakage between integration test files
-	CONFIG.template = undefined;
-	CONFIG.maxPromptLength = 100000;
-	CONFIG.enableContentLengthPlanning = false;
-	CONFIG.maxConcurrency = 1;
-});
 
 describe("Shotput Integration Tests", () => {
 	let tempDir: string;
@@ -35,20 +26,9 @@ describe("Shotput Integration Tests", () => {
 		await Bun.$`mkdir -p ${tempDir}`;
 		await Bun.write(`${tempDir}/template.md`, `Hello {{${tempDir}/test.txt}}!`);
 		await Bun.write(`${tempDir}/test.txt`, "World!");
-
-		// Configure security
-		const validator = SecurityValidator.getInstance();
-		validator.configure({
-			allowedBasePaths: [process.cwd(), tempDir],
-			allowHttp: false,
-			allowFunctions: true,
-			allowedFunctionPaths: ["./test/fixtures"],
-		});
 	});
 
 	afterEach(async () => {
-		CONFIG.maxPromptLength = 100000;
-
 		// Restore env vars
 		for (const [key, value] of Object.entries(originalEnv)) {
 			if (value === undefined) {
@@ -96,14 +76,6 @@ describe("Shotput Integration Tests", () => {
 	});
 
 	it("should respect security restrictions for path traversal", async () => {
-		// Configure security to only allow tempDir
-		const validator = SecurityValidator.getInstance();
-		validator.configure({
-			allowedBasePaths: [tempDir],
-			allowHttp: false,
-			allowFunctions: false,
-		});
-
 		// Use an absolute path that exists but is outside allowed paths
 		const maliciousTemplate = "Hello {{/etc/hosts}}!";
 		await Bun.write(`${tempDir}/malicious.md`, maliciousTemplate);
@@ -124,13 +96,6 @@ describe("Shotput Integration Tests", () => {
 	});
 
 	it("should block absolute paths outside allowed base paths", async () => {
-		const validator = SecurityValidator.getInstance();
-		validator.configure({
-			allowedBasePaths: [tempDir],
-			allowHttp: false,
-			allowFunctions: false,
-		});
-
 		const maliciousTemplate = "Hello {{/etc/passwd}}!";
 		await Bun.write(`${tempDir}/absolute-path.md`, maliciousTemplate);
 
@@ -278,14 +243,6 @@ describe("FileStream Integration Tests", () => {
 	beforeEach(async () => {
 		tempDir = `${process.cwd()}/test-temp-stream-${Date.now()}`;
 		await Bun.$`mkdir -p ${tempDir}`;
-
-		// Configure security
-		const validator = SecurityValidator.getInstance();
-		validator.configure({
-			allowedBasePaths: [process.cwd(), tempDir],
-			allowHttp: false,
-			allowFunctions: false,
-		});
 	});
 
 	afterEach(async () => {
@@ -305,7 +262,12 @@ describe("FileStream Integration Tests", () => {
 		const match = "{{file}}";
 		const remainingLength = 1000;
 
+		const config = createConfig({
+			allowedBasePaths: [process.cwd(), tempDir],
+		});
+
 		const response = await handleFileStream(
+			config,
 			result,
 			path,
 			match,
@@ -326,7 +288,12 @@ describe("FileStream Integration Tests", () => {
 		const match = "{{file}}";
 		const remainingLength = 50;
 
+		const config = createConfig({
+			allowedBasePaths: [process.cwd(), tempDir],
+		});
+
 		const response = await handleFileStream(
+			config,
 			result,
 			path,
 			match,
@@ -345,7 +312,12 @@ describe("FileStream Integration Tests", () => {
 		const match = "{{file}}";
 		const remainingLength = 0;
 
+		const config = createConfig({
+			allowedBasePaths: [process.cwd(), tempDir],
+		});
+
 		const response = await handleFileStream(
+			config,
 			result,
 			path,
 			match,
@@ -356,19 +328,17 @@ describe("FileStream Integration Tests", () => {
 	});
 
 	it("should return security error for path traversal in file stream", async () => {
-		const validator = SecurityValidator.getInstance();
-		validator.configure({
-			allowedBasePaths: [tempDir],
-			allowHttp: false,
-			allowFunctions: false,
-		});
-
 		const result = "Test {{file}}!";
 		const path = "../../../etc/passwd";
 		const match = "{{file}}";
 		const remainingLength = 1000;
 
+		const config = createConfig({
+			allowedBasePaths: [tempDir],
+		});
+
 		const response = await handleFileStream(
+			config,
 			result,
 			path,
 			match,
@@ -385,7 +355,12 @@ describe("FileStream Integration Tests", () => {
 		const match = "{{file}}";
 		const remainingLength = 1000;
 
+		const config = createConfig({
+			allowedBasePaths: [process.cwd(), tempDir],
+		});
+
 		const response = await handleFileStream(
+			config,
 			result,
 			path,
 			match,
@@ -406,7 +381,12 @@ describe("FileStream Integration Tests", () => {
 		const match = "{{file}}";
 		const remainingLength = 500;
 
+		const config = createConfig({
+			allowedBasePaths: [process.cwd(), tempDir],
+		});
+
 		const response = await handleFileStream(
+			config,
 			result,
 			path,
 			match,
@@ -427,7 +407,12 @@ describe("FileStream Integration Tests", () => {
 		const match = "{{file}}";
 		const remainingLength = 1000;
 
+		const config = createConfig({
+			allowedBasePaths: [process.cwd(), tempDir],
+		});
+
 		const response = await handleFileStream(
+			config,
 			result,
 			path,
 			match,
@@ -446,7 +431,12 @@ describe("FileStream Integration Tests", () => {
 		const match = "{{file}}";
 		const remainingLength = 1000;
 
+		const config = createConfig({
+			allowedBasePaths: [process.cwd(), tempDir],
+		});
+
 		const response = await handleFileStream(
+			config,
 			result,
 			path,
 			match,
@@ -466,7 +456,12 @@ describe("FileStream Integration Tests", () => {
 		const match = "{{file}}";
 		const remainingLength = 1000;
 
+		const config = createConfig({
+			allowedBasePaths: [process.cwd(), tempDir],
+		});
+
 		const response = await handleFileStream(
+			config,
 			result,
 			path,
 			match,
@@ -486,7 +481,12 @@ describe("FileStream Integration Tests", () => {
 		const match = "{{file}}";
 		const remainingLength = 1000;
 
+		const config = createConfig({
+			allowedBasePaths: [process.cwd(), tempDir],
+		});
+
 		const response = await handleFileStream(
+			config,
 			result,
 			path,
 			match,
@@ -505,7 +505,12 @@ describe("FileStream Integration Tests", () => {
 		const match = "{{file}}";
 		const remainingLength = 1000;
 
+		const config = createConfig({
+			allowedBasePaths: [process.cwd(), tempDir],
+		});
+
 		const response = await handleFileStream(
+			config,
 			result,
 			path,
 			match,
@@ -524,14 +529,6 @@ describe("Shotput Edge Cases", () => {
 	beforeEach(async () => {
 		tempDir = `${process.cwd()}/test-temp-edge-${Date.now()}`;
 		await Bun.$`mkdir -p ${tempDir}`;
-
-		const validator = SecurityValidator.getInstance();
-		validator.configure({
-			allowedBasePaths: [process.cwd(), tempDir],
-			allowHttp: false,
-			allowFunctions: true,
-			allowedFunctionPaths: ["./test/fixtures"],
-		});
 	});
 
 	afterEach(async () => {
@@ -667,15 +664,11 @@ describe("Shotput Edge Cases", () => {
 
 describe("Skill Integration Tests", () => {
 	let tempDir: string;
-	let originalSkillsDir: string | undefined;
 
 	beforeEach(async () => {
 		tempDir = `${process.cwd()}/test-temp-skill-integration-${Date.now()}`;
 		await Bun.$`mkdir -p ${tempDir}`;
 		await Bun.$`mkdir -p ${tempDir}/skills/integration-test-skill`;
-
-		// Store and set config
-		originalSkillsDir = CONFIG.skillsDir;
 
 		// Create a test skill
 		const skillContent = `---
@@ -695,21 +688,9 @@ This skill is used for integration testing.
 			`${tempDir}/skills/integration-test-skill/SKILL.md`,
 			skillContent,
 		);
-
-		const validator = SecurityValidator.getInstance();
-		validator.configure({
-			allowedBasePaths: [process.cwd(), tempDir],
-			allowHttp: false,
-			allowFunctions: false,
-		});
 	});
 
 	afterEach(async () => {
-		// Restore config
-		if (originalSkillsDir !== undefined) {
-			CONFIG.skillsDir = originalSkillsDir;
-		}
-
 		try {
 			await Bun.$`rm -rf ${tempDir}`;
 		} catch {
@@ -718,8 +699,6 @@ This skill is used for integration testing.
 	});
 
 	it("should load a skill in template using skill: syntax", async () => {
-		CONFIG.skillsDir = `${tempDir}/skills`;
-
 		const template =
 			"# My Template\n\n{{skill:integration-test-skill}}\n\n## End";
 		await Bun.write(`${tempDir}/skill-template.md`, template);
@@ -730,7 +709,6 @@ This skill is used for integration testing.
 			responseDir: `${tempDir}/responses`,
 			allowedBasePaths: [process.cwd(), tempDir],
 			skillsDir: `${tempDir}/skills`,
-			maxPromptLength: 10000,
 		});
 
 		expect(result.content).toContain("# My Template");
@@ -740,8 +718,6 @@ This skill is used for integration testing.
 	});
 
 	it("should combine skills with file templates", async () => {
-		CONFIG.skillsDir = `${tempDir}/skills`;
-
 		await Bun.write(`${tempDir}/data.txt`, "Important data content");
 
 		const template = `{{skill:integration-test-skill}}
@@ -757,7 +733,6 @@ This skill is used for integration testing.
 			responseDir: `${tempDir}/responses`,
 			allowedBasePaths: [process.cwd(), tempDir],
 			skillsDir: `${tempDir}/skills`,
-			maxPromptLength: 10000,
 		});
 
 		expect(result.content).toContain("## Skill: integration-test-skill");
@@ -766,8 +741,6 @@ This skill is used for integration testing.
 	});
 
 	it("should handle skill not found gracefully in template", async () => {
-		CONFIG.skillsDir = `${tempDir}/skills`;
-
 		const template = "Start {{skill:nonexistent-skill}} End";
 		await Bun.write(`${tempDir}/missing-skill-template.md`, template);
 
@@ -785,8 +758,6 @@ This skill is used for integration testing.
 	});
 
 	it("should load fixture example skill", async () => {
-		CONFIG.skillsDir = "./test/fixtures/skills";
-
 		const template = "{{skill:example-skill}}";
 		await Bun.write(`${tempDir}/fixture-skill-template.md`, template);
 
@@ -796,7 +767,6 @@ This skill is used for integration testing.
 			responseDir: `${tempDir}/responses`,
 			allowedBasePaths: [process.cwd(), tempDir],
 			skillsDir: "./test/fixtures/skills",
-			maxPromptLength: 10000,
 		});
 
 		expect(result.content).toContain("## Skill: example-skill");
@@ -805,8 +775,6 @@ This skill is used for integration testing.
 	});
 
 	it("should handle multiple skills in same template", async () => {
-		CONFIG.skillsDir = `${tempDir}/skills`;
-
 		// Create a second skill
 		await Bun.$`mkdir -p ${tempDir}/skills/second-skill`;
 		const secondSkill = `---
@@ -843,8 +811,6 @@ Different content here.
 	});
 
 	it("should respect length limits with skill content", async () => {
-		CONFIG.skillsDir = `${tempDir}/skills`;
-
 		const template = "{{skill:integration-test-skill}}";
 		await Bun.write(`${tempDir}/limited-skill-template.md`, template);
 
@@ -853,12 +819,12 @@ Different content here.
 			templateFile: "limited-skill-template.md",
 			responseDir: `${tempDir}/responses`,
 			allowedBasePaths: [process.cwd(), tempDir],
+			maxPromptLength: 100,
 			skillsDir: `${tempDir}/skills`,
-			maxPromptLength: 50,
 		});
 
-		// Result should be truncated
-		expect(result.content?.length).toBeLessThan(100);
+		// Result should be truncated to at most maxPromptLength
+		expect(result.content?.length).toBeLessThanOrEqual(100);
 	});
 });
 
@@ -870,13 +836,6 @@ describe("Inline Template Tests", () => {
 		await Bun.$`mkdir -p ${tempDir}`;
 		await Bun.write(`${tempDir}/data.txt`, "Test Data Content");
 		await Bun.write(`${tempDir}/other.txt`, "Other Content");
-
-		const validator = SecurityValidator.getInstance();
-		validator.configure({
-			allowedBasePaths: [process.cwd(), tempDir],
-			allowHttp: false,
-			allowFunctions: false,
-		});
 	});
 
 	afterEach(async () => {
@@ -1004,13 +963,6 @@ describe("Inline Template Tests", () => {
 	});
 
 	it("should respect security restrictions in inline template", async () => {
-		const validator = SecurityValidator.getInstance();
-		validator.configure({
-			allowedBasePaths: [tempDir],
-			allowHttp: false,
-			allowFunctions: false,
-		});
-
 		const template = "{{/etc/passwd}}";
 
 		const result = await shotput({

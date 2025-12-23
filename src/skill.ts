@@ -1,7 +1,8 @@
-import { CONFIG } from "./config";
+import { join } from "node:path";
+import type { ShotputConfig } from "./config";
 import { processContent } from "./content";
 import { getLogger } from "./logger";
-import { SecurityError, securityValidator } from "./security";
+import { SecurityError, validatePath, validateSkillSource } from "./security";
 
 const log = getLogger("skill");
 
@@ -56,15 +57,16 @@ const parseSkillMd = (content: string): SkillContent => {
  * Load skill content from a local directory
  */
 const loadLocalSkill = async (
+	config: ShotputConfig,
 	skillName: string,
 	includeReferences: boolean,
 ): Promise<string> => {
-	const skillsDir = CONFIG.skillsDir || "./skills";
-	const skillDir = `${skillsDir}/${skillName}`;
-	const skillFile = `${skillDir}/SKILL.md`;
+	const skillsDir = config.skillsDir || "./skills";
+	const skillDir = join(skillsDir, skillName);
+	const skillFile = join(skillDir, "SKILL.md");
 
 	// Validate skill path for security
-	const validatedPath = securityValidator.validatePath(skillFile);
+	const validatedPath = validatePath(config, skillFile);
 
 	const file = Bun.file(validatedPath);
 	const exists = await file.exists();
@@ -84,16 +86,16 @@ ${parsed.instructions}`;
 
 	// Optionally include reference files
 	if (includeReferences) {
-		const referenceDir = `${skillDir}/reference`;
+		const referenceDir = join(skillDir, "reference");
 		try {
-			const refDirValidated = securityValidator.validatePath(referenceDir);
+			const refDirValidated = validatePath(config, referenceDir);
 
-			// Check if reference directory exists by trying to read it
+			// Check if reference directory exists
 			const glob = new Bun.Glob("*.md");
 			let referenceContent = "";
 
 			for await (const refFile of glob.scan(refDirValidated)) {
-				const refPath = `${refDirValidated}/${refFile}`;
+				const refPath = join(refDirValidated, refFile);
 				const refContent = await Bun.file(refPath).text();
 				referenceContent += `\n\n### Reference: ${refFile}\n\n${refContent}`;
 			}
@@ -101,7 +103,7 @@ ${parsed.instructions}`;
 			if (referenceContent) {
 				formattedSkill += `\n\n## Skill References\n${referenceContent}`;
 			}
-		} catch {
+		} catch (error) {
 			// Reference directory doesn't exist or can't be read, skip silently
 			log.info(`No reference files found for skill: ${skillName}`);
 		}
@@ -114,26 +116,19 @@ ${parsed.instructions}`;
  * Load skill content from a remote GitHub repository
  */
 const loadRemoteSkill = async (
+	config: ShotputConfig,
 	repoPath: string,
 	skillName: string,
 	includeReferences: boolean,
 ): Promise<string> => {
-	if (!CONFIG.allowRemoteSkills) {
+	if (!config.allowRemoteSkills) {
 		throw new SecurityError(
 			"Remote skill loading is disabled. Set allowRemoteSkills: true to enable.",
 		);
 	}
 
 	// Validate against allowed skill sources
-	if (
-		CONFIG.allowedSkillSources &&
-		CONFIG.allowedSkillSources.length > 0 &&
-		!CONFIG.allowedSkillSources.includes(repoPath)
-	) {
-		throw new SecurityError(
-			`Remote skill source not allowed: ${repoPath}. Allowed sources: ${CONFIG.allowedSkillSources.join(", ")}`,
-		);
-	}
+	validateSkillSource(config, repoPath);
 
 	const baseUrl = `https://raw.githubusercontent.com/${repoPath}/main/skills/${skillName}`;
 	const skillUrl = `${baseUrl}/SKILL.md`;
@@ -253,6 +248,7 @@ const parseSkillPath = (
  * Loads and processes Anthropic Skills from local or remote sources
  */
 export const handleSkill = async (
+	config: ShotputConfig,
 	result: string,
 	path: string,
 	match: string,
@@ -276,12 +272,13 @@ export const handleSkill = async (
 
 		if (isRemote && repoPath) {
 			skillContent = await loadRemoteSkill(
+				config,
 				repoPath,
 				skillName,
 				includeReferences,
 			);
 		} else {
-			skillContent = await loadLocalSkill(skillName, includeReferences);
+			skillContent = await loadLocalSkill(config, skillName, includeReferences);
 		}
 
 		const processed = await processContent(skillContent, remainingLength);

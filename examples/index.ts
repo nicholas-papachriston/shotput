@@ -18,3 +18,4 @@ await import("./advanced/06-length-limits.ts");
 await import("./advanced/07-mixed-sources.ts");
 await import("./advanced/08-remote-skills.ts");
 await import("./advanced/09-parallel-processing.ts");
+await import("./advanced/10-nested-templates.ts");

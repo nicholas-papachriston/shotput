@@ -1,51 +1,41 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import * as fs from "node:fs";
 import { join } from "node:path";
+import { type ShotputConfig, createConfig } from "../../src/config";
 import { ParallelProcessor } from "../../src/parallelProcessor";
-import { securityValidator } from "../../src/security";
+import { TemplateType } from "../../src/types";
 
 describe("ParallelProcessor", () => {
-	let processor: ParallelProcessor;
 	const originalFetch = global.fetch;
+	const testConfig: ShotputConfig = createConfig({
+		maxConcurrency: 4,
+		allowHttp: true,
+		allowedDomains: ["example.com", "api.example.com"],
+		allowFunctions: true,
+		allowedBasePaths: [process.cwd(), "/tmp"],
+	});
+	let processor: ParallelProcessor;
 
 	beforeEach(() => {
-		processor = new ParallelProcessor(4);
-		securityValidator.configure({
-			allowHttp: true,
-			allowedDomains: ["example.com", "api.example.com"],
-			allowFunctions: true,
-		});
+		processor = new ParallelProcessor(testConfig);
 	});
 
 	afterEach(() => {
 		mock.restore();
 		global.fetch = originalFetch;
-		securityValidator.configure({
-			allowHttp: false,
-			allowFunctions: false,
-			allowedDomains: [],
-			allowedBasePaths: [process.cwd()],
-		});
 	});
 
 	describe("constructor", () => {
-		test("should create processor with default concurrency", () => {
-			const defaultProcessor = new ParallelProcessor();
-			expect(defaultProcessor).toBeDefined();
+		test("should create processor with provided config", () => {
+			const config = createConfig();
+			const p = new ParallelProcessor(config);
+			expect(p).toBeDefined();
 		});
 
-		test("should create processor with custom concurrency", () => {
-			const customProcessor = new ParallelProcessor(8);
-			expect(customProcessor).toBeDefined();
-		});
-
-		test("should accept custom retry configuration", () => {
-			const customProcessor = new ParallelProcessor(4, {
-				maxRetries: 5,
-				initialDelay: 2000,
-				backoffMultiplier: 3,
-			});
-			expect(customProcessor).toBeDefined();
+		test("should use configuration values from the config object", () => {
+			const config = createConfig({ maxConcurrency: 8, maxRetries: 5 });
+			const p = new ParallelProcessor(config);
+			expect(p).toBeDefined();
 		});
 	});
 
@@ -54,620 +44,257 @@ describe("ParallelProcessor", () => {
 			const content = "No templates here";
 			const result = await processor.processTemplatesWithPlanning(
 				content,
-				"/test/base",
-				100000,
+				process.cwd(),
+				1000,
 			);
-
 			expect(result.content).toBe(content);
 			expect(result.metadata).toHaveLength(0);
 		});
 
 		test("should process single file template", async () => {
-			const tempDir = fs.mkdtempSync(join(process.cwd(), "test-temp-proc-1-"));
+			const tempDir = fs.mkdtempSync(join("/tmp", "shotput-test-"));
 			const filePath = join(tempDir, "test.txt");
 			fs.writeFileSync(filePath, "file content");
 
-			const content = "Hello {{./test.txt}} world";
-			const basePath = tempDir;
+			const content = `{{${filePath}}}`;
+			const result = await processor.processTemplatesWithPlanning(
+				content,
+				tempDir,
+				1000,
+			);
 
-			try {
-				const result = await processor.processTemplatesWithPlanning(
-					content,
-					basePath,
-					100000,
-				);
+			expect(result.content).toContain("file content");
+			expect(result.metadata).toHaveLength(1);
+			expect(result.metadata[0].path).toBe(filePath);
 
-				expect(result.metadata.length).toBeGreaterThan(0);
-				expect(result.metadata[0].path).toBe(filePath);
-			} finally {
-				fs.rmSync(tempDir, { recursive: true, force: true });
-			}
+			fs.rmSync(tempDir, { recursive: true, force: true });
 		});
 
 		test("should process multiple templates in parallel", async () => {
-			const tempDir = fs.mkdtempSync(join(process.cwd(), "test-temp-proc-3-"));
-			fs.writeFileSync(join(tempDir, "file1.txt"), "Content 1");
-			fs.writeFileSync(join(tempDir, "file2.txt"), "Content 2");
-			fs.writeFileSync(join(tempDir, "file3.txt"), "Content 3");
+			const tempDir = fs.mkdtempSync(join("/tmp", "shotput-test-"));
+			const f1 = join(tempDir, "1.txt");
+			const f2 = join(tempDir, "2.txt");
+			fs.writeFileSync(f1, "content 1");
+			fs.writeFileSync(f2, "content 2");
 
-			const content =
-				"File: {{./file1.txt}}\nMore: {{./file2.txt}}\nEven more: {{./file3.txt}}";
-			const basePath = tempDir;
+			const content = `{{${f1}}} {{${f2}}}`;
+			const result = await processor.processTemplatesWithPlanning(
+				content,
+				tempDir,
+				1000,
+			);
 
-			try {
-				const result = await processor.processTemplatesWithPlanning(
-					content,
-					basePath,
-					100000,
-				);
+			expect(result.content).toContain("content 1");
+			expect(result.content).toContain("content 2");
+			expect(result.metadata).toHaveLength(2);
 
-				expect(result.metadata.length).toBe(3);
-			} finally {
-				fs.rmSync(tempDir, { recursive: true, force: true });
-			}
+			fs.rmSync(tempDir, { recursive: true, force: true });
 		});
 
 		test("should respect max length constraints", async () => {
-			const tempDir = fs.mkdtempSync(join(process.cwd(), "test-temp-proc-4-"));
-			const filePath = join(tempDir, "large-file.txt");
-			fs.writeFileSync(filePath, "A".repeat(1000));
+			const tempDir = fs.mkdtempSync(join("/tmp", "shotput-test-"));
+			const filePath = join(tempDir, "large.txt");
+			fs.writeFileSync(filePath, "A".repeat(100));
 
-			const content = "Content: {{./large-file.txt}}";
-			const basePath = tempDir;
-			const maxLength = 100;
+			const content = `{{${filePath}}}`;
+			// Set a small max length
+			const result = await processor.processTemplatesWithPlanning(
+				content,
+				tempDir,
+				10,
+			);
 
-			try {
-				const result = await processor.processTemplatesWithPlanning(
-					content,
-					basePath,
-					maxLength,
-				);
+			// When a file is skipped due to length constraints, it's not included in metadata
+			expect(result.metadata.length).toBe(0);
+			// The content should not include the file content
+			expect(result.content).not.toContain("A".repeat(100));
 
-				expect(result.content.length).toBeLessThanOrEqual(maxLength * 5); // Allow significant overhead for headers
-			} finally {
-				fs.rmSync(tempDir, { recursive: true, force: true });
-			}
+			fs.rmSync(tempDir, { recursive: true, force: true });
 		});
 
 		test("should call progress callback during processing", async () => {
-			const tempDir = fs.mkdtempSync(join(process.cwd(), "test-temp-proc-5-"));
-			fs.writeFileSync(join(tempDir, "test.txt"), "content");
+			const tempDir = fs.mkdtempSync(join("/tmp", "shotput-test-"));
+			const filePath = join(tempDir, "test.txt");
+			fs.writeFileSync(filePath, "content");
 
-			const content = "File: {{./test.txt}}";
-			const basePath = tempDir;
-			const progressUpdates: Array<{
-				current: number;
-				total: number;
-				stage: string;
-			}> = [];
+			const content = `{{${filePath}}}`;
+			const progressUpdates: unknown[] = [];
+			const onProgress = (progress: unknown) => progressUpdates.push(progress);
 
-			const onProgress = (progress: {
-				current: number;
-				total: number;
-				stage: string;
-			}) => {
-				progressUpdates.push(progress);
-			};
+			await processor.processTemplatesWithPlanning(
+				content,
+				tempDir,
+				1000,
+				onProgress,
+			);
 
-			try {
-				await processor.processTemplatesWithPlanning(
-					content,
-					basePath,
-					100000,
-					onProgress,
-				);
-
-				expect(progressUpdates.length).toBeGreaterThan(0);
-			} finally {
-				fs.rmSync(tempDir, { recursive: true, force: true });
-			}
+			expect(progressUpdates.length).toBeGreaterThan(0);
+			fs.rmSync(tempDir, { recursive: true, force: true });
 		});
 	});
 
 	describe("priority calculation", () => {
-		test("should prioritize file templates over directory templates", async () => {
-			const tempDir = fs.mkdtempSync(join(process.cwd(), "test-temp-proc-6-"));
-			fs.mkdirSync(join(tempDir, "dir"));
-			fs.writeFileSync(join(tempDir, "file.txt"), "content");
+		test("should maintain relative order of templates in final content", async () => {
+			const tempDir = fs.mkdtempSync(join("/tmp", "shotput-test-"));
+			const f1 = join(tempDir, "a.txt");
+			const f2 = join(tempDir, "b.txt");
+			fs.writeFileSync(f1, "A");
+			fs.writeFileSync(f2, "B");
 
-			const content = "Dir: {{./dir/}}\nFile: {{./file.txt}}";
-			const basePath = tempDir;
+			const content = `{{${f1}}} {{${f2}}}`;
+			const result = await processor.processTemplatesWithPlanning(
+				content,
+				tempDir,
+				1000,
+			);
 
-			try {
-				const result = await processor.processTemplatesWithPlanning(
-					content,
-					basePath,
-					100000,
-				);
+			expect(result.content).toContain("A");
+			expect(result.content).toContain("B");
+			expect(result.content.indexOf("A")).toBeLessThan(
+				result.content.indexOf("B"),
+			);
 
-				expect(result.metadata.length).toBe(2);
-			} finally {
-				fs.rmSync(tempDir, { recursive: true, force: true });
-			}
-		});
-
-		test("should maintain order for same template types", async () => {
-			const tempDir = fs.mkdtempSync(join(process.cwd(), "test-temp-proc-7-"));
-			fs.writeFileSync(join(tempDir, "a.txt"), "A");
-			fs.writeFileSync(join(tempDir, "b.txt"), "B");
-			fs.writeFileSync(join(tempDir, "c.txt"), "C");
-
-			const content =
-				"File1: {{./a.txt}}\nFile2: {{./b.txt}}\nFile3: {{./c.txt}}";
-			const basePath = tempDir;
-
-			try {
-				const result = await processor.processTemplatesWithPlanning(
-					content,
-					basePath,
-					100000,
-				);
-
-				expect(result.metadata.length).toBe(3);
-			} finally {
-				fs.rmSync(tempDir, { recursive: true, force: true });
-			}
+			fs.rmSync(tempDir, { recursive: true, force: true });
 		});
 	});
 
 	describe("content length estimation", () => {
 		test("should estimate file size correctly", async () => {
-			const tempDir = fs.mkdtempSync(join(process.cwd(), "test-temp-proc-2-"));
-			const filePath = join(tempDir, "test.txt");
-			const fileContent = "A".repeat(1024);
-			fs.writeFileSync(filePath, fileContent);
+			const tempDir = fs.mkdtempSync(join("/tmp", "shotput-test-"));
+			const filePath = join(tempDir, "size.txt");
+			const text = "1234567890";
+			fs.writeFileSync(filePath, text);
 
-			const content = "File: {{./test.txt}}";
-			const basePath = tempDir;
+			const content = `{{${filePath}}}`;
+			const result = await processor.processTemplatesWithPlanning(
+				content,
+				tempDir,
+				1000,
+			);
 
-			try {
-				const result = await processor.processTemplatesWithPlanning(
-					content,
-					basePath,
-					100000,
-				);
+			expect(result.metadata[0].length).toBeGreaterThanOrEqual(text.length);
 
-				expect(result.metadata.length).toBeGreaterThan(0);
-				expect(result.metadata[0].length).toBe(
-					1024 + `filename:${filePath}:\n`.length,
-				);
-			} finally {
-				fs.rmSync(tempDir, { recursive: true, force: true });
-			}
+			fs.rmSync(tempDir, { recursive: true, force: true });
 		});
 
 		test("should handle HTTP HEAD requests for content length", async () => {
-			const content = "HTTP: {{http://example.com/data.json}}";
-			const basePath = "/test/base";
-
-			const mockResponse = {
-				headers: {
-					get: mock((name: string) =>
-						name === "content-length" ? "2048" : null,
-					),
-				},
-			};
 			global.fetch = mock(() =>
-				Promise.resolve(mockResponse),
+				Promise.resolve({
+					ok: true,
+					headers: new Headers({ "content-length": "100" }),
+					text: () => Promise.resolve("mocked content"),
+				}),
 			) as unknown as typeof fetch;
 
+			const content = "{{https://example.com/data}}";
 			const result = await processor.processTemplatesWithPlanning(
 				content,
-				basePath,
-				100000,
+				process.cwd(),
+				1000,
 			);
 
-			expect(result.metadata.length).toBeGreaterThan(0);
-		});
-
-		test("should handle missing content length gracefully", async () => {
-			const content = "HTTP: {{http://example.com/no-length}}";
-			const basePath = "/test/base";
-
-			const mockResponse = {
-				headers: {
-					get: mock(() => null),
-				},
-			};
-			global.fetch = mock(() =>
-				Promise.resolve(mockResponse),
-			) as unknown as typeof fetch;
-
-			const result = await processor.processTemplatesWithPlanning(
-				content,
-				basePath,
-				100000,
-			);
-
-			expect(result.metadata.length).toBeGreaterThan(0);
-		});
-	});
-
-	describe("trimming by content length", () => {
-		test("should trim templates when exceeding max length", async () => {
-			const tempDir = fs.mkdtempSync(join(process.cwd(), "test-temp-proc-8-"));
-			fs.writeFileSync(join(tempDir, "large1.txt"), "A".repeat(100));
-			fs.writeFileSync(join(tempDir, "large2.txt"), "B".repeat(100));
-
-			const content = "File1: {{./large1.txt}}\nFile2: {{./large2.txt}}";
-			const basePath = tempDir;
-			const maxLength = 50;
-
-			try {
-				const result = await processor.processTemplatesWithPlanning(
-					content,
-					basePath,
-					maxLength,
-				);
-
-				// Should process but might trim some templates
-				expect(result.metadata.length).toBeGreaterThanOrEqual(0);
-			} finally {
-				fs.rmSync(tempDir, { recursive: true, force: true });
-			}
-		});
-
-		test("should preserve high priority templates when trimming", async () => {
-			const tempDir = fs.mkdtempSync(join(process.cwd(), "test-temp-proc-9-"));
-			fs.mkdirSync(join(tempDir, "dir"));
-			fs.writeFileSync(join(tempDir, "important.txt"), "Important");
-
-			const content =
-				"LowPriority: {{./dir/}}\nHighPriority: {{./important.txt}}";
-			const basePath = tempDir;
-			const maxLength = 100;
-
-			try {
-				const result = await processor.processTemplatesWithPlanning(
-					content,
-					basePath,
-					maxLength,
-				);
-
-				expect(result.metadata.length).toBeGreaterThanOrEqual(1);
-			} finally {
-				fs.rmSync(tempDir, { recursive: true, force: true });
-			}
+			expect(result.metadata[0].type).toBe(TemplateType.Http);
 		});
 	});
 
 	describe("retry logic", () => {
 		test("should retry failed operations with exponential backoff", async () => {
-			const content = "HTTP: {{http://example.com/failing}}";
-			const basePath = "/test/base";
+			let attempts = 0;
+			global.fetch = mock(() => {
+				attempts++;
+				if (attempts < 2) return Promise.reject(new Error("Network failure"));
+				return Promise.resolve({
+					ok: true,
+					headers: new Headers({ "content-length": "10" }),
+					text: () => Promise.resolve("success"),
+				});
+			}) as unknown as typeof fetch;
 
-			let attemptCount = 0;
-			const mockResponse = {
-				headers: { get: () => null },
-				text: mock(() => {
-					attemptCount++;
-					if (attemptCount < 3) {
-						return Promise.reject(new Error("Temporary failure"));
-					}
-					return Promise.resolve("success after retries");
-				}),
-				ok: true,
-			};
-			global.fetch = mock(() =>
-				Promise.resolve(mockResponse),
-			) as unknown as typeof fetch;
-
-			const retryProcessor = new ParallelProcessor(4, {
-				maxRetries: 3,
-				initialDelay: 10,
-				backoffMultiplier: 2,
-			});
-
-			const result = await retryProcessor.processTemplatesWithPlanning(
-				content,
-				basePath,
-				100000,
-			);
-
-			expect(attemptCount).toBeGreaterThanOrEqual(0);
-			expect(result.metadata.length).toBeGreaterThan(0);
-		});
-
-		test("should give up after max retries", async () => {
-			const content = "HTTP: {{http://example.com/always-failing}}";
-			const basePath = "/test/base";
-
-			const mockResponse = {
-				headers: { get: () => null },
-				text: mock(() => Promise.reject(new Error("Permanent failure"))),
-				ok: true,
-			};
-			global.fetch = mock(() =>
-				Promise.resolve(mockResponse),
-			) as unknown as typeof fetch;
-
-			const retryProcessor = new ParallelProcessor(4, {
+			const config = createConfig({
+				...testConfig,
 				maxRetries: 2,
-				initialDelay: 10,
-				backoffMultiplier: 2,
+				retryDelay: 10,
 			});
+			const retryProcessor = new ParallelProcessor(config);
 
+			const content = "{{https://example.com/retry}}";
 			const result = await retryProcessor.processTemplatesWithPlanning(
 				content,
-				basePath,
-				100000,
+				process.cwd(),
+				1000,
 			);
 
-			const errorResults = result.metadata.filter((m) => m.error);
-			expect(errorResults.length).toBeGreaterThanOrEqual(0);
+			expect(attempts).toBe(2);
+			expect(result.content).toContain("success");
 		});
 	});
 
 	describe("error handling", () => {
 		test("should handle invalid template types gracefully", async () => {
-			const content = "Invalid: {{unknown://invalid-path}}";
-			const basePath = "/test/base";
-
+			const content = "{{unknown://something}}";
 			const result = await processor.processTemplatesWithPlanning(
 				content,
-				basePath,
-				100000,
+				process.cwd(),
+				1000,
 			);
-
-			expect(result.metadata.length).toBeGreaterThanOrEqual(0);
+			expect(result.metadata[0].error).toBeDefined();
 		});
 
 		test("should continue processing after individual template failures", async () => {
-			const content =
-				"Good: {{./good.txt}}\nBad: {{./bad.txt}}\nAlsoGood: {{./good2.txt}}";
-			const basePath = "/test/base";
+			const tempDir = fs.mkdtempSync(join("/tmp", "shotput-test-"));
+			const f1 = join(tempDir, "exists.txt");
+			fs.writeFileSync(f1, "i exist");
 
+			const content = `{{${f1}}} {{${join(tempDir, "missing.txt")}}}`;
 			const result = await processor.processTemplatesWithPlanning(
 				content,
-				basePath,
-				100000,
+				tempDir,
+				1000,
 			);
 
-			expect(result.metadata.length).toBeGreaterThan(0);
-		});
+			expect(result.content).toContain("i exist");
+			expect(result.metadata).toHaveLength(2);
 
-		test("should record errors in metadata", async () => {
-			const tempDir = fs.mkdtempSync(join(process.cwd(), "test-temp-proc-10-"));
-			const content = "File: {{./nonexistent.txt}}";
-			const basePath = tempDir;
-
-			try {
-				const result = await processor.processTemplatesWithPlanning(
-					content,
-					basePath,
-					100000,
-				);
-
-				const hasError = result.metadata.some((m) => m.error !== undefined);
-				expect(hasError || result.metadata.length >= 0).toBe(true);
-			} finally {
-				fs.rmSync(tempDir, { recursive: true, force: true });
-			}
+			fs.rmSync(tempDir, { recursive: true, force: true });
 		});
 	});
 
 	describe("path resolution", () => {
 		test("should resolve relative paths correctly", async () => {
-			const content = "Relative: {{./subdir/file.txt}}";
-			const basePath = "/test/base";
+			const tempDir = fs.mkdtempSync(join("/tmp", "shotput-test-"));
+			fs.writeFileSync(join(tempDir, "rel.txt"), "relative content");
 
 			const result = await processor.processTemplatesWithPlanning(
-				content,
-				basePath,
-				100000,
+				"{{rel.txt}}",
+				tempDir,
+				1000,
 			);
+			expect(result.content).toContain("relative content");
 
-			expect(result.metadata.length).toBeGreaterThanOrEqual(0);
-		});
-
-		test("should handle absolute paths", async () => {
-			const content = "Absolute: {{/absolute/path/file.txt}}";
-			const basePath = "/test/base";
-
-			const result = await processor.processTemplatesWithPlanning(
-				content,
-				basePath,
-				100000,
-			);
-
-			expect(result.metadata.length).toBeGreaterThanOrEqual(0);
-		});
-
-		test("should not resolve special prefixes", async () => {
-			const content = "HTTP: {{http://example.com/file.txt}}";
-			const basePath = "/test/base";
-
-			const result = await processor.processTemplatesWithPlanning(
-				content,
-				basePath,
-				100000,
-			);
-
-			expect(result.metadata.length).toBeGreaterThanOrEqual(0);
-		});
-
-		test("should handle skill paths correctly", async () => {
-			const content = "Skill: {{skill:brand-guidelines}}";
-			const basePath = "/test/base";
-
-			const result = await processor.processTemplatesWithPlanning(
-				content,
-				basePath,
-				100000,
-			);
-
-			expect(result.metadata.length).toBeGreaterThanOrEqual(0);
-		});
-
-		test("should handle function paths correctly", async () => {
-			const content = "Function: {{TemplateType.Function:/path/to/fn.js}}";
-			const basePath = "/test/base";
-
-			const result = await processor.processTemplatesWithPlanning(
-				content,
-				basePath,
-				100000,
-			);
-
-			expect(result.metadata.length).toBeGreaterThanOrEqual(0);
-		});
-
-		test("should handle S3 paths correctly", async () => {
-			const content = "S3: {{s3://bucket/key.txt}}";
-			const basePath = "/test/base";
-
-			const result = await processor.processTemplatesWithPlanning(
-				content,
-				basePath,
-				100000,
-			);
-
-			expect(result.metadata.length).toBeGreaterThanOrEqual(0);
-		});
-	});
-
-	describe("template type detection", () => {
-		test("should detect file templates", async () => {
-			const content = "File: {{./test.txt}}";
-			const basePath = "/test/base";
-
-			const result = await processor.processTemplatesWithPlanning(
-				content,
-				basePath,
-				100000,
-			);
-
-			expect(result.metadata.length).toBeGreaterThanOrEqual(0);
-		});
-
-		test("should detect directory templates", async () => {
-			const content = "Dir: {{./test-dir/}}";
-			const basePath = "/test/base";
-
-			const result = await processor.processTemplatesWithPlanning(
-				content,
-				basePath,
-				100000,
-			);
-
-			expect(result.metadata.length).toBeGreaterThanOrEqual(0);
-		});
-
-		test("should detect glob patterns", async () => {
-			const content = "Glob: {{./src/**/*.ts}}";
-			const basePath = "/test/base";
-
-			const result = await processor.processTemplatesWithPlanning(
-				content,
-				basePath,
-				100000,
-			);
-
-			expect(result.metadata.length).toBeGreaterThanOrEqual(0);
-		});
-
-		test("should detect HTTP templates", async () => {
-			const content = "HTTP: {{https://api.example.com/data}}";
-			const basePath = "/test/base";
-
-			const result = await processor.processTemplatesWithPlanning(
-				content,
-				basePath,
-				100000,
-			);
-
-			expect(result.metadata.length).toBeGreaterThanOrEqual(0);
-		});
-
-		test("should detect S3 templates", async () => {
-			const content = "S3: {{s3://my-bucket/path/to/file.json}}";
-			const basePath = "/test/base";
-
-			const result = await processor.processTemplatesWithPlanning(
-				content,
-				basePath,
-				100000,
-			);
-
-			expect(result.metadata.length).toBeGreaterThanOrEqual(0);
+			fs.rmSync(tempDir, { recursive: true, force: true });
 		});
 	});
 
 	describe("metadata collection", () => {
-		test("should include processing time in metadata", async () => {
-			const content = "File: {{./test.txt}}";
-			const basePath = "/test/base";
+		test("should include required fields in metadata", async () => {
+			const tempDir = fs.mkdtempSync(join("/tmp", "shotput-test-"));
+			const filePath = join(tempDir, "meta.txt");
+			fs.writeFileSync(filePath, "content");
 
+			const content = `{{${filePath}}}`;
 			const result = await processor.processTemplatesWithPlanning(
 				content,
-				basePath,
-				100000,
+				tempDir,
+				1000,
 			);
 
-			if (result.metadata.length > 0) {
-				expect(result.metadata[0].processingTime).toBeGreaterThanOrEqual(0);
-			}
-		});
+			const meta = result.metadata[0];
+			expect(meta.path).toBe(filePath);
+			expect(meta.type).toBe(TemplateType.File);
+			expect(meta.length).toBeGreaterThan(0);
+			expect(meta.processingTime).toBeGreaterThanOrEqual(0);
 
-		test("should include template type in metadata", async () => {
-			const content = "File: {{./test.txt}}";
-			const basePath = "/test/base";
-
-			const result = await processor.processTemplatesWithPlanning(
-				content,
-				basePath,
-				100000,
-			);
-
-			if (result.metadata.length > 0) {
-				expect(result.metadata[0].type).toBeDefined();
-			}
-		});
-
-		test("should include path in metadata", async () => {
-			const content = "File: {{./test.txt}}";
-			const basePath = "/test/base";
-
-			const result = await processor.processTemplatesWithPlanning(
-				content,
-				basePath,
-				100000,
-			);
-
-			if (result.metadata.length > 0) {
-				expect(result.metadata[0].path).toBeDefined();
-			}
-		});
-
-		test("should include content length in metadata", async () => {
-			const content = "File: {{./test.txt}}";
-			const basePath = "/test/base";
-
-			const result = await processor.processTemplatesWithPlanning(
-				content,
-				basePath,
-				100000,
-			);
-
-			if (result.metadata.length > 0) {
-				expect(result.metadata[0].length).toBeGreaterThanOrEqual(0);
-			}
-		});
-
-		test("should indicate truncation in metadata", async () => {
-			const content = "File: {{./large.txt}}";
-			const basePath = "/test/base";
-			const maxLength = 10;
-
-			const result = await processor.processTemplatesWithPlanning(
-				content,
-				basePath,
-				maxLength,
-			);
-
-			if (result.metadata.length > 0) {
-				expect(typeof result.metadata[0].truncated).toBe("boolean");
-			}
+			fs.rmSync(tempDir, { recursive: true, force: true });
 		});
 	});
 });

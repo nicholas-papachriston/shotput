@@ -1,9 +1,8 @@
 import { join } from "node:path";
-import { CONFIG } from "./config";
+import { type ShotputConfig, createConfig } from "./config";
 import { ensureDirectoryExists } from "./directory";
 import { interpolation } from "./interpolation";
 import { getLogger } from "./logger";
-import { securityValidator } from "./security";
 
 const log = getLogger("shotput");
 
@@ -16,26 +15,24 @@ export interface ShotputOutput {
 	};
 }
 
-const run = async (): Promise<ShotputOutput> => {
+const run = async (config: ShotputConfig): Promise<ShotputOutput> => {
 	const startTime = Date.now();
 	try {
-		// Initialize security configuration using current CONFIG
-		securityValidator.configure(CONFIG);
-
-		await ensureDirectoryExists(CONFIG.responseDir, CONFIG.templateDir);
+		await ensureDirectoryExists(config.responseDir, config.templateDir);
 
 		// Use provided template content or read from file
 		let templateContent: string;
-		if (CONFIG.template !== undefined) {
-			templateContent = CONFIG.template;
+		if (config.template !== undefined) {
+			templateContent = config.template;
 		} else {
-			const templatePath = join(CONFIG.templateDir, CONFIG.templateFile);
+			const templatePath = join(config.templateDir, config.templateFile);
 			templateContent = await Bun.file(templatePath).text();
 		}
 
 		const { processedTemplate, resultMetadata } = await interpolation(
 			templateContent,
-			CONFIG.templateDir,
+			config,
+			config.templateDir,
 		);
 
 		const duration = Date.now() - startTime;
@@ -44,9 +41,9 @@ const run = async (): Promise<ShotputOutput> => {
 			metadata: { duration, resultMetadata },
 		};
 
-		if (CONFIG.debug) {
-			await Bun.write(CONFIG.debugFile, processedTemplate);
-			log.info(`Debug output written to ${CONFIG.debugFile}`);
+		if (config.debug) {
+			await Bun.write(config.debugFile, processedTemplate);
+			log.info(`Debug output written to ${config.debugFile}`);
 		}
 
 		return resultObject;
@@ -85,21 +82,10 @@ const run = async (): Promise<ShotputOutput> => {
  * ```
  */
 export function shotput(
-	config?: Partial<typeof CONFIG>,
+	configOverrides?: Partial<ShotputConfig>,
 ): Promise<ShotputOutput> {
-	// Reset per-call template content to prevent state leakage between runs
-	CONFIG.template = undefined;
-
-	if (config) {
-		// Update global CONFIG with provided values, ignoring undefined ones
-		for (const [key, value] of Object.entries(config)) {
-			if (value !== undefined) {
-				(CONFIG as Record<string, unknown>)[key] = value;
-			}
-		}
-	}
-
-	return run();
+	const config = createConfig(configOverrides);
+	return run(config);
 }
 
 if (require.main === module) {

@@ -259,7 +259,7 @@ const directoryBuckets = [
 
 // Helper to get S3 client for a bucket
 function getS3Client(bucketName: string): S3Client {
-	const config: any = {
+	const config: Record<string, unknown> = {
 		accessKeyId,
 		secretAccessKey,
 		region,
@@ -267,11 +267,11 @@ function getS3Client(bucketName: string): S3Client {
 	};
 
 	if (sessionToken) {
-		config.sessionToken = sessionToken;
+		config["sessionToken"] = sessionToken;
 	}
 
 	if (isR2 && r2Url) {
-		config.endpoint = `https://${r2Url}`;
+		config["endpoint"] = `https://${r2Url}`;
 	}
 
 	return new S3Client(config);
@@ -298,8 +298,9 @@ async function uploadFile(
 		await file.write(content);
 		log.info(`    ✓ Uploaded: ${key} (${content.length} bytes)`);
 		return true;
-	} catch (error: any) {
-		log.error(`    ✗ Failed to upload ${key}: ${error.message}`);
+	} catch (error: unknown) {
+		const errorMessage = error instanceof Error ? error.message : String(error);
+		log.error(`    ✗ Failed to upload ${key}: ${errorMessage}`);
 		return false;
 	}
 }
@@ -319,7 +320,7 @@ async function deleteFile(bucketName: string, key: string): Promise<boolean> {
 		await file.delete();
 		log.info(`    ✓ Deleted: ${key}`);
 		return true;
-	} catch (error: any) {
+	} catch (error: unknown) {
 		// File might not exist, that's ok
 		log.info(`    ⊘ File not found: ${key}`);
 		return true;
@@ -399,9 +400,9 @@ async function main() {
 	}
 
 	log.info("\nBuckets populated:");
-	targetBuckets.forEach((b) => {
-		log.info(`  ✓ ${b.name} (${b.files.length} files)`);
-	});
+	for (const bucket of targetBuckets) {
+		log.info(`  ✓ ${bucket.name} (${bucket.files.length} files)`);
+	}
 
 	if (!isR2 && directoryBuckets.length > 0) {
 		log.info("\n📝 Directory Buckets (Manual Setup Required):");
@@ -409,10 +410,10 @@ async function main() {
 			"   These require special AWS configuration and must be created manually.",
 		);
 		log.info("   See SETUP.md for detailed instructions.");
-		directoryBuckets.forEach((b) => {
-			log.info(`\n  ${b.name}`);
-			log.info(`    Region: ${b.region}, AZ: ${b.availabilityZone}`);
-		});
+		for (const bucket of directoryBuckets) {
+			log.info(`\n  ${bucket.name}`);
+			log.info(`    Region: ${bucket.region}, AZ: ${bucket.availabilityZone}`);
+		}
 	}
 
 	log.info("\n💡 Tips:");

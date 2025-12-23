@@ -1,24 +1,30 @@
+import type { ShotputConfig } from "./config";
 import { processContent } from "./content";
 import { handleFileStream } from "./fileStream";
 import { getLogger } from "./logger";
-import { SecurityError, securityValidator } from "./security";
+import { SecurityError, validatePath } from "./security";
 
 // Files larger than 1MB will use streaming to avoid memory issues
 const STREAM_THRESHOLD_BYTES = 1024 * 1024;
 
 const log = getLogger("file");
 
+/**
+ * Handles file interpolation by reading content from the local file system.
+ * Uses streaming for files larger than 1MB to optimize memory usage.
+ */
 export const handleFile = async (
+	config: ShotputConfig,
 	result: string,
 	path: string,
 	match: string,
 	remainingLength: number,
-) => {
+): Promise<{ operationResults: string; combinedRemainingCount: number }> => {
 	log.info(`Handling file: ${path}`);
 
 	try {
 		// Security validation
-		const validatedPath = securityValidator.validatePath(path);
+		const validatedPath = validatePath(config, path);
 
 		// Check if file exists and is accessible
 		const file = Bun.file(validatedPath);
@@ -31,7 +37,7 @@ export const handleFile = async (
 		const fileSize = file.size;
 		if (fileSize > STREAM_THRESHOLD_BYTES) {
 			log.info(`File ${validatedPath} is ${fileSize} bytes, using streaming`);
-			return handleFileStream(result, path, match, remainingLength);
+			return handleFileStream(config, result, path, match, remainingLength);
 		}
 
 		const fileContent = `filename:${validatedPath}:\n${await file.text()}`;

@@ -20,6 +20,7 @@
  * @prop [allowHttp] - def: true - whether HTTP requests are allowed
  * @prop [allowFunctions] - def: false - whether function execution is allowed
  * @prop [allowedFunctionPaths] - def: [] - allowed paths for function execution
+ * @prop [maxNestingDepth] - def: 3 - maximum depth for nested template interpolation
  */
 export interface ShotputConfig {
 	debug: boolean;
@@ -28,33 +29,34 @@ export interface ShotputConfig {
 	templateDir: string;
 	templateFile: string;
 	responseDir: string;
-	maxPromptLength?: number;
-	maxBucketFiles?: number;
-	awsS3Url?: string;
+	maxPromptLength: number;
+	maxBucketFiles: number;
+	awsS3Url: string;
 	cloudflareR2Url?: string;
-	httpTimeout?: number;
-	maxConcurrency?: number;
-	maxRetries?: number;
-	retryDelay?: number;
-	retryBackoffMultiplier?: number;
-	enableContentLengthPlanning?: boolean;
-	allowedBasePaths?: string[];
-	allowedDomains?: string[];
-	allowHttp?: boolean;
-	allowFunctions?: boolean;
-	allowedFunctionPaths?: string[];
-	skillsDir?: string;
-	allowRemoteSkills?: boolean;
-	allowedSkillSources?: string[];
+	httpTimeout: number;
+	maxConcurrency: number;
+	maxRetries: number;
+	retryDelay: number;
+	retryBackoffMultiplier: number;
+	enableContentLengthPlanning: boolean;
+	allowedBasePaths: string[];
+	allowedDomains: string[];
+	allowHttp: boolean;
+	allowFunctions: boolean;
+	allowedFunctionPaths: string[];
+	skillsDir: string;
+	allowRemoteSkills: boolean;
+	allowedSkillSources: string[];
 	s3AccessKeyId?: string;
 	s3SecretAccessKey?: string;
 	s3SessionToken?: string;
 	s3Region?: string;
 	s3Bucket?: string;
-	s3VirtualHostedStyle?: boolean;
+	s3VirtualHostedStyle: boolean;
+	maxNestingDepth: number;
 }
 
-const DEFAULT_CONFIG = {
+export const DEFAULT_CONFIG: ShotputConfig = {
 	debug: false,
 	debugFile: "./templates/template_debug.txt",
 	template: undefined,
@@ -85,9 +87,14 @@ const DEFAULT_CONFIG = {
 	s3Region: undefined,
 	s3Bucket: undefined,
 	s3VirtualHostedStyle: false,
+	maxNestingDepth: 3,
 };
 
-export const CONFIG = {
+/**
+ * Returns a configuration object populated from environment variables,
+ * falling back to DEFAULT_CONFIG values where necessary.
+ */
+export const getEnvConfig = (): ShotputConfig => ({
 	debug: process.env["DEBUG"] === "true",
 	debugFile: process.env["DEBUG_FILE"] ?? DEFAULT_CONFIG.debugFile,
 	template: process.env["TEMPLATE"] ?? DEFAULT_CONFIG.template,
@@ -122,23 +129,23 @@ export const CONFIG = {
 		DEFAULT_CONFIG.enableContentLengthPlanning,
 	allowedBasePaths: process.env["ALLOWED_BASE_PATHS"]
 		? process.env["ALLOWED_BASE_PATHS"].split(",")
-		: DEFAULT_CONFIG.allowedBasePaths,
+		: [...DEFAULT_CONFIG.allowedBasePaths],
 	allowedDomains: process.env["ALLOWED_DOMAINS"]
 		? process.env["ALLOWED_DOMAINS"].split(",")
-		: DEFAULT_CONFIG.allowedDomains,
+		: [...DEFAULT_CONFIG.allowedDomains],
 	allowHttp: process.env["ALLOW_HTTP"] === "true" || DEFAULT_CONFIG.allowHttp,
 	allowFunctions:
 		process.env["ALLOW_FUNCTIONS"] === "true" || DEFAULT_CONFIG.allowFunctions,
 	allowedFunctionPaths: process.env["ALLOWED_FUNCTION_PATHS"]
 		? process.env["ALLOWED_FUNCTION_PATHS"].split(",")
-		: DEFAULT_CONFIG.allowedFunctionPaths,
+		: [...DEFAULT_CONFIG.allowedFunctionPaths],
 	skillsDir: process.env["SKILLS_DIR"] ?? DEFAULT_CONFIG.skillsDir,
 	allowRemoteSkills:
 		process.env["ALLOW_REMOTE_SKILLS"] === "true" ||
 		DEFAULT_CONFIG.allowRemoteSkills,
 	allowedSkillSources: process.env["ALLOWED_SKILL_SOURCES"]
 		? process.env["ALLOWED_SKILL_SOURCES"].split(",")
-		: DEFAULT_CONFIG.allowedSkillSources,
+		: [...DEFAULT_CONFIG.allowedSkillSources],
 	s3AccessKeyId:
 		process.env["S3_ACCESS_KEY_ID"] ??
 		process.env["AWS_ACCESS_KEY_ID"] ??
@@ -162,4 +169,30 @@ export const CONFIG = {
 	s3VirtualHostedStyle:
 		process.env["S3_VIRTUAL_HOSTED_STYLE"] === "true" ||
 		DEFAULT_CONFIG.s3VirtualHostedStyle,
+	maxNestingDepth:
+		Number.parseInt(process.env["MAX_NESTING_DEPTH"] ?? "") ||
+		DEFAULT_CONFIG.maxNestingDepth,
+});
+
+/**
+ * Creates a new configuration object by merging environment variables and optional overrides.
+ *
+ * @param overrides - Partial configuration to override defaults
+ * @returns A complete ShotputConfig object
+ */
+export const createConfig = (
+	overrides?: Partial<ShotputConfig>,
+): ShotputConfig => {
+	const config = getEnvConfig();
+
+	if (overrides) {
+		for (const key of Object.keys(overrides)) {
+			const k = key as keyof ShotputConfig;
+			// Use type assertion through unknown to allow dynamic assignment
+			// Note: We allow undefined values to override env config
+			(config as unknown as Record<string, unknown>)[k] = overrides[k];
+		}
+	}
+
+	return config;
 };

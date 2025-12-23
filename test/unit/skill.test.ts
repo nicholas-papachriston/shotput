@@ -1,24 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { CONFIG } from "../../src/config";
-import { SecurityValidator } from "../../src/security";
+import { createConfig } from "../../src/config";
+
 import { SKILL_TEMPLATE, handleSkill } from "../../src/skill";
 
 describe("handleSkill", () => {
 	let tempDir: string;
-	let originalSkillsDir: string | undefined;
-	let originalAllowRemoteSkills: boolean | undefined;
 
 	beforeEach(async () => {
 		tempDir = `${process.cwd()}/test-temp-skill-${Date.now()}`;
 		await Bun.$`mkdir -p ${tempDir}/skills/test-skill`;
 		await Bun.$`mkdir -p ${tempDir}/skills/test-skill-with-refs/reference`;
-
-		// Store original config values
-		originalSkillsDir = CONFIG.skillsDir;
-		originalAllowRemoteSkills = CONFIG.allowRemoteSkills;
-
-		// Set skills directory in CONFIG
-		CONFIG.skillsDir = `${tempDir}/skills`;
 
 		// Create a basic test skill
 		const basicSkillContent = `---
@@ -64,24 +55,9 @@ See the reference files for more details.
 			`${tempDir}/skills/test-skill-with-refs/reference/examples.md`,
 			"# Examples\n\nHere are some examples.",
 		);
-
-		const validator = SecurityValidator.getInstance();
-		validator.configure({
-			allowedBasePaths: [process.cwd(), tempDir],
-			allowHttp: false,
-			allowFunctions: false,
-		});
 	});
 
 	afterEach(async () => {
-		// Restore original config values
-		if (originalSkillsDir !== undefined) {
-			CONFIG.skillsDir = originalSkillsDir;
-		}
-		if (originalAllowRemoteSkills !== undefined) {
-			CONFIG.allowRemoteSkills = originalAllowRemoteSkills;
-		}
-
 		try {
 			await Bun.$`rm -rf ${tempDir}`;
 		} catch {
@@ -91,12 +67,25 @@ See the reference files for more details.
 
 	describe("local skill loading", () => {
 		it("should load a basic local skill", async () => {
+			const config = createConfig({
+				skillsDir: `${tempDir}/skills`,
+				allowedBasePaths: [process.cwd(), tempDir],
+				allowHttp: false,
+				allowFunctions: false,
+			});
+
 			const result = "Before {{skill:test-skill}} After";
 			const path = "skill:test-skill";
 			const match = "{{skill:test-skill}}";
 			const remainingLength = 10000;
 
-			const response = await handleSkill(result, path, match, remainingLength);
+			const response = await handleSkill(
+				config,
+				result,
+				path,
+				match,
+				remainingLength,
+			);
 
 			expect(response.operationResults).toContain("Before");
 			expect(response.operationResults).toContain("After");
@@ -108,19 +97,39 @@ See the reference files for more details.
 			expect(response.combinedRemainingCount).toBeGreaterThan(0);
 		});
 
-		it("should handle skill not found error", async () => {
-			const result = "Content: {{skill:nonexistent-skill}}";
+		it("should handle missing skill gracefully", async () => {
+			const config = createConfig({
+				skillsDir: `${tempDir}/skills`,
+				allowedBasePaths: [process.cwd(), tempDir],
+				allowHttp: false,
+				allowFunctions: false,
+			});
+
+			const result = "{{skill:nonexistent-skill}}";
 			const path = "skill:nonexistent-skill";
 			const match = "{{skill:nonexistent-skill}}";
 			const remainingLength = 10000;
 
-			const response = await handleSkill(result, path, match, remainingLength);
+			const response = await handleSkill(
+				config,
+				result,
+				path,
+				match,
+				remainingLength,
+			);
 
 			expect(response.operationResults).toContain("[Error loading skill:");
 			expect(response.combinedRemainingCount).toBe(remainingLength);
 		});
 
-		it("should handle invalid SKILL.md format", async () => {
+		it("should handle invalid skill format", async () => {
+			const config = createConfig({
+				skillsDir: `${tempDir}/skills`,
+				allowedBasePaths: [process.cwd(), tempDir],
+				allowHttp: false,
+				allowFunctions: false,
+			});
+
 			// Create skill with invalid format (no frontmatter)
 			await Bun.$`mkdir -p ${tempDir}/skills/invalid-skill`;
 			await Bun.write(
@@ -133,12 +142,25 @@ See the reference files for more details.
 			const match = "{{skill:invalid-skill}}";
 			const remainingLength = 10000;
 
-			const response = await handleSkill(result, path, match, remainingLength);
+			const response = await handleSkill(
+				config,
+				result,
+				path,
+				match,
+				remainingLength,
+			);
 
 			expect(response.operationResults).toContain("[Error loading skill:");
 		});
 
 		it("should handle missing name in frontmatter", async () => {
+			const config = createConfig({
+				skillsDir: `${tempDir}/skills`,
+				allowedBasePaths: [process.cwd(), tempDir],
+				allowHttp: false,
+				allowFunctions: false,
+			});
+
 			await Bun.$`mkdir -p ${tempDir}/skills/missing-name`;
 			await Bun.write(
 				`${tempDir}/skills/missing-name/SKILL.md`,
@@ -155,7 +177,13 @@ description: Missing name field
 			const match = "{{skill:missing-name}}";
 			const remainingLength = 10000;
 
-			const response = await handleSkill(result, path, match, remainingLength);
+			const response = await handleSkill(
+				config,
+				result,
+				path,
+				match,
+				remainingLength,
+			);
 
 			expect(response.operationResults).toContain("[Error loading skill:");
 		});
@@ -163,41 +191,78 @@ description: Missing name field
 
 	describe("skill path parsing", () => {
 		it("should handle skill path without skill: prefix", async () => {
+			const config = createConfig({
+				skillsDir: `${tempDir}/skills`,
+				allowedBasePaths: [process.cwd(), tempDir],
+				allowHttp: false,
+				allowFunctions: false,
+			});
+
 			const result = "{{test-skill}}";
-			const path = "test-skill"; // No skill: prefix
+			const path = "test-skill";
 			const match = "{{test-skill}}";
 			const remainingLength = 10000;
 
-			const response = await handleSkill(result, path, match, remainingLength);
+			const response = await handleSkill(
+				config,
+				result,
+				path,
+				match,
+				remainingLength,
+			);
 
 			expect(response.operationResults).toContain("## Skill: test-skill");
 		});
 
-		it("should handle :full suffix for including references", async () => {
-			const result = "{{skill:test-skill-with-refs:full}}";
-			const path = "skill:test-skill-with-refs:full";
-			const match = "{{skill:test-skill-with-refs:full}}";
+		it("should load a skill with reference files", async () => {
+			const config = createConfig({
+				skillsDir: `${tempDir}/skills`,
+				allowedBasePaths: [process.cwd(), tempDir],
+				allowHttp: false,
+				allowFunctions: false,
+			});
+
+			const result = "{{skill:test-skill-with-refs}}";
+			const path = "skill:test-skill-with-refs";
+			const match = "{{skill:test-skill-with-refs}}";
 			const remainingLength = 10000;
 
-			const response = await handleSkill(result, path, match, remainingLength);
+			const response = await handleSkill(
+				config,
+				result,
+				path,
+				match,
+				remainingLength,
+			);
 
 			expect(response.operationResults).toContain(
 				"## Skill: test-skill-with-refs",
 			);
-			// Note: Reference loading depends on glob scanning working correctly
 		});
 	});
 
 	describe("remote skill loading", () => {
 		it("should block remote skills when disabled", async () => {
-			CONFIG.allowRemoteSkills = false;
+			const config = createConfig({
+				skillsDir: `${tempDir}/skills`,
+				allowRemoteSkills: false,
+				allowedBasePaths: [process.cwd(), tempDir],
+				allowHttp: false,
+				allowFunctions: false,
+			});
 
 			const result = "{{skill:github:anthropics/skills/brand-guidelines}}";
 			const path = "skill:github:anthropics/skills/brand-guidelines";
 			const match = "{{skill:github:anthropics/skills/brand-guidelines}}";
 			const remainingLength = 10000;
 
-			const response = await handleSkill(result, path, match, remainingLength);
+			const response = await handleSkill(
+				config,
+				result,
+				path,
+				match,
+				remainingLength,
+			);
 
 			expect(response.operationResults).toContain("[Security Error:");
 			expect(response.operationResults).toContain(
@@ -206,14 +271,26 @@ description: Missing name field
 		});
 
 		it("should handle invalid github path format", async () => {
-			CONFIG.allowRemoteSkills = true;
+			const config = createConfig({
+				skillsDir: `${tempDir}/skills`,
+				allowRemoteSkills: true,
+				allowedBasePaths: [process.cwd(), tempDir],
+				allowHttp: false,
+				allowFunctions: false,
+			});
 
 			const result = "{{skill:github:invalid-path}}";
 			const path = "skill:github:invalid-path";
 			const match = "{{skill:github:invalid-path}}";
 			const remainingLength = 10000;
 
-			const response = await handleSkill(result, path, match, remainingLength);
+			const response = await handleSkill(
+				config,
+				result,
+				path,
+				match,
+				remainingLength,
+			);
 
 			expect(response.operationResults).toContain("[Error loading skill:");
 		});
@@ -221,35 +298,74 @@ description: Missing name field
 
 	describe("content processing", () => {
 		it("should truncate skill content when length limit is reached", async () => {
+			const config = createConfig({
+				skillsDir: `${tempDir}/skills`,
+				allowedBasePaths: [process.cwd(), tempDir],
+				allowHttp: false,
+				allowFunctions: false,
+			});
+
 			const result = "{{skill:test-skill}}";
 			const path = "skill:test-skill";
 			const match = "{{skill:test-skill}}";
-			const remainingLength = 50; // Very small limit
+			const remainingLength = 50;
 
-			const response = await handleSkill(result, path, match, remainingLength);
+			const response = await handleSkill(
+				config,
+				result,
+				path,
+				match,
+				remainingLength,
+			);
 
 			expect(response.combinedRemainingCount).toBe(0);
 			expect(response.operationResults.length).toBeLessThan(200);
 		});
 
 		it("should handle zero remaining length", async () => {
+			const config = createConfig({
+				skillsDir: `${tempDir}/skills`,
+				allowedBasePaths: [process.cwd(), tempDir],
+				allowHttp: false,
+				allowFunctions: false,
+			});
+
 			const result = "{{skill:test-skill}}";
 			const path = "skill:test-skill";
 			const match = "{{skill:test-skill}}";
 			const remainingLength = 0;
 
-			const response = await handleSkill(result, path, match, remainingLength);
+			const response = await handleSkill(
+				config,
+				result,
+				path,
+				match,
+				remainingLength,
+			);
 
 			expect(response.combinedRemainingCount).toBe(0);
 		});
 
 		it("should replace the correct match placeholder", async () => {
+			const config = createConfig({
+				skillsDir: `${tempDir}/skills`,
+				allowedBasePaths: [process.cwd(), tempDir],
+				allowHttp: false,
+				allowFunctions: false,
+			});
+
 			const result = "Start {{other}} {{skill:test-skill}} {{another}} End";
 			const path = "skill:test-skill";
 			const match = "{{skill:test-skill}}";
 			const remainingLength = 10000;
 
-			const response = await handleSkill(result, path, match, remainingLength);
+			const response = await handleSkill(
+				config,
+				result,
+				path,
+				match,
+				remainingLength,
+			);
 
 			expect(response.operationResults).toContain("Start {{other}}");
 			expect(response.operationResults).toContain("{{another}} End");
@@ -266,30 +382,13 @@ description: Missing name field
 
 describe("skill frontmatter parsing", () => {
 	let tempDir: string;
-	let originalSkillsDir: string | undefined;
 
 	beforeEach(async () => {
 		tempDir = `${process.cwd()}/test-temp-skill-parse-${Date.now()}`;
 		await Bun.$`mkdir -p ${tempDir}/skills`;
-
-		// Store and set config
-		originalSkillsDir = CONFIG.skillsDir;
-		CONFIG.skillsDir = `${tempDir}/skills`;
-
-		const validator = SecurityValidator.getInstance();
-		validator.configure({
-			allowedBasePaths: [process.cwd(), tempDir],
-			allowHttp: false,
-			allowFunctions: false,
-		});
 	});
 
 	afterEach(async () => {
-		// Restore config
-		if (originalSkillsDir !== undefined) {
-			CONFIG.skillsDir = originalSkillsDir;
-		}
-
 		try {
 			await Bun.$`rm -rf ${tempDir}`;
 		} catch {
@@ -298,6 +397,13 @@ describe("skill frontmatter parsing", () => {
 	});
 
 	it("should parse skill with all frontmatter fields", async () => {
+		const config = createConfig({
+			skillsDir: `${tempDir}/skills`,
+			allowedBasePaths: [process.cwd(), tempDir],
+			allowHttp: false,
+			allowFunctions: false,
+		});
+
 		await Bun.$`mkdir -p ${tempDir}/skills/full-frontmatter`;
 		await Bun.write(
 			`${tempDir}/skills/full-frontmatter/SKILL.md`,
@@ -318,7 +424,13 @@ Content here.
 		const match = "{{skill:full-frontmatter}}";
 		const remainingLength = 10000;
 
-		const response = await handleSkill(result, path, match, remainingLength);
+		const response = await handleSkill(
+			config,
+			result,
+			path,
+			match,
+			remainingLength,
+		);
 
 		expect(response.operationResults).toContain(
 			"## Skill: full-frontmatter-skill",
@@ -329,6 +441,13 @@ Content here.
 	});
 
 	it("should handle multiline description in frontmatter", async () => {
+		const config = createConfig({
+			skillsDir: `${tempDir}/skills`,
+			allowedBasePaths: [process.cwd(), tempDir],
+			allowHttp: false,
+			allowFunctions: false,
+		});
+
 		await Bun.$`mkdir -p ${tempDir}/skills/multiline-desc`;
 		await Bun.write(
 			`${tempDir}/skills/multiline-desc/SKILL.md`,
@@ -348,12 +467,25 @@ Content here.
 		const match = "{{skill:multiline-desc}}";
 		const remainingLength = 10000;
 
-		const response = await handleSkill(result, path, match, remainingLength);
+		const response = await handleSkill(
+			config,
+			result,
+			path,
+			match,
+			remainingLength,
+		);
 
 		expect(response.operationResults).toContain("## Skill: multiline-skill");
 	});
 
 	it("should handle skill with complex markdown content", async () => {
+		const config = createConfig({
+			skillsDir: `${tempDir}/skills`,
+			allowedBasePaths: [process.cwd(), tempDir],
+			allowHttp: false,
+			allowFunctions: false,
+		});
+
 		await Bun.$`mkdir -p ${tempDir}/skills/complex-content`;
 		await Bun.write(
 			`${tempDir}/skills/complex-content/SKILL.md`,
@@ -391,7 +523,13 @@ const example = () => {
 		const match = "{{skill:complex-content}}";
 		const remainingLength = 10000;
 
-		const response = await handleSkill(result, path, match, remainingLength);
+		const response = await handleSkill(
+			config,
+			result,
+			path,
+			match,
+			remainingLength,
+		);
 
 		expect(response.operationResults).toContain("## Code Example");
 		expect(response.operationResults).toContain("console.log");
@@ -401,33 +539,28 @@ const example = () => {
 });
 
 describe("skill integration with fixtures", () => {
-	let originalSkillsDir: string | undefined;
+	beforeEach(() => {});
 
-	beforeEach(() => {
-		originalSkillsDir = CONFIG.skillsDir;
-		CONFIG.skillsDir = "./test/fixtures/skills";
-
-		const validator = SecurityValidator.getInstance();
-		validator.configure({
+	it("should load the example-skill fixture", async () => {
+		const config = createConfig({
+			skillsDir: "./test/fixtures/skills",
 			allowedBasePaths: [process.cwd()],
 			allowHttp: false,
 			allowFunctions: false,
 		});
-	});
 
-	afterEach(() => {
-		if (originalSkillsDir !== undefined) {
-			CONFIG.skillsDir = originalSkillsDir;
-		}
-	});
-
-	it("should load example skill from fixtures", async () => {
 		const result = "{{skill:example-skill}}";
 		const path = "skill:example-skill";
 		const match = "{{skill:example-skill}}";
 		const remainingLength = 10000;
 
-		const response = await handleSkill(result, path, match, remainingLength);
+		const response = await handleSkill(
+			config,
+			result,
+			path,
+			match,
+			remainingLength,
+		);
 
 		expect(response.operationResults).toContain("## Skill: example-skill");
 		expect(response.operationResults).toContain("An example skill for testing");

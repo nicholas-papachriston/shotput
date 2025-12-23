@@ -51,6 +51,7 @@ Shotput can be configured via environment variables. All configuration options c
 | `RETRY_DELAY` | `number` | `1000` | Initial retry delay in milliseconds |
 | `RETRY_BACKOFF_MULTIPLIER` | `number` | `2` | Exponential backoff multiplier for retries |
 | `ENABLE_CONTENT_LENGTH_PLANNING` | `boolean` | `true` | Enable planning phase with content length detection |
+| `MAX_NESTING_DEPTH` | `number` | `3` | Maximum depth for nested template interpolation |
 
 ### Security Configuration
 
@@ -97,6 +98,7 @@ DEBUG_FILE=./output/debug.txt
 TEMPLATE_DIR=./templates
 TEMPLATE_PATH=prompt.md
 RESPONSE_DIR=./output
+MAX_NESTING_DEPTH=3
 
 # Limits
 MAX_PROMPT_LENGTH=100000
