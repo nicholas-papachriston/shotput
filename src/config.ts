@@ -21,6 +21,16 @@
  * @prop [allowFunctions] - def: false - whether function execution is allowed
  * @prop [allowedFunctionPaths] - def: [] - allowed paths for function execution
  * @prop [maxNestingDepth] - def: 3 - maximum depth for nested template interpolation
+ * @prop [customSources] - optional array of custom source plugins for extensible source types
+ * @prop [context] - optional context object for rule conditions ({{#if context.key}})
+ * @prop [expressionEngine] - "js" (default) or "safe" for condition evaluation
+ * @prop [hooks] - optional lifecycle hooks (preResolve, postResolveSource, postAssembly, preOutput)
+ * @prop [outputMode] - "flat" | "sectioned" | "messages"
+ * @prop [sectionBudgets] - per-section max length overrides
+ * @prop [sectionRoles] - section name to role for messages mode
+ * @prop [commandsDir] - directory for command templates (default ./commands)
+ * @prop [parseSubagentFrontmatter] - when true, strip subagent YAML frontmatter and set output.frontmatter
+ * @prop [subagentsDir] - directory for subagent definitions (default ./.agents)
  */
 export interface ShotputConfig {
 	debug: boolean;
@@ -54,6 +64,16 @@ export interface ShotputConfig {
 	s3Bucket?: string;
 	s3VirtualHostedStyle: boolean;
 	maxNestingDepth: number;
+	customSources?: import("./plugins").SourcePlugin[];
+	context?: Record<string, unknown>;
+	expressionEngine?: "js" | "safe";
+	hooks?: import("./hooks").HookSet;
+	outputMode?: import("./types").OutputMode;
+	sectionBudgets?: Record<string, number>;
+	sectionRoles?: Record<string, "system" | "user" | "assistant">;
+	commandsDir?: string;
+	parseSubagentFrontmatter?: boolean;
+	subagentsDir?: string;
 }
 
 export const DEFAULT_CONFIG: ShotputConfig = {
@@ -88,6 +108,14 @@ export const DEFAULT_CONFIG: ShotputConfig = {
 	s3Bucket: undefined,
 	s3VirtualHostedStyle: false,
 	maxNestingDepth: 3,
+	context: undefined,
+	expressionEngine: "js",
+	outputMode: "flat",
+	sectionBudgets: undefined,
+	sectionRoles: undefined,
+	commandsDir: "./commands",
+	parseSubagentFrontmatter: false,
+	subagentsDir: "./.agents",
 };
 
 /**
@@ -172,6 +200,27 @@ export const getEnvConfig = (): ShotputConfig => ({
 	maxNestingDepth:
 		Number.parseInt(process.env["MAX_NESTING_DEPTH"] ?? "") ||
 		DEFAULT_CONFIG.maxNestingDepth,
+	context: DEFAULT_CONFIG.context,
+	expressionEngine:
+		(process.env["EXPRESSION_ENGINE"] as "js" | "safe") === "safe"
+			? "safe"
+			: DEFAULT_CONFIG.expressionEngine,
+	outputMode:
+		(process.env["OUTPUT_MODE"] as "flat" | "sectioned" | "messages") ||
+		DEFAULT_CONFIG.outputMode,
+	sectionBudgets: process.env["SECTION_BUDGETS"]
+		? (JSON.parse(process.env["SECTION_BUDGETS"]) as Record<string, number>)
+		: DEFAULT_CONFIG.sectionBudgets,
+	sectionRoles: process.env["SECTION_ROLES"]
+		? (JSON.parse(process.env["SECTION_ROLES"]) as Record<
+				string,
+				"system" | "user" | "assistant"
+			>)
+		: DEFAULT_CONFIG.sectionRoles,
+	commandsDir: process.env["COMMANDS_DIR"] ?? DEFAULT_CONFIG.commandsDir,
+	parseSubagentFrontmatter:
+		process.env["PARSE_SUBAGENT_FRONTMATTER"] === "true",
+	subagentsDir: process.env["SUBAGENTS_DIR"] ?? DEFAULT_CONFIG.subagentsDir,
 });
 
 /**

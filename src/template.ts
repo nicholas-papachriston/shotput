@@ -1,5 +1,7 @@
 import { stat } from "node:fs/promises";
+import type { ShotputConfig } from "./config";
 import { FUNCTION_TEMPLATE } from "./function";
+import { getMatchingPlugin } from "./plugins";
 import { SKILL_TEMPLATE } from "./skill";
 import { TemplateType } from "./types";
 
@@ -11,6 +13,7 @@ const regexIndicators = [
 export const findTemplateType = async (
 	path: string,
 	rawPath?: string,
+	config?: ShotputConfig,
 ): Promise<TemplateType> => {
 	try {
 		try {
@@ -28,6 +31,15 @@ export const findTemplateType = async (
 
 		if (path.startsWith(SKILL_TEMPLATE)) {
 			return TemplateType.Skill;
+		}
+
+		// Section blocks are post-interpolation; leave as literal
+		const pathForSection = rawPath ?? path;
+		if (
+			pathForSection.startsWith("#section:") ||
+			pathForSection.trim() === "/section"
+		) {
+			return TemplateType.String;
 		}
 
 		if (path.includes(FUNCTION_TEMPLATE)) {
@@ -48,6 +60,14 @@ export const findTemplateType = async (
 
 		if (regexIndicators.some((pattern) => pattern.test(path))) {
 			return TemplateType.Regex;
+		}
+
+		// Custom source plugins (check before file fallback so custom URLs are not treated as paths)
+		if (config?.customSources?.length) {
+			const pathForMatch = rawPath ?? path;
+			if (getMatchingPlugin(config, pathForMatch)) {
+				return TemplateType.Custom;
+			}
 		}
 
 		// Fallback for paths that don't exist yet but look like paths

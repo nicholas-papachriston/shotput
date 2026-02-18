@@ -1,5 +1,9 @@
 {
-	"project": "Parallel Processing Demo",
-	"version": "1.0.0",
-	"features": ["planning", "retry", "concurrency"]
+  "project": "Parallel Processing Demo",
+  "version": "1.0.0",
+  "features": [
+    "planning",
+    "retry",
+    "concurrency"
+  ]
 }

@@ -1,12 +1,16 @@
 import { dirname, isAbsolute, resolve } from "node:path";
 import type { ShotputConfig } from "./config";
+import { handleCustomSource } from "./custom";
 import { handleDirectory } from "./directory";
 import { handleFile } from "./file";
 import { handleFunction } from "./function";
 import { handleGlob } from "./glob";
+import { getPostResolveSourceHooks, runPostResolveSourceHooks } from "./hooks";
 import { handleHttp } from "./http";
 import { getLogger } from "./logger";
 import { ParallelProcessor } from "./parallelProcessor";
+import { getMatchingPlugin } from "./plugins";
+import { evaluateRules } from "./rules";
 import { handleS3 } from "./s3";
 import { handleSkill } from "./skill";
 import { findTemplateType } from "./template";
@@ -29,9 +33,17 @@ const shouldResolvePath = (filePath: string): boolean => {
 	return !SPECIAL_PREFIXES.some((prefix) => filePath.startsWith(prefix));
 };
 
-const resolvePath = (basePath: string, filePath: string): string => {
+const resolvePath = (
+	basePath: string,
+	filePath: string,
+	config: ShotputConfig,
+): string => {
 	// Don't resolve paths for special template types
 	if (!shouldResolvePath(filePath)) {
+		return filePath;
+	}
+	// Custom source paths: if a plugin matches, use path as-is
+	if (getMatchingPlugin(config, filePath)) {
 		return filePath;
 	}
 	return isAbsolute(filePath) ? filePath : resolve(basePath, filePath);
@@ -45,6 +57,19 @@ interface InterpolationResults {
 
 const CYCLE_MESSAGE_PREFIX = "[Cycle detected: ";
 
+const LITERAL_PLACEHOLDER_PREFIX = "__SHOTPUT_LITERAL_";
+
+function substituteLiterals(
+	content: string,
+	literals: Map<string, string>,
+): string {
+	let result = content;
+	for (const [key, value] of literals) {
+		result = result.replaceAll(key, value);
+	}
+	return result;
+}
+
 export const interpolation = async (
 	content: string,
 	config: ShotputConfig,
@@ -52,9 +77,33 @@ export const interpolation = async (
 	depth = 0,
 	remainingLength: number = config.maxPromptLength,
 	expandingPaths: Set<string> = new Set(),
+	literalBox?: { literals: Map<string, string> },
+	mergeContext?: Record<string, unknown>,
 ): Promise<InterpolationResults> => {
-	const matches = content.match(pattern);
-	if (!matches) return { processedTemplate: content, remainingLength };
+	const effectiveConfig = mergeContext
+		? {
+				...config,
+				context: { ...(config.context ?? {}), ...mergeContext },
+			}
+		: config;
+	const contentAfterRules = evaluateRules(content, effectiveConfig);
+	const matches = contentAfterRules.match(pattern);
+	const resolvedLiteralBox =
+		literalBox ??
+		(depth === 0 ? { literals: new Map<string, string>() } : undefined);
+
+	const configToUse = effectiveConfig;
+
+	if (!matches) {
+		const out = { processedTemplate: contentAfterRules, remainingLength };
+		if (depth === 0 && resolvedLiteralBox?.literals.size) {
+			out.processedTemplate = substituteLiterals(
+				content,
+				resolvedLiteralBox.literals,
+			);
+		}
+		return out;
+	}
 
 	const maxDepth = config.maxNestingDepth;
 
@@ -72,14 +121,14 @@ export const interpolation = async (
 		const processor = new ParallelProcessor(config);
 		const { content: processedContent, metadata } =
 			await processor.processTemplatesWithPlanning(
-				content,
+				contentAfterRules,
 				basePath,
 				remainingLength,
 				undefined,
 				expandingPaths,
 			);
 
-		processedTemplate = processedContent;
+		processedTemplate = evaluateRules(processedContent, config);
 		currentMetadata = metadata.map((m) => ({
 			path: m.path,
 			type: m.type,
@@ -89,7 +138,7 @@ export const interpolation = async (
 		// Remaining budget = characters left until maxPromptLength
 		finalRemainingLength = Math.max(
 			0,
-			config.maxPromptLength - processedContent.length,
+			config.maxPromptLength - processedTemplate.length,
 		);
 	} else {
 		// Fall back to sequential processing
@@ -99,7 +148,7 @@ export const interpolation = async (
 			type: string;
 			duration: number;
 		}> = [];
-		let result = content;
+		let result = contentAfterRules;
 
 		const inclusionBasePathFor = (type: TemplateType, p: string): string => {
 			if (
@@ -118,6 +167,7 @@ export const interpolation = async (
 				operationResults: string;
 				combinedRemainingCount: number;
 				replacement?: string;
+				mergeContext?: Record<string, unknown>;
 			},
 			m: string,
 			p: string,
@@ -131,18 +181,50 @@ export const interpolation = async (
 				type: templateType,
 				duration: Date.now() - start,
 			};
-			const replacement = handlerResult.replacement;
-			if (replacement?.match(pattern) && depth < maxDepth && remLength > 0) {
+			let replacement = handlerResult.replacement;
+			let effectiveHandlerResult = handlerResult;
+			const postSourceHooks = getPostResolveSourceHooks(configToUse);
+			if (postSourceHooks.length > 0 && replacement != null) {
+				const sourceResult = {
+					type: templateType,
+					path: p,
+					content: replacement,
+					remainingLength: remLength,
+					metadata: {
+						type: templateType,
+						path: p,
+						length: replacement.length,
+						truncated: false,
+						processingTime: Date.now() - start,
+					},
+				};
+				const afterHook = await runPostResolveSourceHooks(
+					sourceResult,
+					postSourceHooks,
+				);
+				replacement = afterHook.content;
+				effectiveHandlerResult = {
+					...handlerResult,
+					replacement,
+					operationResults: currentResult.replace(m, replacement),
+				};
+			}
+			const afterRules = replacement
+				? evaluateRules(replacement, configToUse)
+				: "";
+			if (afterRules.match(pattern) && depth < maxDepth && remLength > 0) {
 				const inclusionBase = inclusionBasePathFor(templateType, p);
 				const nestedExpanding = new Set(expandingPaths);
 				nestedExpanding.add(p);
 				const nested = await interpolation(
-					replacement,
-					config,
+					afterRules,
+					configToUse,
 					inclusionBase,
 					depth + 1,
 					remLength,
 					nestedExpanding,
+					resolvedLiteralBox,
+					handlerResult.mergeContext,
 				);
 				return {
 					result: currentResult.replace(m, nested.processedTemplate),
@@ -150,9 +232,15 @@ export const interpolation = async (
 					metadata: [entry, ...(nested.resultMetadata ?? [])],
 				};
 			}
+			const finalContent =
+				afterRules.length > 0 ? afterRules : (replacement ?? "");
+			const resultStr =
+				replacement != null
+					? currentResult.replace(m, finalContent)
+					: effectiveHandlerResult.operationResults;
 			return {
-				result: handlerResult.operationResults,
-				remainingLength: handlerResult.combinedRemainingCount,
+				result: resultStr,
+				remainingLength: effectiveHandlerResult.combinedRemainingCount,
 				metadata: [entry],
 			};
 		};
@@ -160,7 +248,7 @@ export const interpolation = async (
 		for (const match of matches) {
 			const startTime = Date.now();
 			const rawPath = match.slice(2, -2).trim();
-			const path = resolvePath(basePath, rawPath);
+			let path = resolvePath(basePath, rawPath, configToUse);
 
 			if (expandingPaths.has(path)) {
 				log.warn(`Cycle detected for path: ${path}`);
@@ -170,7 +258,10 @@ export const interpolation = async (
 
 			expandingPaths.add(path);
 			try {
-				const templateType = await findTemplateType(path, rawPath);
+				const templateType = await findTemplateType(path, rawPath, configToUse);
+				if (templateType === TemplateType.Custom) {
+					path = rawPath;
+				}
 
 				switch (templateType) {
 					case TemplateType.File: {
@@ -346,6 +437,61 @@ export const interpolation = async (
 						resultMetadata.push(...applied.metadata);
 						continue;
 					}
+					case TemplateType.Custom: {
+						const plugin = getMatchingPlugin(configToUse, path);
+						if (!plugin) {
+							log.warn(`No custom plugin matched for path: ${path}`);
+							result = result.replace(match, `[Error reading ${path}]`);
+							continue;
+						}
+						const handlerResult = await handleCustomSource(
+							plugin,
+							configToUse,
+							result,
+							path,
+							match,
+							currentRemainingLength,
+							basePath,
+						);
+						if (
+							plugin.canContainTemplates &&
+							handlerResult.replacement?.match(pattern) &&
+							depth < maxDepth &&
+							currentRemainingLength > 0
+						) {
+							const applied = await applyReplacement(
+								handlerResult,
+								match,
+								path,
+								templateType,
+								result,
+								currentRemainingLength,
+								startTime,
+							);
+							result = applied.result;
+							currentRemainingLength = applied.remainingLength;
+							resultMetadata.push(...applied.metadata);
+						} else {
+							if (
+								!plugin.canContainTemplates &&
+								handlerResult.replacement &&
+								resolvedLiteralBox
+							) {
+								const key = `${LITERAL_PLACEHOLDER_PREFIX}${resolvedLiteralBox.literals.size}__`;
+								resolvedLiteralBox.literals.set(key, handlerResult.replacement);
+								result = result.replace(match, key);
+							} else {
+								result = handlerResult.operationResults;
+							}
+							currentRemainingLength = handlerResult.combinedRemainingCount;
+							resultMetadata.push({
+								path,
+								type: templateType,
+								duration: Date.now() - startTime,
+							});
+						}
+						continue;
+					}
 					default: {
 						log.warn(
 							`Unknown template type: ${templateType} for path: ${path}`,
@@ -370,9 +516,13 @@ export const interpolation = async (
 	}
 
 	// Optimization: if nothing changed in this pass, skip recursion
-	if (processedTemplate === content) {
+	if (processedTemplate === contentAfterRules) {
+		let out = processedTemplate.trim();
+		if (depth === 0 && resolvedLiteralBox?.literals.size) {
+			out = substituteLiterals(out, resolvedLiteralBox.literals);
+		}
 		return {
-			processedTemplate: processedTemplate.trim(),
+			processedTemplate: out,
 			resultMetadata: currentMetadata,
 			remainingLength: finalRemainingLength,
 		};
@@ -395,10 +545,15 @@ export const interpolation = async (
 			depth + 1,
 			finalRemainingLength,
 			nestedExpanding,
+			resolvedLiteralBox,
 		);
 
+		let out = nestedResults.processedTemplate;
+		if (depth === 0 && resolvedLiteralBox?.literals.size) {
+			out = substituteLiterals(out, resolvedLiteralBox.literals);
+		}
 		return {
-			processedTemplate: nestedResults.processedTemplate,
+			processedTemplate: out,
 			resultMetadata: [
 				...currentMetadata,
 				...(nestedResults.resultMetadata ?? []),
@@ -407,8 +562,12 @@ export const interpolation = async (
 		};
 	}
 
+	let out = processedTemplate.trim();
+	if (depth === 0 && resolvedLiteralBox?.literals.size) {
+		out = substituteLiterals(out, resolvedLiteralBox.literals);
+	}
 	return {
-		processedTemplate: processedTemplate.trim(),
+		processedTemplate: out,
 		resultMetadata: currentMetadata,
 		remainingLength: finalRemainingLength,
 	};

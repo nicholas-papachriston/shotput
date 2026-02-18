@@ -47,6 +47,12 @@ These examples demonstrate fundamental features:
 7. **[Custom Functions](./basic/07-functions.ts)** - Using custom JavaScript functions
 8. **[Anthropic Skills](./basic/08-skills.ts)** - Loading Anthropic Skills format
 9. **[Inline Template Content](./basic/09-inline-template.ts)** - Using template strings instead of files
+10. **[Parallel Simple](./basic/10-parallel-simple.ts)** - Basic parallel processing
+11. **[Rules (Conditional Inclusion)](./basic/11-rules.ts)** - `{{#if}}...{{else}}...{{/if}}` and `context`
+12. **[Hooks](./basic/12-hooks.ts)** - preResolve, postResolveSource, postAssembly, preOutput
+13. **[Output Modes](./basic/13-output-modes.ts)** - Sectioned and messages output with `{{#section:name}}`
+14. **[Commands](./basic/14-commands.ts)** - `{{command:name key=value}}` and `{{$param}}`
+15. **[Subagents](./basic/15-subagents.ts)** - `resolveSubagent()`, `{{subagent:name}}`, `parseSubagentFrontmatter`
 
 ### Advanced Examples
 
@@ -62,6 +68,8 @@ These examples demonstrate advanced features and patterns:
 8. **[Remote Skills](./advanced/08-remote-skills.ts)** - Loading skills from GitHub
 9. **[Parallel Processing](./advanced/09-parallel-processing.ts)** - Advanced concurrency features
 10. **[Nested Templates](./advanced/10-nested-templates.ts)** - Recursive template interpolation
+11. **[Nested Mixed Sources](./advanced/11-nested-mixed-sources.ts)** - File, skill, function, HTTP chain
+12. **[Custom Source Plugin](./advanced/12-custom-source.ts)** - `customSources` and `SourcePlugin`
 
 ## Feature Matrix
 
@@ -83,6 +91,12 @@ These examples demonstrate advanced features and patterns:
 | Remote skills | - | 08 | `{{skill:github:org/repo/skill}}` |
 | Streaming | - | 04 | Automatic for files >1MB |
 | Security | - | 05 | Configuration-based |
+| Rules (conditionals) | 11 | - | `{{#if context.x}}...{{else}}...{{/if}}` |
+| Hooks | 12 | - | preResolve, postResolveSource, postAssembly, preOutput |
+| Output modes (sectioned/messages) | 13 | - | `{{#section:name}}...{{/section}}`, outputMode config |
+| Commands | 14 | - | `{{command:name key=val}}`, `{{$param}}` |
+| Subagents | 15 | - | `{{subagent:name}}`, resolveSubagent(), parseSubagentFrontmatter |
+| Custom source plugin | - | 12 | `customSources: [SourcePlugin]` |
 
 ## Template Syntax Reference
 

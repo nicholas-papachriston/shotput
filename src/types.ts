@@ -8,6 +8,7 @@ export enum TemplateType {
 	Function = "function",
 	Http = "http",
 	Skill = "skill",
+	Custom = "custom",
 }
 
 export interface FileResult {
@@ -76,4 +77,32 @@ export interface S3BucketInfo {
 	key?: string;
 	isDirectoryBucket: boolean;
 	availabilityZoneId?: string;
+}
+
+export type OutputMode = "flat" | "sectioned" | "messages";
+
+export interface Section {
+	name: string;
+	content: string;
+	stable: boolean;
+	contentHash: string;
+	metadata: Array<{ path: string; type: string; duration: number }>;
+}
+
+export interface MessageOutput {
+	role: "system" | "user" | "assistant";
+	content: string;
+}
+
+export interface ShotputOutput {
+	content?: string;
+	sections?: Section[];
+	messages?: MessageOutput[];
+	frontmatter?: Record<string, unknown>;
+	error?: Error;
+	metadata: {
+		duration: number;
+		outputMode?: OutputMode;
+		resultMetadata?: Array<{ path: string; type: string; duration: number }>;
+	};
 }

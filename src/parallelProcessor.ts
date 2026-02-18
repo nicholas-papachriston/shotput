@@ -1,7 +1,10 @@
 import { isAbsolute, resolve } from "node:path";
 import type { ShotputConfig } from "./config";
+import { handleCustomSource } from "./custom";
 import { handleFunction } from "./function";
+import { getPostResolveSourceHooks, runPostResolveSourceHooks } from "./hooks";
 import { getLogger } from "./logger";
+import { getMatchingPlugin } from "./plugins";
 import { Semaphore } from "./semaphore";
 import { findTemplateType } from "./template";
 import type { ProcessingProgress, TemplateResult } from "./types";
@@ -69,7 +72,7 @@ export class ParallelProcessor {
 		for (let i = 0; i < matches.length; i++) {
 			const match = matches[i];
 			const rawPath = match.slice(2, -2).trim();
-			const path = this.resolvePath(basePath, rawPath);
+			let path = this.resolvePath(basePath, rawPath);
 
 			if (expandingPaths?.has(path)) {
 				tasks.push({
@@ -84,7 +87,7 @@ export class ParallelProcessor {
 			}
 
 			try {
-				const templateType = await findTemplateType(path, rawPath);
+				const templateType = await findTemplateType(path, rawPath, this.config);
 
 				// Skip unknown/string types to allow them to remain in the template
 				// This prevents things like {{markers}} from being replaced by error messages
@@ -92,10 +95,16 @@ export class ParallelProcessor {
 					continue;
 				}
 
+				// Custom sources use raw path as canonical path (no filesystem resolution)
+				if (templateType === TemplateType.Custom) {
+					path = rawPath;
+				}
+
 				tasks.push({
 					type: templateType,
 					path,
 					match,
+					basePath,
 					originalIndex: i,
 					priority: this.calculatePriority(templateType, i),
 				});
@@ -125,6 +134,7 @@ export class ParallelProcessor {
 			[TemplateType.Http]: 20,
 			[TemplateType.Function]: 60,
 			[TemplateType.Skill]: 70,
+			[TemplateType.Custom]: 35,
 		};
 
 		// Maintain original order within same type
@@ -154,6 +164,14 @@ export class ParallelProcessor {
 				case TemplateType.S3: {
 					// For S3, we'd need to make a HEAD request
 					// This is a simplified estimation
+					return 0;
+				}
+
+				case TemplateType.Custom: {
+					const plugin = getMatchingPlugin(this.config, task.path);
+					if (plugin?.estimateLength) {
+						return await plugin.estimateLength(task.path, this.config);
+					}
 					return 0;
 				}
 
@@ -321,11 +339,28 @@ export class ParallelProcessor {
 
 		const operation = async () => {
 			// Handle function type specially due to extra basePath parameter
+			// Handle custom type by resolving plugin and calling handleCustomSource
 			let operationResults: string;
 			let combinedRemainingCount: number;
 
 			if (task.type === TemplateType.Function) {
 				const result = await handleFunction(
+					this.config,
+					task.match,
+					task.path,
+					task.match,
+					remainingLength,
+					task.basePath || process.cwd(),
+				);
+				operationResults = result.operationResults;
+				combinedRemainingCount = result.combinedRemainingCount;
+			} else if (task.type === TemplateType.Custom) {
+				const plugin = getMatchingPlugin(this.config, task.path);
+				if (!plugin) {
+					throw new Error(`No custom plugin matched for path: ${task.path}`);
+				}
+				const result = await handleCustomSource(
+					plugin,
 					this.config,
 					task.match,
 					task.path,
@@ -468,11 +503,23 @@ export class ParallelProcessor {
 			this.processedTemplates.push(result);
 
 			if (!result.error && processed) {
-				// Replace the template match in the current content
-				resultContent = resultContent.replace(
-					processed.match,
-					processed.replacement,
-				);
+				let replacement = processed.replacement;
+				const postSourceHooks = getPostResolveSourceHooks(this.config);
+				if (postSourceHooks.length > 0) {
+					const sourceResult = {
+						type: result.type,
+						path: result.path,
+						content: replacement,
+						remainingLength: remainingLength - processed.length,
+						metadata: result,
+					};
+					const afterHook = await runPostResolveSourceHooks(
+						sourceResult,
+						postSourceHooks,
+					);
+					replacement = afterHook.content;
+				}
+				resultContent = resultContent.replace(processed.match, replacement);
 				remainingLength -= processed.length;
 			} else if (result.error) {
 				// Handle failed templates by replacing with error message
@@ -503,7 +550,8 @@ export class ParallelProcessor {
 	}
 
 	/**
-	 * Resolve path with special prefix handling
+	 * Resolve path with special prefix handling.
+	 * Custom source paths (matched by a plugin) are left unchanged.
 	 */
 	private resolvePath(basePath: string, filePath: string): string {
 		const SPECIAL_PREFIXES = [
@@ -514,11 +562,12 @@ export class ParallelProcessor {
 			"s3://",
 		];
 
-		const shouldResolve = !SPECIAL_PREFIXES.some((prefix) =>
-			filePath.startsWith(prefix),
-		);
+		if (SPECIAL_PREFIXES.some((prefix) => filePath.startsWith(prefix))) {
+			return filePath;
+		}
 
-		if (!shouldResolve) {
+		// Custom sources: if a plugin matches, use path as-is (no filesystem resolution)
+		if (getMatchingPlugin(this.config, filePath)) {
 			return filePath;
 		}
 
@@ -559,6 +608,10 @@ export class ParallelProcessor {
 			case TemplateType.Skill: {
 				const handler = await import("./skill");
 				return handler.handleSkill;
+			}
+			case TemplateType.Custom: {
+				// Custom is handled explicitly in processSingleTemplate via handleCustomSource
+				throw new Error("Custom handler should be called directly");
 			}
 			default:
 				throw new Error(`Unsupported template type: ${type}`);
