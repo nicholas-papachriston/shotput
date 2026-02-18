@@ -1,12 +1,15 @@
 import type { ShotputConfig } from "./config";
 import { getLogger } from "./logger";
+import { substituteVariables } from "./variables";
 
 const log = getLogger("rules");
 
 const IF_CLOSE = "{{/if}}";
 const ELSE_MARKER = "{{else}}";
+const EACH_CLOSE = "{{/each}}";
 /** New regex per call so concurrent evaluateRules() do not share lastIndex. */
 const createIfOpenRegex = () => /\{\{#if\s+(.+?)\}\}/g;
+const createEachOpenRegex = () => /\{\{#each\s+(.+?)\}\}/g;
 
 const conditionFnCache = new Map<
 	string,
@@ -94,6 +97,40 @@ function getSafeValue(path: string, ctx: RuleContext): unknown {
 	return undefined;
 }
 
+/** Resolve dot path (e.g. context.foo.bar) to a value for {{#each}}. */
+function getValueByPath(path: string, ctx: RuleContext): unknown {
+	const trimmed = path.trim();
+	if (trimmed.startsWith("context.")) {
+		const keyPath = trimmed.slice(8).trim();
+		const keys = keyPath.split(".");
+		let current: unknown = ctx.context;
+		for (const k of keys) {
+			if (current == null || typeof current !== "object") return undefined;
+			current = (current as Record<string, unknown>)[k];
+		}
+		return current;
+	}
+	if (trimmed.startsWith("params.")) {
+		const keyPath = trimmed.slice(7).trim();
+		const keys = keyPath.split(".");
+		let current: unknown = ctx.params;
+		for (const k of keys) {
+			if (current == null || typeof current !== "object") return undefined;
+			current = (current as Record<string, unknown>)[k];
+		}
+		return current;
+	}
+	return getSafeValue(trimmed, ctx);
+}
+
+/** Resolve expression to an array for {{#each}}. Non-array values become single-element or empty. */
+function getArrayFromExpr(expr: string, ctx: RuleContext): unknown[] {
+	const value = getValueByPath(expr, ctx);
+	if (Array.isArray(value)) return value;
+	if (value != null) return [value];
+	return [];
+}
+
 function evaluateCondition(
 	expr: string,
 	ctx: RuleContext,
@@ -122,6 +159,28 @@ function findMatchingClose(content: string, startIndex: number): number {
 			depth--;
 			if (depth === 0) return nextClose;
 			pos = nextClose + closeStr.length;
+		}
+	}
+	return -1;
+}
+
+/**
+ * Find the matching {{/each}} for the {{#each}} at startIndex, accounting for nested {{#each}}.
+ */
+function findMatchingEachClose(content: string, startIndex: number): number {
+	let depth = 1;
+	let pos = startIndex;
+	while (depth > 0) {
+		const nextEachOpen = content.indexOf("{{#each", pos);
+		const nextEachClose = content.indexOf(EACH_CLOSE, pos);
+		if (nextEachClose === -1) return -1;
+		if (nextEachOpen !== -1 && nextEachOpen < nextEachClose) {
+			depth++;
+			pos = nextEachOpen + 1;
+		} else {
+			depth--;
+			if (depth === 0) return nextEachClose;
+			pos = nextEachClose + EACH_CLOSE.length;
 		}
 	}
 	return -1;
@@ -158,8 +217,37 @@ function findElseAtDepth(blockContent: string): number {
 }
 
 /**
- * Evaluate {{#if condition}}...{{else}}...{{/if}} blocks and return the template with
- * blocks replaced by the chosen branch. Runs as a pre-pass before interpolation.
+ * Find the next {{#if}} or {{#each}} in content and return which one and its match.
+ */
+function findNextBlock(
+	content: string,
+):
+	| { kind: "if"; match: RegExpExecArray }
+	| { kind: "each"; match: RegExpExecArray }
+	| null {
+	const ifRegex = createIfOpenRegex();
+	const eachRegex = createEachOpenRegex();
+	let ifMatch: RegExpExecArray | null = null;
+	let eachMatch: RegExpExecArray | null = null;
+	ifRegex.lastIndex = 0;
+	eachRegex.lastIndex = 0;
+	ifMatch = ifRegex.exec(content);
+	eachMatch = eachRegex.exec(content);
+	if (!ifMatch && !eachMatch) return null;
+	if (ifMatch && !eachMatch) return { kind: "if", match: ifMatch };
+	if (eachMatch && !ifMatch) return { kind: "each", match: eachMatch };
+	if (ifMatch && eachMatch) {
+		return ifMatch.index <= eachMatch.index
+			? { kind: "if", match: ifMatch }
+			: { kind: "each", match: eachMatch };
+	}
+	return null;
+}
+
+/**
+ * Evaluate {{#if condition}}...{{else}}...{{/if}} and {{#each expr}}...{{/each}} blocks.
+ * For each, exposes context.__loop = { item, index } so rules and variable substitution can read them.
+ * Runs as a pre-pass before interpolation.
  */
 export function evaluateRules(content: string, config: ShotputConfig): string {
 	const context = config.context ?? {};
@@ -169,38 +257,68 @@ export function evaluateRules(content: string, config: ShotputConfig): string {
 	const ctx: RuleContext = { context, env, params };
 
 	let result = content;
-	const ifOpenRegex = createIfOpenRegex();
-	let match: RegExpExecArray | null;
 	while (true) {
-		ifOpenRegex.lastIndex = 0;
-		match = ifOpenRegex.exec(result);
-		if (!match) break;
+		const block = findNextBlock(result);
+		if (!block) break;
+
+		if (block.kind === "if") {
+			const match = block.match;
+			const expr = match[1].trim();
+			const openStart = match.index;
+			const openEnd = match.index + match[0].length;
+			const closeIndex = findMatchingClose(result, openEnd);
+			if (closeIndex === -1) {
+				log.warn(`Unclosed {{#if}} block at index ${openStart}`);
+				break;
+			}
+			const blockContent = result.slice(openEnd, closeIndex);
+			const elseIndex = findElseAtDepth(blockContent);
+			let consequent: string;
+			let alternate: string;
+			if (elseIndex === -1) {
+				consequent = blockContent;
+				alternate = "";
+			} else {
+				consequent = blockContent.slice(0, elseIndex);
+				alternate = blockContent.slice(elseIndex + ELSE_MARKER.length);
+			}
+			const chosen = evaluateCondition(expr, ctx, engine)
+				? consequent
+				: alternate;
+			result =
+				result.slice(0, openStart) +
+				chosen +
+				result.slice(closeIndex + IF_CLOSE.length);
+			continue;
+		}
+
+		// {{#each expr}}
+		const match = block.match;
 		const expr = match[1].trim();
 		const openStart = match.index;
 		const openEnd = match.index + match[0].length;
-		const closeIndex = findMatchingClose(result, openEnd);
+		const closeIndex = findMatchingEachClose(result, openEnd);
 		if (closeIndex === -1) {
-			log.warn(`Unclosed {{#if}} block at index ${openStart}`);
+			log.warn(`Unclosed {{#each}} block at index ${openStart}`);
 			break;
 		}
 		const blockContent = result.slice(openEnd, closeIndex);
-		const elseIndex = findElseAtDepth(blockContent);
-		let consequent: string;
-		let alternate: string;
-		if (elseIndex === -1) {
-			consequent = blockContent;
-			alternate = "";
-		} else {
-			consequent = blockContent.slice(0, elseIndex);
-			alternate = blockContent.slice(elseIndex + ELSE_MARKER.length);
+		const arr = getArrayFromExpr(expr, ctx);
+		const chunks: string[] = [];
+		for (let i = 0; i < arr.length; i++) {
+			const mergedContext = {
+				...context,
+				__loop: { item: arr[i], index: i },
+			};
+			const mergedConfig = { ...config, context: mergedContext };
+			const evaluated = evaluateRules(blockContent, mergedConfig);
+			const substituted = substituteVariables(evaluated, mergedConfig);
+			chunks.push(substituted);
 		}
-		const chosen = evaluateCondition(expr, ctx, engine)
-			? consequent
-			: alternate;
 		result =
 			result.slice(0, openStart) +
-			chosen +
-			result.slice(closeIndex + IF_CLOSE.length);
+			chunks.join("") +
+			result.slice(closeIndex + EACH_CLOSE.length);
 	}
 	return result;
 }

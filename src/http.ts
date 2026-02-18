@@ -36,7 +36,7 @@ export const handleHttp = async (
 		}
 
 		const content = await response.text();
-		const processed = await processContent(content, remainingLength);
+		const processed = await processContent(content, remainingLength, config);
 
 		if (processed.truncated) {
 			log.warn(`HTTP content truncated for ${path} due to length limit`);

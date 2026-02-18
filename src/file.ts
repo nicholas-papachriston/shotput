@@ -53,7 +53,11 @@ export const handleFile = async (
 		}
 
 		const fileContent = `filename:${validatedPath}:\n${await file.text()}`;
-		const processed = await processContent(fileContent, remainingLength);
+		const processed = await processContent(
+			fileContent,
+			remainingLength,
+			config,
+		);
 
 		if (processed.truncated) {
 			log.warn(`Content truncated for ${validatedPath} due to length limit`);

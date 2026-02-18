@@ -24,6 +24,7 @@
  * @prop [customSources] - optional array of custom source plugins for extensible source types
  * @prop [context] - optional context object for rule conditions ({{#if context.key}})
  * @prop [expressionEngine] - "js" (default) or "safe" for condition evaluation
+ * @prop [tokenizer] - when set, maxPromptLength and planning/trimming use token count; "openai"|"cl100k_base" use heuristic; pass (text)=>number for exact counts (e.g. tiktoken)
  * @prop [hooks] - optional lifecycle hooks (preResolve, postResolveSource, postAssembly, preOutput)
  * @prop [outputMode] - "flat" | "sectioned" | "messages"
  * @prop [sectionBudgets] - per-section max length overrides
@@ -67,6 +68,8 @@ export interface ShotputConfig {
 	customSources?: import("./plugins").SourcePlugin[];
 	context?: Record<string, unknown>;
 	expressionEngine?: "js" | "safe";
+	/** When set, maxPromptLength is in tokens and planning/trimming use token count. */
+	tokenizer?: "openai" | "cl100k_base" | ((text: string) => number);
 	hooks?: import("./hooks").HookSet;
 	outputMode?: import("./types").OutputMode;
 	sectionBudgets?: Record<string, number>;
@@ -110,6 +113,7 @@ export const DEFAULT_CONFIG: ShotputConfig = {
 	maxNestingDepth: 3,
 	context: undefined,
 	expressionEngine: "js",
+	tokenizer: undefined,
 	outputMode: "flat",
 	sectionBudgets: undefined,
 	sectionRoles: undefined,

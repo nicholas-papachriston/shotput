@@ -32,7 +32,11 @@ export const handleCustomSource = async (
 			basePath,
 		};
 		const resolution = await plugin.resolve(ctx);
-		const processed = await processContent(resolution.content, remainingLength);
+		const processed = await processContent(
+			resolution.content,
+			remainingLength,
+			config,
+		);
 
 		if (processed.truncated) {
 			log.warn(

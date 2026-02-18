@@ -8,25 +8,20 @@ Shotput is a simple, programmatic templating library to help manage personas, sy
 
 ## Features
 
-- arbitrary source retrieval
-- arbitrary output destination
-- streaming for large files (>1MB)
-- security validation for all paths
-- templating with:
-  - file paths
-  - directory paths
-  - functions (cjs/esm)
-  - http paths
-  - glob patterns
-  - s3 paths with advanced credential support ([docs](./docs/s3-advanced-features.md))
-  - s3 directory buckets (AWS S3 Express One Zone) ([docs](./docs/s3-advanced-features.md))
-  - regex patterns
-  - [Anthropic Skills](https://github.com/anthropics/skills)
+- Arbitrary source retrieval and output destination
+- Streaming for large files (>1MB)
+- Security validation for all paths
+- **Templating sources:** file paths, directory paths, functions (cjs/esm), HTTP URLs, glob patterns, regex patterns, S3 paths (including [S3 directory buckets](./docs/s3-advanced-features.md)), [Anthropic Skills](https://github.com/anthropics/skills), custom source plugins
+- **Conditionals and loops:** `{{#if}}...{{else}}...{{/if}}` with `context`, `env`, and `params`; `{{#each context.list}}...{{/each}}` with `context.__loop.item` and `context.__loop.index`
+- **Variable substitution:** `{{context.x}}`, `{{params.x}}`, `{{env.X}}` in template body (nested paths supported)
+- **Token-aware budgeting:** optional `tokenizer` config so `maxPromptLength` is in tokens; heuristic or custom `(text) => number`
+- **Lifecycle hooks:** preResolve, postResolveSource, postAssembly, preOutput
+- **Output modes:** flat, sectioned, or messages (system/user/assistant)
+- **Commands and subagents:** `{{command:name}}`, `{{subagent:name}}` with custom source plugins
 
 ## TODO
 
 - npm package
-- nested documents
 - blob search s3/rs support
 - regex search s3/rs support
 
@@ -44,7 +39,7 @@ Shotput can be configured via environment variables. All configuration options c
 | `TEMPLATE_DIR` | `string` | `"./templates"` | Template directory |
 | `TEMPLATE_PATH` | `string` | `"template.md"` | Template file name |
 | `RESPONSE_DIR` | `string` | `"./responses"` | Output directory |
-| `MAX_PROMPT_LENGTH` | `number` | `100000` | Maximum output length in characters |
+| `MAX_PROMPT_LENGTH` | `number` | `100000` | Maximum output length (characters, or tokens when `tokenizer` is set) |
 | `MAX_BUCKET_FILES` | `number` | `100000` | Maximum files from S3 prefix |
 | `MAX_CONCURRENCY` | `number` | `4` | Maximum concurrent operations |
 | `MAX_RETRIES` | `number` | `3` | Maximum retry attempts for failed operations |
@@ -166,31 +161,49 @@ In the file format of you choice, simply include any combination of the followin
 {{skill:github:anthropics/skills/brand-guidelines}}
 ```
 
+### Variables, conditionals, and loops
+
+Inject context, params, and env directly into the template body, and use conditionals or loops:
+
+```sh
+# Variable substitution (after rules, before source resolution)
+{{context.taskName}}
+{{params.requestId}}
+{{env.USER}}
+
+# Conditionals (context, env, params in expressions)
+{{#if context.env == "prod"}}Production{{else}}Other{{/if}}
+
+# Loops over arrays (context.* or params.*)
+{{#each context.items}}
+- {{context.__loop.index}}: {{context.__loop.item}}
+{{/each}}
+```
+
+- **Variables:** `{{context.x}}`, `{{params.x}}`, `{{env.X}}` (nested paths like `{{context.project.name}}` supported). Missing keys become empty string.
+- **Conditionals:** `{{#if expr}}...{{else}}...{{/if}}`. Use `expressionEngine: "safe"` to restrict to simple comparisons and `context`/`env`/`params` paths.
+- **Loops:** `{{#each context.list}}...{{/each}}`. Inside the block, `{{context.__loop.item}}` is the current element and `{{context.__loop.index}}` is the zero-based index. Non-arrays are treated as single-element; empty/missing as empty.
+
 ### Inline Template Content
 
-Instead of reading templates from files, you can pass template content directly as a string:
+Pass template content directly as a string instead of reading from a file:
 
 ```ts
 import { shotput } from "shotput";
 
-// Simple inline template
-const instance = shotput({
-  template: 'Hello {{./data.txt}}!',
-  templateDir: '/path/to/base',  // used for resolving relative paths
-  allowedBasePaths: ['/path/to/base']
+const result = await shotput({
+  template: "Hello {{./data.txt}}!",
+  templateDir: "/path/to/base",
+  allowedBasePaths: ["/path/to/base"],
 });
-
-const result = await instance.run();
 console.log(result.content);
 
 // Dynamically generated template
-const timestamp = new Date().toISOString();
-const dynamicTemplate = `# Report\nGenerated: ${timestamp}\n{{./config.json}}`;
-
-const dynamicInstance = shotput({
+const dynamicTemplate = `# Report\nGenerated: ${new Date().toISOString()}\n{{./config.json}}`;
+const dynamicResult = await shotput({
   template: dynamicTemplate,
-  templateDir: './data',
-  allowedBasePaths: ['./data']
+  templateDir: "./data",
+  allowedBasePaths: ["./data"],
 });
 ```
 
@@ -205,12 +218,10 @@ const dynamicInstance = shotput({
 ### Skill Configuration
 
 ```ts
-import { shotput } from "shotput";
-
-const instance = shotput({
-  skillsDir: "./skills",           // local skills directory
-  allowRemoteSkills: false,        // enable GitHub skill loading
-  allowedSkillSources: ["anthropics/skills"],  // allowed remote sources
+await shotput({
+  skillsDir: "./skills",
+  allowRemoteSkills: false,
+  allowedSkillSources: ["anthropics/skills"],
 });
 ```
 
@@ -233,14 +244,11 @@ CLOUDFLARE_R2_URL=account-id.r2.cloudflarestorage.com
 **Programmatic Configuration:**
 
 ```ts
-import { shotput } from "shotput";
-
-const instance = shotput({
+await shotput({
   s3AccessKeyId: "your-access-key",
   s3SecretAccessKey: "your-secret-key",
   s3Region: "us-east-1",
-  // Optional
-  s3SessionToken: "session-token",  // for temporary credentials
+  s3SessionToken: "session-token",  // optional, temporary credentials
   s3Bucket: "default-bucket",
   s3VirtualHostedStyle: false,
 });
@@ -275,14 +283,12 @@ Shotput includes advanced parallel processing capabilities with intelligent plan
 **Configuration:**
 
 ```ts
-import { shotput } from "shotput";
-
-const instance = shotput({
-  maxConcurrency: 4,                    // Process 4 templates concurrently
-  enableContentLengthPlanning: true,    // Enable planning phase
-  maxRetries: 3,                        // Retry up to 3 times on failure
-  retryDelay: 1000,                     // Initial delay: 1 second
-  retryBackoffMultiplier: 2,            // Double delay each retry (1s → 2s → 4s)
+await shotput({
+  maxConcurrency: 4,
+  enableContentLengthPlanning: true,
+  maxRetries: 3,
+  retryDelay: 1000,
+  retryBackoffMultiplier: 2,
 });
 ```
 
@@ -312,22 +318,22 @@ Parallel processing can significantly improve performance when working with mult
 - Network-bound operations (HTTP, S3): greatest improvement
 - Local files: modest improvement due to I/O parallelization
 
-**Disabling Parallel Processing:**
+**Token-aware budgeting:** Set `tokenizer` so planning and truncation use token counts instead of characters (e.g. `tokenizer: "cl100k_base"` or a custom `(text) => number`). Then `maxPromptLength` is in tokens.
 
-For debugging or specific use cases, disable parallel processing:
+**Disabling parallel processing:**
 
 ```ts
-const instance = shotput({
-  enableContentLengthPlanning: false,  // Use sequential processing
-  maxConcurrency: 1,                   // Process one at a time
+await shotput({
+  enableContentLengthPlanning: false,
+  maxConcurrency: 1,
 });
 ```
 
 ## API
 
-### `shotput(config?: Partial<ShotputConfig>): ShotputInstance`
+### `shotput(config?: Partial<ShotputConfig>): Promise<ShotputOutput>`
 
-Creates a new Shotput instance with optional configuration overrides.
+Processes the template with optional configuration overrides and returns the result. No separate `.run()` call; invoke as `await shotput({ ... })`.
 
 **Parameters:**
 
@@ -365,43 +371,35 @@ Creates a new Shotput instance with optional configuration overrides.
 | `retryDelay` | `number` | `1000` | Initial retry delay in milliseconds |
 | `retryBackoffMultiplier` | `number` | `2` | Exponential backoff multiplier for retries |
 | `enableContentLengthPlanning` | `boolean` | `true` | Enable planning phase with content length detection |
+| `maxNestingDepth` | `number` | `3` | Maximum depth for nested template interpolation |
+| `context` | `Record<string, unknown>` | `undefined` | Context for rules and variable substitution |
+| `expressionEngine` | `"js"` \| `"safe"` | `"js"` | Condition evaluation: full JS or safe subset |
+| `tokenizer` | `"openai"` \| `"cl100k_base"` \| `(text: string) => number` | `undefined` | When set, `maxPromptLength` is in tokens |
+| `hooks` | `HookSet` | `undefined` | Lifecycle hooks (preResolve, postResolveSource, postAssembly, preOutput) |
+| `outputMode` | `"flat"` \| `"sectioned"` \| `"messages"` | `"flat"` | Output shape |
+| `sectionBudgets` | `Record<string, number>` | `undefined` | Per-section length limits (sectioned mode) |
+| `sectionRoles` | `Record<string, "system" \| "user" \| "assistant">` | `undefined` | Section to role mapping (messages mode) |
+| `commandsDir` | `string` | `undefined` | Directory for command templates |
+| `subagentsDir` | `string` | `undefined` | Directory for subagent definitions |
+| `parseSubagentFrontmatter` | `boolean` | `false` | Strip YAML frontmatter and set `output.frontmatter` |
+| `customSources` | `SourcePlugin[]` | `undefined` | Custom source plugins |
 
 **Returns:**
 
-`ShotputInstance` object with a `run()` method.
-
-### `instance.run(): Promise<ShotputResult>`
-
-Processes the template and returns the result.
-
-**Returns:**
+`Promise<ShotputOutput>`:
 
 ```ts
-interface ShotputResult {
-  content: string;  // Processed template content
+interface ShotputOutput {
+  content?: string;           // Processed template content (flat mode)
+  sections?: Section[];       // Parsed sections (sectioned mode)
+  messages?: MessageOutput[]; // System/user/assistant (messages mode)
+  frontmatter?: Record<string, unknown>; // When parseSubagentFrontmatter and frontmatter present
+  error?: Error;              // Set when processing threw
   metadata: {
-    processedTemplates: TemplateResult[];  // Details for each template
-    totalLength: number;                   // Total output length
-    truncated: boolean;                    // Whether content was truncated
-    errors: ProcessingError[];             // Any errors encountered
-    processingTime: number;                // Total processing time in ms
+    duration: number;         // Processing time in ms
+    outputMode?: OutputMode;
+    resultMetadata?: Array<{ path: string; type: string; duration: number }>;
   };
-}
-
-interface TemplateResult {
-  type: TemplateType;        // e.g., "file", "s3", "http", "function"
-  path: string;              // Source path or URL
-  length: number;            // Content length in characters
-  truncated: boolean;        // Whether this template was truncated
-  processingTime: number;    // Processing time in ms
-  content?: string;          // Optional: actual content
-  error?: string;            // Optional: error message if failed
-}
-
-interface ProcessingError {
-  path: string;              // Source that failed
-  error: string;             // Error message
-  type: TemplateType;        // Type of template that failed
 }
 ```
 
@@ -410,72 +408,75 @@ interface ProcessingError {
 ```ts
 import { shotput } from "shotput";
 
-// File-based template
-const instance = shotput({
+// File-based template (shotput returns a Promise)
+const result = await shotput({
   templateDir: "./templates",
   templateFile: "prompt.md",
   allowedBasePaths: ["./data"],
-  allowHttp: true
+  allowHttp: true,
 });
 
-const result = await instance.run();
-
-// Access the processed content
 console.log(result.content);
+console.log(`Duration: ${result.metadata.duration}ms`);
 
-// Check metadata
-console.log(`Processed ${result.metadata.processedTemplates.length} templates`);
-console.log(`Total length: ${result.metadata.totalLength} characters`);
-console.log(`Processing time: ${result.metadata.processingTime}ms`);
-
-// Check for errors
-if (result.metadata.errors.length > 0) {
-  console.error("Errors encountered:");
-  result.metadata.errors.forEach(err => {
-    console.error(`  ${err.path}: ${err.error}`);
-  });
-}
-
-// Inline template
-const inlineInstance = shotput({
-  template: "Hello {{./data.txt}}!",
+// Inline template with context and variables
+const inlineResult = await shotput({
+  template: "Task: {{context.taskName}}\n{{./data.txt}}",
   templateDir: "./data",
-  allowedBasePaths: ["./data"]
+  allowedBasePaths: ["./data"],
+  context: { taskName: "review" },
 });
-
-const inlineResult = await inlineInstance.run();
 console.log(inlineResult.content);
 ```
 
 ## Examples
 
-Comprehensive examples demonstrating all features are available in the [`examples/`](./examples/) directory:
+Comprehensive examples are in [`examples/`](./examples/):
 
-### Basic Examples
+### Basic
 
 - **[01-simple-file.ts](./examples/basic/01-simple-file.ts)** - Simple file interpolation
-- **[02-multiple-files.ts](./examples/basic/02-multiple-files.ts)** - Including multiple files
+- **[02-multiple-files.ts](./examples/basic/02-multiple-files.ts)** - Multiple files
 - **[03-directory.ts](./examples/basic/03-directory.ts)** - Directory inclusion
-- **[04-glob-patterns.ts](./examples/basic/04-glob-patterns.ts)** - Using glob patterns to match files
-- **[05-regex-patterns.ts](./examples/basic/05-regex-patterns.ts)** - Using regex to match file paths
-- **[06-http.ts](./examples/basic/06-http.ts)** - Fetching content from HTTP URLs
-- **[07-functions.ts](./examples/basic/07-functions.ts)** - Using custom JavaScript functions
-- **[08-skills.ts](./examples/basic/08-skills.ts)** - Loading Anthropic Skills
-- **[09-inline-template.ts](./examples/basic/09-inline-template.ts)** - Using template strings instead of files
-- **[10-parallel-simple.ts](./examples/basic/10-parallel-simple.ts)** - Simple parallel processing
+- **[04-glob-patterns.ts](./examples/basic/04-glob-patterns.ts)** - Glob patterns
+- **[05-regex-patterns.ts](./examples/basic/05-regex-patterns.ts)** - Regex file paths
+- **[06-http.ts](./examples/basic/06-http.ts)** - HTTP URLs
+- **[07-functions.ts](./examples/basic/07-functions.ts)** - Custom JavaScript functions
+- **[08-skills.ts](./examples/basic/08-skills.ts)** - Anthropic Skills
+- **[09-inline-template.ts](./examples/basic/09-inline-template.ts)** - Template strings
+- **[10-parallel-simple.ts](./examples/basic/10-parallel-simple.ts)** - Parallel processing
+- **[11-rules.ts](./examples/basic/11-rules.ts)** - Conditionals (`{{#if}}`)
+- **[12-hooks.ts](./examples/basic/12-hooks.ts)** - Lifecycle hooks
+- **[13-output-modes.ts](./examples/basic/13-output-modes.ts)** - Flat, sectioned, messages
+- **[14-commands.ts](./examples/basic/14-commands.ts)** - Commands
+- **[15-subagents.ts](./examples/basic/15-subagents.ts)** - Subagents
+- **[16-variables.ts](./examples/basic/16-variables.ts)** - Variable substitution (`{{context.x}}`, `{{params.x}}`, `{{env.X}}`)
+- **[17-each.ts](./examples/basic/17-each.ts)** - Loops (`{{#each}}`)
 
-### Advanced Examples
+### Advanced
 
-- **[10-parallel-processing.ts](./examples/advanced/10-parallel-processing.ts)** - Advanced parallel processing with planning, retry logic, and performance comparison
+- **[01-s3-basic.ts](./examples/advanced/01-s3-basic.ts)** - S3 basics
+- **[02-s3-directory-buckets.ts](./examples/advanced/02-s3-directory-buckets.ts)** - S3 directory buckets
+- **[03-s3-cloudflare-r2.ts](./examples/advanced/03-s3-cloudflare-r2.ts)** - Cloudflare R2
+- **[04-streaming.ts](./examples/advanced/04-streaming.ts)** - Streaming large files
+- **[05-security.ts](./examples/advanced/05-security.ts)** - Security and path validation
+- **[06-length-limits.ts](./examples/advanced/06-length-limits.ts)** - Length limits and truncation
+- **[07-mixed-sources.ts](./examples/advanced/07-mixed-sources.ts)** - Mixed source types
+- **[08-remote-skills.ts](./examples/advanced/08-remote-skills.ts)** - Remote skills
+- **[09-parallel-processing.ts](./examples/advanced/09-parallel-processing.ts)** - Parallel planning and retry
+- **[10-nested-templates.ts](./examples/advanced/10-nested-templates.ts)** - Nested templates
+- **[11-nested-mixed-sources.ts](./examples/advanced/11-nested-mixed-sources.ts)** - Nested mixed sources
+- **[12-custom-source.ts](./examples/advanced/12-custom-source.ts)** - Custom source plugins
+- **[13-token-budgeting.ts](./examples/advanced/13-token-budgeting.ts)** - Token-aware budgeting
 
-### Running Examples
+### Running examples
 
 ```bash
 # Run a single example
 bun run examples/basic/01-simple-file.ts
 
-# Run all basic examples
-for file in examples/basic/*.ts; do bun run "$file"; done
+# Run all examples
+bun run examples
 ```
 
 Each example includes:
@@ -486,6 +487,16 @@ Each example includes:
 
 See the [examples README](./examples/README.md) for complete documentation.
 
-## Prerequisites for Local Use
+## Scripts
 
-- `bun`
+| Command | Description |
+|---------|-------------|
+| `bun run build` | Build dist and types |
+| `bun test` | Run all tests |
+| `bun run examples` | Run all examples |
+| `bun run lint` | Run Biome check |
+| `bun run typecheck` | TypeScript check |
+
+## Prerequisites
+
+- [Bun](https://bun.sh)

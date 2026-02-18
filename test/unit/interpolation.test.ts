@@ -155,4 +155,29 @@ describe("interpolation", () => {
 		expect(result.processedTemplate).toContain("Nested:");
 		expect(result.processedTemplate).toContain("from b");
 	});
+
+	it("should substitute {{context.x}} and {{params.x}} in template body", async () => {
+		const config = createConfig({
+			context: { taskName: "review", scope: "security" },
+		}) as ReturnType<typeof createConfig> & {
+			params?: Record<string, unknown>;
+		};
+		config.params = { id: "p1" };
+		const template =
+			"Task: {{context.taskName}} Scope: {{context.scope}} ID: {{params.id}}";
+		const result = await interpolation(template, config);
+		expect(result.processedTemplate).toBe(
+			"Task: review Scope: security ID: p1",
+		);
+	});
+
+	it("should combine {{#each}} and variable substitution in full interpolation", async () => {
+		const config = createConfig({
+			context: { items: ["a", "b", "c"] },
+		});
+		const template =
+			"{{#each context.items}}[{{context.__loop.index}}:{{context.__loop.item}}]{{/each}}";
+		const result = await interpolation(template, config);
+		expect(result.processedTemplate).toBe("[0:a][1:b][2:c]");
+	});
 });

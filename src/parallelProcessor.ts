@@ -6,8 +6,12 @@ import { resolveTemplatePath } from "./pathResolve";
 import { getMatchingPlugin } from "./plugins";
 import { Semaphore } from "./semaphore";
 import { findTemplateType } from "./template";
+import { getCountFn } from "./tokens";
 import type { ProcessingProgress, TemplateResult } from "./types";
 import { TemplateType } from "./types";
+
+/** When tokenizer is set, planning uses token estimates; convert bytes to tokens with this. */
+const CHARS_PER_TOKEN = 4;
 
 const log = getLogger("parallelProcessor");
 
@@ -250,13 +254,21 @@ export class ParallelProcessor {
 
 		const tasksWithLengths = await Promise.all(estimationPromises);
 
-		// Log planning summary
+		// When tokenizer is set, convert byte estimates to token estimates for planning
+		if (this.config.tokenizer) {
+			for (const task of tasksWithLengths) {
+				const bytes = task.estimatedLength ?? 0;
+				task.estimatedLength = Math.ceil(bytes / CHARS_PER_TOKEN);
+			}
+		}
+
 		const totalEstimatedLength = tasksWithLengths.reduce(
 			(sum, task) => sum + (task.estimatedLength ?? 0),
 			0,
 		);
+		const unit = this.config.tokenizer ? "tokens" : "bytes";
 		log.info(
-			`Total estimated content length: ${totalEstimatedLength} bytes, max allowed: ${this.config.maxPromptLength}`,
+			`Total estimated content length: ${totalEstimatedLength} ${unit}, max allowed: ${this.config.maxPromptLength}`,
 		);
 
 		return tasksWithLengths;
@@ -341,19 +353,20 @@ export class ParallelProcessor {
 	}> {
 		const startTime = Date.now();
 
+		const countFn = getCountFn(this.config);
+		const lengthOf = (text: string) =>
+			this.config.tokenizer ? countFn(text) : text.length;
+
 		if (task.isCycle) {
 			const replacement = `[Cycle detected: ${task.path}]`;
+			const len = lengthOf(replacement);
 			return {
 				task,
-				processed: {
-					match: task.match,
-					replacement,
-					length: replacement.length,
-				},
+				processed: { match: task.match, replacement, length: len },
 				result: {
 					type: task.type,
 					path: task.path,
-					length: replacement.length,
+					length: len,
 					truncated: false,
 					processingTime: Date.now() - startTime,
 					content: replacement,
@@ -374,27 +387,25 @@ export class ParallelProcessor {
 			const operationResults = result.operationResults;
 			const combinedRemainingCount = result.combinedRemainingCount;
 
-			// The operationResults should be just the replacement content
-			// since we passed only the match as the input
 			const replacement = operationResults;
 
-			// Detect if the handler returned an error message instead of throwing
-			// Handlers typically return [Error: ...] or [Security Error: ...]
 			const isError =
 				replacement.startsWith("[Error") ||
 				replacement.startsWith("[Security Error");
+
+			const len = lengthOf(replacement);
 
 			return {
 				task,
 				processed: {
 					match: task.match,
 					replacement,
-					length: replacement.length,
+					length: len,
 				},
 				result: {
 					type: task.type,
 					path: task.path,
-					length: replacement.length,
+					length: len,
 					truncated: combinedRemainingCount === 0,
 					processingTime: Date.now() - startTime,
 					content: replacement,

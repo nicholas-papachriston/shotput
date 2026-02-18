@@ -283,7 +283,11 @@ export const handleSkill = async (
 			skillContent = await loadLocalSkill(config, skillName, includeReferences);
 		}
 
-		const processed = await processContent(skillContent, remainingLength);
+		const processed = await processContent(
+			skillContent,
+			remainingLength,
+			config,
+		);
 
 		if (processed.truncated) {
 			log.warn(`Skill content truncated for ${skillPath} due to length limit`);

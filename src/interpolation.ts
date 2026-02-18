@@ -9,7 +9,9 @@ import { resolveTemplatePath } from "./pathResolve";
 import { getMatchingPlugin } from "./plugins";
 import { evaluateRules } from "./rules";
 import { clearStatCache, findTemplateType } from "./template";
+import { getCountFn } from "./tokens";
 import { TemplateType } from "./types";
+import { substituteVariables } from "./variables";
 
 const log = getLogger("interpolation");
 
@@ -58,7 +60,11 @@ export const interpolation = async (
 			}
 		: config;
 	const contentAfterRules = evaluateRules(content, effectiveConfig);
-	const matches = contentAfterRules.match(pattern);
+	const contentAfterVariables = substituteVariables(
+		contentAfterRules,
+		effectiveConfig,
+	);
+	const matches = contentAfterVariables.match(pattern);
 	const resolvedLiteralBox =
 		literalBox ??
 		(depth === 0 ? { literals: new Map<string, string>() } : undefined);
@@ -66,7 +72,7 @@ export const interpolation = async (
 	const configToUse = effectiveConfig;
 
 	if (!matches) {
-		const out = { processedTemplate: contentAfterRules, remainingLength };
+		const out = { processedTemplate: contentAfterVariables, remainingLength };
 		if (depth === 0 && resolvedLiteralBox?.literals.size) {
 			out.processedTemplate = substituteLiterals(
 				content,
@@ -92,25 +98,28 @@ export const interpolation = async (
 		const processor = new ParallelProcessor(config);
 		const { content: processedContent, metadata } =
 			await processor.processTemplatesWithPlanning(
-				contentAfterRules,
+				contentAfterVariables,
 				basePath,
 				remainingLength,
 				undefined,
 				expandingPaths,
 			);
 
-		processedTemplate = evaluateRules(processedContent, config);
+		processedTemplate = substituteVariables(
+			evaluateRules(processedContent, effectiveConfig),
+			effectiveConfig,
+		);
 		currentMetadata = metadata.map((m) => ({
 			path: m.path,
 			type: m.type,
 			duration: m.processingTime,
 		}));
 
-		// Remaining budget = characters left until maxPromptLength
-		finalRemainingLength = Math.max(
-			0,
-			config.maxPromptLength - processedTemplate.length,
-		);
+		// Remaining budget (chars or tokens when config.tokenizer is set)
+		const usedLength = config.tokenizer
+			? getCountFn(config)(processedTemplate)
+			: processedTemplate.length;
+		finalRemainingLength = Math.max(0, config.maxPromptLength - usedLength);
 	} else {
 		// Fall back to sequential processing
 		log.info(`Using sequential processing (depth ${depth}/${maxDepth})`);
@@ -119,7 +128,7 @@ export const interpolation = async (
 			type: string;
 			duration: number;
 		}> = [];
-		let result = contentAfterRules;
+		let result = contentAfterVariables;
 
 		const inclusionBasePathFor = (type: TemplateType, p: string): string => {
 			if (
@@ -370,7 +379,7 @@ export const interpolation = async (
 	}
 
 	// Optimization: if nothing changed in this pass, skip recursion
-	if (processedTemplate === contentAfterRules) {
+	if (processedTemplate === contentAfterVariables) {
 		let out = processedTemplate.trim();
 		if (depth === 0 && resolvedLiteralBox?.literals.size) {
 			out = substituteLiterals(out, resolvedLiteralBox.literals);

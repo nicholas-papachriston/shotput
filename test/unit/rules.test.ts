@@ -105,4 +105,69 @@ describe("rules", () => {
 		const template = "{{#if context.x.y.z}}bad{{/if}}";
 		expect(evaluateRules(template, config)).toBe("");
 	});
+
+	describe("{{#each}}", () => {
+		it("should iterate over context array and expose __loop.item", () => {
+			const config = createConfig({
+				context: { items: ["a", "b", "c"] },
+			});
+			const template =
+				"{{#each context.items}}-{{context.__loop.item}}-{{/each}}";
+			expect(evaluateRules(template, config)).toBe("-a--b--c-");
+		});
+
+		it("should expose context.__loop.index", () => {
+			const config = createConfig({
+				context: { list: ["x", "y"] },
+			});
+			const template =
+				"{{#each context.list}}[{{context.__loop.index}}]{{context.__loop.item}}{{/each}}";
+			expect(evaluateRules(template, config)).toBe("[0]x[1]y");
+		});
+
+		it("should render empty string for empty array", () => {
+			const config = createConfig({
+				context: { list: [] },
+			});
+			const template = "{{#each context.list}}x{{/each}}";
+			expect(evaluateRules(template, config)).toBe("");
+		});
+
+		it("should treat non-array as single-item array", () => {
+			const config = createConfig({
+				context: { single: "only" },
+			});
+			const template =
+				"{{#each context.single}}{{context.__loop.item}}{{/each}}";
+			expect(evaluateRules(template, config)).toBe("only");
+		});
+
+		it("should support params.* as each source", () => {
+			const config = createConfig({}) as ReturnType<typeof createConfig> & {
+				params?: Record<string, unknown>;
+			};
+			config.params = { names: ["alice", "bob"] };
+			const template =
+				"{{#each params.names}}{{context.__loop.item}} {{/each}}";
+			expect(evaluateRules(template, config)).toBe("alice bob ");
+		});
+
+		it("should evaluate nested {{#if}} inside {{#each}}", () => {
+			const config = createConfig({
+				context: { items: [1, 2, 3], threshold: 2 },
+			});
+			const template =
+				"{{#each context.items}}{{#if context.__loop.item >= context.threshold}}{{context.__loop.item}}{{/if}}{{/each}}";
+			expect(evaluateRules(template, config)).toBe("23");
+		});
+
+		it("should handle nested {{#each}}", () => {
+			const config = createConfig({
+				context: { rows: [["a", "b"], ["c"]] },
+			});
+			const template =
+				"{{#each context.rows}}({{#each context.__loop.item}}{{context.__loop.item}}{{/each}}){{/each}}";
+			expect(evaluateRules(template, config)).toBe("(ab)(c)");
+		});
+	});
 });

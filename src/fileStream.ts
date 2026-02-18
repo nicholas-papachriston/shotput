@@ -2,8 +2,12 @@ import type { ShotputConfig } from "./config";
 import { handlerErrorResult } from "./handlerResult";
 import { getLogger } from "./logger";
 import { SecurityError, validatePath } from "./security";
+import { getCountFn } from "./tokens";
 
 const log = getLogger("fileStream");
+
+/** When tokenizer is set, remainingLength is in tokens; use this as char budget for streaming. */
+const CHARS_PER_TOKEN = 4;
 
 /**
  * Handles reading large files using streams to avoid memory issues.
@@ -29,6 +33,11 @@ export const handleFileStream = async (
 			throw new Error(`File not found: ${validatedPath}`);
 		}
 
+		const countFn = getCountFn(config);
+		const charBudget = config.tokenizer
+			? remainingLength * CHARS_PER_TOKEN
+			: remainingLength;
+
 		const stream = file.stream();
 		const reader = stream.getReader();
 		const decoder = new TextDecoder();
@@ -37,9 +46,9 @@ export const handleFileStream = async (
 		let currentLength = content.length;
 		let truncated = false;
 
-		// If the header itself is longer than remaining length
-		if (currentLength > remainingLength) {
-			content = content.slice(0, remainingLength);
+		// If the header itself is longer than budget
+		if (currentLength > charBudget) {
+			content = content.slice(0, charBudget);
 			truncated = true;
 		} else {
 			while (true) {
@@ -48,13 +57,12 @@ export const handleFileStream = async (
 
 				const chunk = decoder.decode(value, { stream: true });
 
-				if (currentLength + chunk.length > remainingLength) {
-					const allowed = remainingLength - currentLength;
+				if (currentLength + chunk.length > charBudget) {
+					const allowed = charBudget - currentLength;
 					if (allowed > 0) {
 						content += chunk.slice(0, allowed);
 					}
 					truncated = true;
-					// Cancel the reader to stop the stream
 					await reader.cancel();
 					break;
 				}
@@ -68,9 +76,12 @@ export const handleFileStream = async (
 			log.warn(`Content truncated for ${validatedPath} due to length limit`);
 		}
 
+		const usedLength = config.tokenizer ? countFn(content) : content.length;
+		const combinedRemaining = Math.max(0, remainingLength - usedLength);
+
 		return {
 			operationResults: result.replace(match, content),
-			combinedRemainingCount: Math.max(0, remainingLength - content.length),
+			combinedRemainingCount: combinedRemaining,
 		};
 	} catch (error) {
 		if (error instanceof SecurityError) {
