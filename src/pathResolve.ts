@@ -14,6 +14,17 @@ export const SPECIAL_PREFIXES = [
 	"s3://",
 ];
 
+const resolvedPathCache = new WeakMap<ShotputConfig, Map<string, string>>();
+
+function getOrCreatePathCache(config: ShotputConfig): Map<string, string> {
+	let cache = resolvedPathCache.get(config);
+	if (!cache) {
+		cache = new Map();
+		resolvedPathCache.set(config, cache);
+	}
+	return cache;
+}
+
 /**
  * Resolve a template path: if it has a special prefix or matches a custom plugin,
  * return as-is; otherwise resolve relative to basePath (or return if absolute).
@@ -23,11 +34,23 @@ export const resolveTemplatePath = (
 	filePath: string,
 	config: ShotputConfig,
 ): string => {
+	const cacheKey = `${basePath}\0${filePath}`;
+	const cache = getOrCreatePathCache(config);
+	const cached = cache.get(cacheKey);
+	if (cached !== undefined) {
+		return cached;
+	}
 	if (SPECIAL_PREFIXES.some((prefix) => filePath.startsWith(prefix))) {
+		cache.set(cacheKey, filePath);
 		return filePath;
 	}
 	if (getMatchingPlugin(config, filePath)) {
+		cache.set(cacheKey, filePath);
 		return filePath;
 	}
-	return isAbsolute(filePath) ? filePath : resolve(basePath, filePath);
+	const resolved = isAbsolute(filePath)
+		? filePath
+		: resolve(basePath, filePath);
+	cache.set(cacheKey, resolved);
+	return resolved;
 };

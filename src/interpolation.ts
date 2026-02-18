@@ -25,15 +25,17 @@ const CYCLE_MESSAGE_PREFIX = "[Cycle detected: ";
 
 const LITERAL_PLACEHOLDER_PREFIX = "__SHOTPUT_LITERAL_";
 
+const REGEX_ESCAPE = /[.*+?^${}()|[\]\\]/g;
+
 function substituteLiterals(
 	content: string,
 	literals: Map<string, string>,
 ): string {
-	let result = content;
-	for (const [key, value] of literals) {
-		result = result.replaceAll(key, value);
-	}
-	return result;
+	if (literals.size === 0) return content;
+	const keys = [...literals.keys()].sort((a, b) => b.length - a.length);
+	const escaped = keys.map((k) => k.replace(REGEX_ESCAPE, "\\$&"));
+	const regex = new RegExp(escaped.join("|"), "g");
+	return content.replace(regex, (match) => literals.get(match) ?? match);
 }
 
 export const interpolation = async (
@@ -183,15 +185,13 @@ export const interpolation = async (
 				: "";
 			if (afterRules.match(pattern) && depth < maxDepth && remLength > 0) {
 				const inclusionBase = inclusionBasePathFor(templateType, p);
-				const nestedExpanding = new Set(expandingPaths);
-				nestedExpanding.add(p);
 				const nested = await interpolation(
 					afterRules,
 					configToUse,
 					inclusionBase,
 					depth + 1,
 					remLength,
-					nestedExpanding,
+					expandingPaths,
 					resolvedLiteralBox,
 					handlerResult.mergeContext,
 				);
@@ -233,79 +233,24 @@ export const interpolation = async (
 					continue;
 				}
 				expandingPaths.add(path);
-
-				switch (templateType) {
-					case TemplateType.File:
-					case TemplateType.Directory:
-					case TemplateType.Glob:
-					case TemplateType.Regex:
-					case TemplateType.S3:
-					case TemplateType.Http:
-					case TemplateType.Skill: {
-						const handler = getHandler(templateType);
-						const handlerResult = await handler(
-							config,
-							result,
-							path,
-							match,
-							currentRemainingLength,
-							basePath,
-						);
-						const applied = await applyReplacement(
-							handlerResult,
-							match,
-							path,
-							templateType,
-							result,
-							currentRemainingLength,
-							startTime,
-						);
-						result = applied.result;
-						currentRemainingLength = applied.remainingLength;
-						resultMetadata.push(...applied.metadata);
-						continue;
-					}
-					case TemplateType.Function: {
-						const handler = getHandler(templateType);
-						const { operationResults, combinedRemainingCount } = await handler(
-							config,
-							result,
-							path,
-							match,
-							currentRemainingLength,
-							basePath,
-						);
-						currentRemainingLength = combinedRemainingCount;
-						result = operationResults;
-						resultMetadata.push({
-							path,
-							type: templateType,
-							duration: Date.now() - startTime,
-						});
-						continue;
-					}
-					case TemplateType.Custom: {
-						const plugin = getMatchingPlugin(configToUse, path);
-						if (!plugin) {
-							log.warn(`No custom plugin matched for path: ${path}`);
-							result = result.replace(match, `[Error reading ${path}]`);
-							continue;
-						}
-						const handlerResult = await handleCustomSource(
-							plugin,
-							configToUse,
-							result,
-							path,
-							match,
-							currentRemainingLength,
-							basePath,
-						);
-						if (
-							plugin.canContainTemplates &&
-							handlerResult.replacement?.match(pattern) &&
-							depth < maxDepth &&
-							currentRemainingLength > 0
-						) {
+				try {
+					switch (templateType) {
+						case TemplateType.File:
+						case TemplateType.Directory:
+						case TemplateType.Glob:
+						case TemplateType.Regex:
+						case TemplateType.S3:
+						case TemplateType.Http:
+						case TemplateType.Skill: {
+							const handler = getHandler(templateType);
+							const handlerResult = await handler(
+								config,
+								result,
+								path,
+								match,
+								currentRemainingLength,
+								basePath,
+							);
 							const applied = await applyReplacement(
 								handlerResult,
 								match,
@@ -318,38 +263,100 @@ export const interpolation = async (
 							result = applied.result;
 							currentRemainingLength = applied.remainingLength;
 							resultMetadata.push(...applied.metadata);
-						} else {
-							if (
-								!plugin.canContainTemplates &&
-								handlerResult.replacement &&
-								resolvedLiteralBox
-							) {
-								const key = `${LITERAL_PLACEHOLDER_PREFIX}${resolvedLiteralBox.literals.size}__`;
-								resolvedLiteralBox.literals.set(key, handlerResult.replacement);
-								result = result.replace(match, key);
-							} else {
-								result = handlerResult.operationResults;
-							}
-							currentRemainingLength = handlerResult.combinedRemainingCount;
+							continue;
+						}
+						case TemplateType.Function: {
+							const handler = getHandler(templateType);
+							const { operationResults, combinedRemainingCount } =
+								await handler(
+									config,
+									result,
+									path,
+									match,
+									currentRemainingLength,
+									basePath,
+								);
+							currentRemainingLength = combinedRemainingCount;
+							result = operationResults;
 							resultMetadata.push({
 								path,
 								type: templateType,
 								duration: Date.now() - startTime,
 							});
+							continue;
 						}
-						continue;
+						case TemplateType.Custom: {
+							const plugin = getMatchingPlugin(configToUse, path);
+							if (!plugin) {
+								log.warn(`No custom plugin matched for path: ${path}`);
+								result = result.replace(match, `[Error reading ${path}]`);
+								continue;
+							}
+							const handlerResult = await handleCustomSource(
+								plugin,
+								configToUse,
+								result,
+								path,
+								match,
+								currentRemainingLength,
+								basePath,
+							);
+							if (
+								plugin.canContainTemplates &&
+								handlerResult.replacement?.match(pattern) &&
+								depth < maxDepth &&
+								currentRemainingLength > 0
+							) {
+								const applied = await applyReplacement(
+									handlerResult,
+									match,
+									path,
+									templateType,
+									result,
+									currentRemainingLength,
+									startTime,
+								);
+								result = applied.result;
+								currentRemainingLength = applied.remainingLength;
+								resultMetadata.push(...applied.metadata);
+							} else {
+								if (
+									!plugin.canContainTemplates &&
+									handlerResult.replacement &&
+									resolvedLiteralBox
+								) {
+									const key = `${LITERAL_PLACEHOLDER_PREFIX}${resolvedLiteralBox.literals.size}__`;
+									resolvedLiteralBox.literals.set(
+										key,
+										handlerResult.replacement,
+									);
+									result = result.replace(match, key);
+								} else {
+									result = handlerResult.operationResults;
+								}
+								currentRemainingLength = handlerResult.combinedRemainingCount;
+								resultMetadata.push({
+									path,
+									type: templateType,
+									duration: Date.now() - startTime,
+								});
+							}
+							continue;
+						}
+						default: {
+							log.warn(
+								`Unknown template type: ${templateType} for path: ${path}`,
+							);
+							resultMetadata.push({
+								path,
+								type: templateType,
+								duration: Date.now() - startTime,
+							});
+							continue;
+						}
 					}
-					default: {
-						log.warn(
-							`Unknown template type: ${templateType} for path: ${path}`,
-						);
-						resultMetadata.push({
-							path,
-							type: templateType,
-							duration: Date.now() - startTime,
-						});
-						continue;
-					}
+				} finally {
+					expandingPaths.delete(path);
 				}
 			} catch (err) {
 				log.error(`Failed to read path ${path}: ${err}`);
@@ -381,32 +388,37 @@ export const interpolation = async (
 		log.info(
 			`Found nested templates, recursing to depth ${depth + 1}/${maxDepth}`,
 		);
-		const nestedExpanding = new Set(expandingPaths);
 		for (const m of currentMetadata) {
-			nestedExpanding.add(m.path);
+			expandingPaths.add(m.path);
 		}
-		const nestedResults = await interpolation(
-			processedTemplate,
-			config,
-			basePath,
-			depth + 1,
-			finalRemainingLength,
-			nestedExpanding,
-			resolvedLiteralBox,
-		);
+		try {
+			const nestedResults = await interpolation(
+				processedTemplate,
+				config,
+				basePath,
+				depth + 1,
+				finalRemainingLength,
+				expandingPaths,
+				resolvedLiteralBox,
+			);
 
-		let out = nestedResults.processedTemplate;
-		if (depth === 0 && resolvedLiteralBox?.literals.size) {
-			out = substituteLiterals(out, resolvedLiteralBox.literals);
+			let out = nestedResults.processedTemplate;
+			if (depth === 0 && resolvedLiteralBox?.literals.size) {
+				out = substituteLiterals(out, resolvedLiteralBox.literals);
+			}
+			return {
+				processedTemplate: out,
+				resultMetadata: [
+					...currentMetadata,
+					...(nestedResults.resultMetadata ?? []),
+				],
+				remainingLength: nestedResults.remainingLength,
+			};
+		} finally {
+			for (const m of currentMetadata) {
+				expandingPaths.delete(m.path);
+			}
 		}
-		return {
-			processedTemplate: out,
-			resultMetadata: [
-				...currentMetadata,
-				...(nestedResults.resultMetadata ?? []),
-			],
-			remainingLength: nestedResults.remainingLength,
-		};
 	}
 
 	let out = processedTemplate.trim();
