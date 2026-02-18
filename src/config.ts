@@ -10,6 +10,7 @@
  * @prop [awsS3Url] - ex: <ACCOUNT_ID>.s3.amazonaws.com
  * @prop [cloudflareR2Url] - ex: <ACCOUNT_ID>.r2.cloudflarestorage.com
  * @prop [httpTimeout] - def: 30000 - HTTP request timeout in milliseconds
+ * @prop [httpStreamThresholdBytes] - def: 1048576 - use response body stream when Content-Length >= this (1MB)
  * @prop [maxConcurrency] - def: 4 - maximum concurrent operations
  * @prop [maxRetries] - def: 3 - maximum retry attempts for failed operations
  * @prop [retryDelay] - def: 1000 - initial retry delay in milliseconds
@@ -25,6 +26,7 @@
  * @prop [context] - optional context object for rule conditions ({{#if context.key}})
  * @prop [expressionEngine] - "js" (default) or "safe" for condition evaluation
  * @prop [tokenizer] - when set, maxPromptLength and planning/trimming use token count; "openai"|"cl100k_base" use heuristic; pass (text)=>number for exact counts (e.g. tiktoken)
+ * @prop [tokenizerWorker] - when set, token counting runs in a worker (path to worker script)
  * @prop [hooks] - optional lifecycle hooks (preResolve, postResolveSource, postAssembly, preOutput)
  * @prop [outputMode] - "flat" | "sectioned" | "messages"
  * @prop [sectionBudgets] - per-section max length overrides
@@ -45,6 +47,7 @@ export interface ShotputConfig {
 	awsS3Url: string;
 	cloudflareR2Url?: string;
 	httpTimeout: number;
+	httpStreamThresholdBytes: number;
 	maxConcurrency: number;
 	maxRetries: number;
 	retryDelay: number;
@@ -70,6 +73,8 @@ export interface ShotputConfig {
 	expressionEngine?: "js" | "safe";
 	/** When set, maxPromptLength is in tokens and planning/trimming use token count. */
 	tokenizer?: "openai" | "cl100k_base" | ((text: string) => number);
+	/** When set, token counting is done in this worker script (path). */
+	tokenizerWorker?: string;
 	hooks?: import("./hooks").HookSet;
 	outputMode?: import("./types").OutputMode;
 	sectionBudgets?: Record<string, number>;
@@ -91,6 +96,7 @@ export const DEFAULT_CONFIG: ShotputConfig = {
 	awsS3Url: "s3.amazonaws.com",
 	cloudflareR2Url: undefined,
 	httpTimeout: 30000,
+	httpStreamThresholdBytes: 1024 * 1024,
 	maxConcurrency: 4,
 	maxRetries: 3,
 	retryDelay: 1000,
@@ -144,6 +150,9 @@ export const getEnvConfig = (): ShotputConfig => ({
 	httpTimeout:
 		Number.parseInt(process.env["HTTP_TIMEOUT"] ?? "") ||
 		DEFAULT_CONFIG.httpTimeout,
+	httpStreamThresholdBytes:
+		Number.parseInt(process.env["HTTP_STREAM_THRESHOLD_BYTES"] ?? "") ||
+		DEFAULT_CONFIG.httpStreamThresholdBytes,
 	maxConcurrency:
 		Number.parseInt(process.env["MAX_CONCURRENCY"] ?? "") ||
 		DEFAULT_CONFIG.maxConcurrency,

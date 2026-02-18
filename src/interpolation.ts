@@ -5,7 +5,7 @@ import { getLogger } from "./logger";
 import { ParallelProcessor } from "./parallelProcessor";
 import { evaluateRules } from "./rules";
 import { clearStatCache } from "./template";
-import { getCountFn } from "./tokens";
+import { getCountFnAsync } from "./tokens";
 import { substituteVariables } from "./variables";
 
 const log = getLogger("interpolation");
@@ -103,7 +103,7 @@ export const interpolation = async (
 		}));
 
 		const usedLength = config.tokenizer
-			? getCountFn(config)(processedTemplate)
+			? await getCountFnAsync(config)(processedTemplate)
 			: processedTemplate.length;
 		finalRemainingLength = Math.max(0, config.maxPromptLength - usedLength);
 	} else {

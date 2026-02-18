@@ -1,7 +1,8 @@
 import { describe, expect, it } from "bun:test";
+import { join } from "node:path";
 import { createConfig } from "../../src/config";
 import { processContent } from "../../src/content";
-import { getCountFn } from "../../src/tokens";
+import { getCountFn, getCountFnAsync } from "../../src/tokens";
 
 describe("tokens", () => {
 	describe("getCountFn", () => {
@@ -34,6 +35,31 @@ describe("tokens", () => {
 			const count = getCountFn(config);
 			expect(count("one two three")).toBe(3);
 			expect(count("single")).toBe(1);
+		});
+	});
+
+	describe("getCountFnAsync", () => {
+		it("should return same as sync getCountFn when tokenizerWorker is unset", async () => {
+			const config = createConfig({ tokenizer: "openai" });
+			const syncCount = getCountFn(config)("12345678");
+			const asyncCount = await getCountFnAsync(config)("12345678");
+			expect(asyncCount).toBe(syncCount);
+			expect(asyncCount).toBe(2);
+		});
+
+		it("should use worker when tokenizerWorker is set and return heuristic count", async () => {
+			const workerPath = join(
+				import.meta.dir,
+				"../../src/worker/tokenizerWorker.ts",
+			);
+			const config = createConfig({
+				tokenizer: "openai",
+				tokenizerWorker: workerPath,
+			});
+			const countAsync = getCountFnAsync(config);
+			expect(await countAsync("")).toBe(0);
+			expect(await countAsync("1234")).toBe(1);
+			expect(await countAsync("12345678")).toBe(2);
 		});
 	});
 

@@ -31,6 +31,8 @@ export type RunSequentialInterpolationFn = (
 	mergeContext: Record<string, unknown> | undefined,
 ) => Promise<ApplyInterpolationResult>;
 
+export type SegmentSink = (segment: string) => void;
+
 export async function runSequentialInterpolation(
 	content: string,
 	config: ShotputConfig,
@@ -42,15 +44,19 @@ export async function runSequentialInterpolation(
 	configToUse: ShotputConfig,
 	matches: RegExpMatchArray,
 	interpolationFn: RunSequentialInterpolationFn,
+	emit?: SegmentSink,
 ): Promise<{
 	result: string;
 	resultMetadata: InterpolationResultMeta[];
 	finalRemainingLength: number;
+	/** When emit was used: suffix not yet emitted; caller emits it or nested result. */
+	pendingSuffix?: string;
 }> {
 	const maxDepth = config.maxNestingDepth;
 	const resultMetadata: InterpolationResultMeta[] = [];
 	let result = content;
 	let currentRemainingLength = remainingLength;
+	let lastEnd = 0;
 
 	const runInterpolationForApply = (
 		cont: string,
@@ -71,7 +77,21 @@ export async function runSequentialInterpolation(
 			mergeContext,
 		);
 
+	let totalEmittedLength = 0;
+	let lastEndInResult = 0;
+
 	for (const match of matches) {
+		const matchIndex = content.indexOf(match, lastEnd);
+		if (matchIndex < 0) continue;
+		const matchIndexInResult = result.indexOf(match, lastEndInResult);
+		if (matchIndexInResult < 0) continue;
+
+		if (emit) {
+			const prefix = content.slice(lastEnd, matchIndex);
+			emit(prefix);
+			totalEmittedLength += prefix.length;
+		}
+
 		const startTime = Date.now();
 		const rawPath = match.slice(2, -2).trim();
 		let path = resolveTemplatePath(basePath, rawPath, configToUse);
@@ -79,6 +99,12 @@ export async function runSequentialInterpolation(
 		try {
 			const templateType = await findTemplateType(path, rawPath, configToUse);
 			if (templateType === TemplateType.String) {
+				if (emit) {
+					emit(match);
+					totalEmittedLength += match.length;
+				}
+				lastEndInResult = matchIndexInResult + match.length;
+				lastEnd = matchIndex + match.length;
 				continue;
 			}
 			if (templateType === TemplateType.Custom) {
@@ -86,7 +112,16 @@ export async function runSequentialInterpolation(
 			}
 			if (expandingPaths.has(path)) {
 				log.warn(`Cycle detected for path: ${path}`);
-				result = result.replace(match, `${CYCLE_MESSAGE_PREFIX}${path}]`);
+				const cycleMessage = `${CYCLE_MESSAGE_PREFIX}${path}]`;
+				result = result.replace(match, cycleMessage);
+				if (emit) {
+					emit(cycleMessage);
+					totalEmittedLength += cycleMessage.length;
+					lastEndInResult = matchIndexInResult + cycleMessage.length;
+				} else {
+					lastEndInResult = matchIndexInResult + match.length;
+				}
+				lastEnd = matchIndex + match.length;
 				continue;
 			}
 			expandingPaths.add(path);
@@ -124,9 +159,23 @@ export async function runSequentialInterpolation(
 							resolvedLiteralBox,
 							runInterpolationForApply,
 						);
+						if (emit) {
+							const replLen =
+								applied.result.length - result.length + match.length;
+							const replacement = applied.result.slice(
+								matchIndexInResult,
+								matchIndexInResult + replLen,
+							);
+							emit(replacement);
+							totalEmittedLength += replacement.length;
+							lastEndInResult = matchIndexInResult + replLen;
+						} else {
+							lastEndInResult = matchIndexInResult + match.length;
+						}
 						result = applied.result;
 						currentRemainingLength = applied.remainingLength;
 						resultMetadata.push(...applied.metadata);
+						lastEnd = matchIndex + match.length;
 						continue;
 					}
 					case TemplateType.Function: {
@@ -139,6 +188,19 @@ export async function runSequentialInterpolation(
 							currentRemainingLength,
 							basePath,
 						);
+						if (emit) {
+							const replLen =
+								operationResults.length - result.length + match.length;
+							const replacement = operationResults.slice(
+								matchIndexInResult,
+								matchIndexInResult + replLen,
+							);
+							emit(replacement);
+							totalEmittedLength += replacement.length;
+							lastEndInResult = matchIndexInResult + replLen;
+						} else {
+							lastEndInResult = matchIndexInResult + match.length;
+						}
 						currentRemainingLength = combinedRemainingCount;
 						result = operationResults;
 						resultMetadata.push({
@@ -146,13 +208,23 @@ export async function runSequentialInterpolation(
 							type: templateType,
 							duration: Date.now() - startTime,
 						});
+						lastEnd = matchIndex + match.length;
 						continue;
 					}
 					case TemplateType.Custom: {
 						const plugin = getMatchingPlugin(configToUse, path);
 						if (!plugin) {
 							log.warn(`No custom plugin matched for path: ${path}`);
-							result = result.replace(match, `[Error reading ${path}]`);
+							const errMsg = `[Error reading ${path}]`;
+							result = result.replace(match, errMsg);
+							if (emit) {
+								emit(errMsg);
+								totalEmittedLength += errMsg.length;
+								lastEndInResult = matchIndexInResult + errMsg.length;
+							} else {
+								lastEndInResult = matchIndexInResult + match.length;
+							}
+							lastEnd = matchIndex + match.length;
 							continue;
 						}
 						const handlerResult = await handleCustomSource(
@@ -186,6 +258,19 @@ export async function runSequentialInterpolation(
 								resolvedLiteralBox,
 								runInterpolationForApply,
 							);
+							if (emit) {
+								const replLen =
+									applied.result.length - result.length + match.length;
+								const replacement = applied.result.slice(
+									matchIndexInResult,
+									matchIndexInResult + replLen,
+								);
+								emit(replacement);
+								totalEmittedLength += replacement.length;
+								lastEndInResult = matchIndexInResult + replLen;
+							} else {
+								lastEndInResult = matchIndexInResult + match.length;
+							}
 							result = applied.result;
 							currentRemainingLength = applied.remainingLength;
 							resultMetadata.push(...applied.metadata);
@@ -198,7 +283,29 @@ export async function runSequentialInterpolation(
 								const key = `${LITERAL_PLACEHOLDER_PREFIX}${resolvedLiteralBox.literals.size}__`;
 								resolvedLiteralBox.literals.set(key, handlerResult.replacement);
 								result = result.replace(match, key);
+								if (emit) {
+									emit(key);
+									totalEmittedLength += key.length;
+									lastEndInResult = matchIndexInResult + key.length;
+								} else {
+									lastEndInResult = matchIndexInResult + match.length;
+								}
 							} else {
+								if (emit) {
+									const replLen =
+										handlerResult.operationResults.length -
+										result.length +
+										match.length;
+									const replacement = handlerResult.operationResults.slice(
+										matchIndexInResult,
+										matchIndexInResult + replLen,
+									);
+									emit(replacement);
+									totalEmittedLength += replacement.length;
+									lastEndInResult = matchIndexInResult + replLen;
+								} else {
+									lastEndInResult = matchIndexInResult + match.length;
+								}
 								result = handlerResult.operationResults;
 							}
 							currentRemainingLength = handlerResult.combinedRemainingCount;
@@ -208,6 +315,7 @@ export async function runSequentialInterpolation(
 								duration: Date.now() - startTime,
 							});
 						}
+						lastEnd = matchIndex + match.length;
 						continue;
 					}
 					default: {
@@ -219,6 +327,12 @@ export async function runSequentialInterpolation(
 							type: templateType,
 							duration: Date.now() - startTime,
 						});
+						if (emit) {
+							emit(match);
+							totalEmittedLength += match.length;
+						}
+						lastEndInResult = matchIndexInResult + match.length;
+						lastEnd = matchIndex + match.length;
 						continue;
 					}
 				}
@@ -227,13 +341,28 @@ export async function runSequentialInterpolation(
 			}
 		} catch (err) {
 			log.error(`Failed to read path ${path}: ${err}`);
-			result = result.replace(match, `[Error reading ${path}]`);
+			const errMsg = `[Error reading ${path}]`;
+			result = result.replace(match, errMsg);
+			if (emit) {
+				emit(errMsg);
+				totalEmittedLength += errMsg.length;
+				lastEndInResult = matchIndexInResult + errMsg.length;
+			} else {
+				lastEndInResult = matchIndexInResult + match.length;
+			}
+			lastEnd = matchIndex + match.length;
 		}
 	}
+
+	const suffix =
+		emit && result.length > totalEmittedLength
+			? result.slice(totalEmittedLength)
+			: undefined;
 
 	return {
 		result,
 		resultMetadata,
 		finalRemainingLength: currentRemainingLength,
+		...(suffix !== undefined && { pendingSuffix: suffix }),
 	};
 }

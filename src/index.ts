@@ -12,15 +12,60 @@ import {
 	runPreResolveHooks,
 } from "./hooks";
 import { interpolation } from "./interpolation";
+import { interpolationStream } from "./interpolationStream";
 import { getLogger } from "./logger";
 import { evaluateRules } from "./rules";
 import { formatMessages, parseOutputSections } from "./sections";
 import { createSubagentPlugin, parseSubagentFrontmatter } from "./subagent";
-import type { ShotputOutput } from "./types";
+import type {
+	ShotputOutput,
+	ShotputSegmentStreamOutput,
+	ShotputStreamingOutput,
+} from "./types";
 
 const log = getLogger("shotput");
 
-export type { ShotputOutput };
+const STREAM_CHUNK_SIZE = 64 * 1024;
+
+function buildConfig(configOverrides?: Partial<ShotputConfig>): ShotputConfig {
+	let config = createConfig(configOverrides);
+	const customPlugins: import("./plugins").SourcePlugin[] = [
+		...(config.customSources ?? []),
+	];
+	if (config.commandsDir) {
+		customPlugins.unshift(createCommandPlugin());
+	}
+	if (config.subagentsDir) {
+		customPlugins.unshift(createSubagentPlugin());
+	}
+	if (customPlugins.length > 0) {
+		config = { ...config, customSources: customPlugins };
+	}
+	return config;
+}
+
+function contentToStream(content: string): ReadableStream<string> {
+	return new ReadableStream({
+		start(controller) {
+			let offset = 0;
+			while (offset < content.length) {
+				const chunk = content.slice(
+					offset,
+					Math.min(offset + STREAM_CHUNK_SIZE, content.length),
+				);
+				controller.enqueue(chunk);
+				offset += chunk.length;
+			}
+			controller.close();
+		},
+	});
+}
+
+export type {
+	ShotputOutput,
+	ShotputSegmentStreamOutput,
+	ShotputStreamingOutput,
+};
 export { HookAbortError } from "./hooks";
 export type {
 	HookSet,
@@ -194,20 +239,99 @@ const run = async (config: ShotputConfig): Promise<ShotputOutput> => {
 export function shotput(
 	configOverrides?: Partial<ShotputConfig>,
 ): Promise<ShotputOutput> {
-	let config = createConfig(configOverrides);
-	const customPlugins: import("./plugins").SourcePlugin[] = [
-		...(config.customSources ?? []),
-	];
-	if (config.commandsDir) {
-		customPlugins.unshift(createCommandPlugin());
+	return run(buildConfig(configOverrides));
+}
+
+/**
+ * Run the same pipeline as shotput but return the final content as a ReadableStream.
+ * Callers can pipe the stream to fetch(), write to a file, or consume in chunks.
+ */
+export async function shotputStreaming(
+	configOverrides?: Partial<ShotputConfig>,
+): Promise<ShotputStreamingOutput> {
+	const output = await run(buildConfig(configOverrides));
+	if (output.error) {
+		return {
+			stream: new ReadableStream<string>({
+				start(c) {
+					c.close();
+				},
+			}),
+			metadata: output.metadata,
+			error: output.error,
+		};
 	}
-	if (config.subagentsDir) {
-		customPlugins.unshift(createSubagentPlugin());
+	const content = output.content ?? "";
+	return {
+		stream: contentToStream(content),
+		metadata: output.metadata,
+	};
+}
+
+/**
+ * Run template load, preResolve hooks, and rules, then stream segments in document order
+ * as each placeholder is resolved. PostAssembly, preOutput, and sectioning are not run;
+ * consumers can concatenate the stream and run hooks if needed. literalMap can be used
+ * for client-side substituteLiterals when custom sources emit literal placeholders.
+ */
+export async function shotputStreamingSegments(
+	configOverrides?: Partial<ShotputConfig>,
+): Promise<ShotputSegmentStreamOutput> {
+	const config = buildConfig(configOverrides);
+	const startTime = Date.now();
+	try {
+		await ensureDirectoryExists(config.responseDir, config.templateDir);
+
+		let templateContent: string;
+		if (config.template !== undefined) {
+			templateContent = config.template;
+		} else {
+			const templatePath = join(config.templateDir, config.templateFile);
+			templateContent = await Bun.file(templatePath).text();
+		}
+
+		const preResolveHooks = getPreResolveHooks(config);
+		if (preResolveHooks.length > 0) {
+			templateContent = await runPreResolveHooks(
+				templateContent,
+				preResolveHooks,
+			);
+		}
+
+		const streamResult = await interpolationStream(
+			templateContent,
+			config,
+			config.templateDir,
+		);
+
+		const baseMetadata = streamResult.metadata;
+		const metadata: Promise<ShotputOutput["metadata"]> = baseMetadata.then(
+			(m) => ({
+				...m,
+				duration: Date.now() - startTime,
+			}),
+		);
+
+		return {
+			stream: streamResult.stream,
+			metadata,
+			literalMap: streamResult.literalMap,
+		};
+	} catch (error) {
+		log.error(`Failed to process template: ${error}`);
+		return {
+			stream: new ReadableStream<string>({
+				start(c) {
+					c.close();
+				},
+			}),
+			metadata: Promise.resolve({
+				duration: Date.now() - startTime,
+				resultMetadata: [],
+			}),
+			error: error as Error,
+		};
 	}
-	if (customPlugins.length > 0) {
-		config = { ...config, customSources: customPlugins };
-	}
-	return run(config);
 }
 
 export type { SourceContext, SourcePlugin, SourceResolution } from "./plugins";

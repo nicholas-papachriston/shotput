@@ -106,3 +106,18 @@ export interface ShotputOutput {
 		resultMetadata?: Array<{ path: string; type: string; duration: number }>;
 	};
 }
+
+/** Result of runStreaming: content as a ReadableStream plus metadata. */
+export interface ShotputStreamingOutput {
+	stream: ReadableStream<string>;
+	metadata: ShotputOutput["metadata"];
+	error?: Error;
+}
+
+/** Result of shotputStreamingSegments: segments in document order, metadata when done, optional literal map. */
+export interface ShotputSegmentStreamOutput {
+	stream: ReadableStream<string>;
+	metadata: Promise<ShotputOutput["metadata"]>;
+	literalMap?: Map<string, string>;
+	error?: Error;
+}

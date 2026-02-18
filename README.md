@@ -429,6 +429,12 @@ const inlineResult = await shotput({
 console.log(inlineResult.content);
 ```
 
+### `shotputStreamingSegments(config?: Partial<ShotputConfig>): Promise<ShotputSegmentStreamOutput>`
+
+Streams segments in document order as each `{{path}}` placeholder is resolved (prefix, replacement, suffix). Uses the same template load and preResolve hooks as `shotput`, then yields segments without running postAssembly, preOutput, or sectioning; consumers can concatenate and run hooks if needed. When the parallel path is used (`enableContentLengthPlanning` and `maxConcurrency > 1`), segments are still emitted in document order and concatenation equals `interpolation().processedTemplate`. `literalMap` is only set when the sequential path is used (e.g. custom sources with literal placeholders).
+
+**Returns:** `{ stream: ReadableStream<string>; metadata: Promise<...>; literalMap?: Map<string, string>; error?: Error }`. `literalMap` is set when custom sources emit literal placeholders; use it for client-side `substituteLiterals(concatenated, literalMap)` if required.
+
 ## Examples
 
 Comprehensive examples are in [`examples/`](./examples/):

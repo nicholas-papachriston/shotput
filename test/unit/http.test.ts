@@ -312,4 +312,44 @@ describe("handleHttp", () => {
 
 		expect(result.operationResults).toContain(specialContent);
 	});
+
+	it("should use stream for large body when Content-Length >= httpStreamThresholdBytes", async () => {
+		const largeBodySize = 2 * 1024 * 1024;
+		const largeContent = "x".repeat(largeBodySize);
+		const stream = new ReadableStream({
+			start(controller) {
+				controller.enqueue(new TextEncoder().encode(largeContent));
+				controller.close();
+			},
+		});
+		const streamConfig = createConfig({
+			allowedBasePaths: [process.cwd()],
+			allowHttp: true,
+			allowedDomains: [],
+			allowFunctions: false,
+			httpStreamThresholdBytes: 1024 * 1024,
+		});
+
+		const mockResponse = new Response(stream, {
+			status: 200,
+			headers: { "content-length": String(largeBodySize) },
+		});
+
+		global.fetch = mock(async () => mockResponse);
+
+		const remainingLength = 100;
+		const result = await handleHttp(
+			streamConfig,
+			"Data: {{url}}",
+			"https://api.example.com/large",
+			"{{url}}",
+			remainingLength,
+		);
+
+		expect(result.replacement?.length).toBeLessThanOrEqual(
+			remainingLength * 4 + 100,
+		);
+		expect(result.combinedRemainingCount).toBeLessThanOrEqual(remainingLength);
+		expect(result.operationResults).toContain("Data: ");
+	});
 });

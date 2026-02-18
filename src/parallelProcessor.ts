@@ -8,10 +8,12 @@ import { getPostResolveSourceHooks, runPostResolveSourceHooks } from "./hooks";
 import { getLogger } from "./logger";
 import { type TemplateTask, planTemplates } from "./parallelPlan";
 import { Semaphore } from "./semaphore";
-import { getCountFn } from "./tokens";
+import { getCountFnAsync } from "./tokens";
 import type { ProcessingProgress, TemplateResult } from "./types";
 
 const log = getLogger("parallelProcessor");
+
+export type SegmentSink = (segment: string) => void;
 
 interface ProcessedContent {
 	match: string;
@@ -77,13 +79,13 @@ export class ParallelProcessor {
 	}> {
 		const startTime = Date.now();
 
-		const countFn = getCountFn(this.config);
-		const lengthOf = (text: string) =>
-			this.config.tokenizer ? countFn(text) : text.length;
+		const countFnAsync = getCountFnAsync(this.config);
+		const lengthOf = async (text: string): Promise<number> =>
+			this.config.tokenizer ? await countFnAsync(text) : text.length;
 
 		if (task.isCycle) {
 			const replacement = `[Cycle detected: ${task.path}]`;
-			const len = lengthOf(replacement);
+			const len = await lengthOf(replacement);
 			return {
 				task,
 				processed: { match: task.match, replacement, length: len },
@@ -117,7 +119,7 @@ export class ParallelProcessor {
 				replacement.startsWith("[Error") ||
 				replacement.startsWith("[Security Error");
 
-			const len = lengthOf(replacement);
+			const len = await lengthOf(replacement);
 
 			return {
 				task,
@@ -162,7 +164,12 @@ export class ParallelProcessor {
 		maxLength: number,
 		onProgress?: (progress: ProcessingProgress) => void,
 		expandingPaths?: Set<string>,
-	): Promise<{ content: string; metadata: TemplateResult[] }> {
+		emit?: SegmentSink,
+	): Promise<{
+		content: string;
+		metadata: TemplateResult[];
+		pendingSuffix?: string;
+	}> {
 		this.startTime = Date.now();
 		this.processedTemplates = [];
 
@@ -261,6 +268,17 @@ export class ParallelProcessor {
 				resultContent.slice(0, start) + replacement + resultContent.slice(end);
 		}
 
+		let pendingSuffix: string | undefined;
+		if (emit) {
+			let lastEnd = 0;
+			for (const part of parts) {
+				emit(content.slice(lastEnd, part.start));
+				emit(part.replacement);
+				lastEnd = part.end;
+			}
+			pendingSuffix = content.slice(lastEnd);
+		}
+
 		onProgress?.({
 			current: selectedTasks.length,
 			total: selectedTasks.length,
@@ -275,6 +293,7 @@ export class ParallelProcessor {
 		return {
 			content: resultContent,
 			metadata: this.processedTemplates,
+			...(pendingSuffix !== undefined && { pendingSuffix }),
 		};
 	}
 }

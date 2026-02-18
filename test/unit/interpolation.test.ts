@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { createConfig } from "../../src/config";
 import { interpolation } from "../../src/interpolation";
+import { interpolationStream } from "../../src/interpolationStream";
 
 describe("interpolation", () => {
 	const defaultConfig = createConfig({
@@ -179,5 +180,72 @@ describe("interpolation", () => {
 			"{{#each context.items}}[{{context.__loop.index}}:{{context.__loop.item}}]{{/each}}";
 		const result = await interpolation(template, config);
 		expect(result.processedTemplate).toBe("[0:a][1:b][2:c]");
+	});
+});
+
+describe("interpolationStream", () => {
+	const sequentialConfig = createConfig({
+		allowedBasePaths: [process.cwd()],
+		allowHttp: false,
+		allowFunctions: true,
+		allowedFunctionPaths: ["./test/fixtures"],
+		maxConcurrency: 1,
+	});
+
+	async function consumeStream(
+		stream: ReadableStream<string>,
+	): Promise<string> {
+		const reader = stream.getReader();
+		const chunks: string[] = [];
+		// eslint-disable-next-line no-constant-condition
+		while (true) {
+			const { value, done } = await reader.read();
+			if (done) break;
+			if (value !== undefined) chunks.push(value);
+		}
+		return chunks.join("");
+	}
+
+	it("concatenated segments equal interpolation().processedTemplate (no matches)", async () => {
+		const template = "Hello World!";
+		const expected = await interpolation(template, sequentialConfig);
+		const { stream } = await interpolationStream(template, sequentialConfig);
+		const concatenated = await consumeStream(stream);
+		expect(concatenated).toBe(expected.processedTemplate);
+	});
+
+	it("concatenated segments equal interpolation().processedTemplate (one placeholder)", async () => {
+		const template = "Hello {{test/fixtures/test.txt}}!";
+		const expected = await interpolation(template, sequentialConfig);
+		const { stream } = await interpolationStream(template, sequentialConfig);
+		const concatenated = await consumeStream(stream);
+		expect(concatenated).toBe(expected.processedTemplate);
+	});
+
+	it("concatenated segments equal interpolation().processedTemplate (multiple placeholders)", async () => {
+		const template =
+			"Start {{test/fixtures/test.txt}} Middle {{test/fixtures/test.txt}} End";
+		const expected = await interpolation(template, sequentialConfig);
+		const { stream } = await interpolationStream(template, sequentialConfig);
+		const concatenated = await consumeStream(stream);
+		expect(concatenated).toBe(expected.processedTemplate);
+	});
+
+	const parallelConfig = createConfig({
+		allowedBasePaths: [process.cwd()],
+		allowHttp: false,
+		allowFunctions: true,
+		allowedFunctionPaths: ["./test/fixtures"],
+		enableContentLengthPlanning: true,
+		maxConcurrency: 2,
+	});
+
+	it("concatenated segments equal interpolation().processedTemplate (parallel path)", async () => {
+		const template =
+			"Start {{test/fixtures/test.txt}} Mid {{test/fixtures/test.txt}} End";
+		const expected = await interpolation(template, parallelConfig);
+		const { stream } = await interpolationStream(template, parallelConfig);
+		const concatenated = await consumeStream(stream);
+		expect(concatenated).toBe(expected.processedTemplate);
 	});
 });

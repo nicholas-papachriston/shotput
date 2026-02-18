@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { shotput } from "../../src";
+import { shotput, shotputStreaming } from "../../src";
 import { createConfig } from "../../src/config";
 import { handleFileStream } from "../../src/fileStream";
 
@@ -58,6 +58,33 @@ describe("Shotput Integration Tests", () => {
 		});
 		expect(result.content).toContain("Hello filename:");
 		expect(result.content).toContain("World!");
+	});
+
+	it("shotputStreaming produces same content as shotput when consumed to string", async () => {
+		const normal = await shotput({
+			templateDir: `${tempDir}/`,
+			templateFile: "template.md",
+			responseDir: `${tempDir}/responses`,
+			allowedBasePaths: [process.cwd(), tempDir],
+		});
+		const streaming = await shotputStreaming({
+			templateDir: `${tempDir}/`,
+			templateFile: "template.md",
+			responseDir: `${tempDir}/responses`,
+			allowedBasePaths: [process.cwd(), tempDir],
+		});
+		expect(streaming.error).toBeUndefined();
+		let streamedContent = "";
+		const reader = streaming.stream.getReader();
+		while (true) {
+			const { done, value } = await reader.read();
+			if (done) break;
+			streamedContent += value;
+		}
+		expect(streamedContent).toBe(normal.content ?? "");
+		expect(streaming.metadata.resultMetadata?.length).toBe(
+			normal.metadata.resultMetadata?.length ?? 0,
+		);
 	});
 
 	it("should work with explicit configuration", async () => {
