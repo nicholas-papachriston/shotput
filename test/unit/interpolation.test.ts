@@ -124,4 +124,30 @@ describe("interpolation", () => {
 		expect(result.processedTemplate).toContain("{{test/fixtures/test.txt}}");
 		expect(result.processedTemplate).not.toContain("Hello World!");
 	});
+
+	it("should detect cycle and replace with message", async () => {
+		const template = "{{test/fixtures/cycle-a.txt}}";
+		const result = await interpolation(template, defaultConfig);
+
+		expect(result.processedTemplate).toContain("Content A");
+		expect(result.processedTemplate).toContain("Content B");
+		expect(result.processedTemplate).toContain("[Cycle detected:");
+		expect(result.processedTemplate).toContain("cycle-a.txt]");
+	});
+
+	it("should resolve relative paths in included content relative to including file (sequential path)", async () => {
+		const sequentialConfig = createConfig({
+			...defaultConfig,
+			maxConcurrency: 1,
+		});
+		const template = "{{test/fixtures/subdir/a.txt}}";
+		const result = await interpolation(
+			template,
+			sequentialConfig,
+			process.cwd(),
+		);
+
+		expect(result.processedTemplate).toContain("Nested:");
+		expect(result.processedTemplate).toContain("from b");
+	});
 });

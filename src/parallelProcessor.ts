@@ -17,6 +17,7 @@ interface TemplateTask {
 	originalIndex: number;
 	estimatedLength?: number;
 	priority: number;
+	isCycle?: boolean;
 }
 
 interface ProcessedContent {
@@ -54,6 +55,7 @@ export class ParallelProcessor {
 	private async planTemplates(
 		content: string,
 		basePath: string,
+		expandingPaths?: Set<string>,
 	): Promise<TemplateTask[]> {
 		const pattern = /\{\{([^}]+)\}\}/g;
 		const matches = content.match(pattern);
@@ -68,6 +70,18 @@ export class ParallelProcessor {
 			const match = matches[i];
 			const rawPath = match.slice(2, -2).trim();
 			const path = this.resolvePath(basePath, rawPath);
+
+			if (expandingPaths?.has(path)) {
+				tasks.push({
+					type: TemplateType.File,
+					path,
+					match,
+					originalIndex: i,
+					priority: this.calculatePriority(TemplateType.File, i),
+					isCycle: true,
+				});
+				continue;
+			}
 
 			try {
 				const templateType = await findTemplateType(path, rawPath);
@@ -285,6 +299,26 @@ export class ParallelProcessor {
 	}> {
 		const startTime = Date.now();
 
+		if (task.isCycle) {
+			const replacement = `[Cycle detected: ${task.path}]`;
+			return {
+				task,
+				processed: {
+					match: task.match,
+					replacement,
+					length: replacement.length,
+				},
+				result: {
+					type: task.type,
+					path: task.path,
+					length: replacement.length,
+					truncated: false,
+					processingTime: Date.now() - startTime,
+					content: replacement,
+				},
+			};
+		}
+
 		const operation = async () => {
 			// Handle function type specially due to extra basePath parameter
 			let operationResults: string;
@@ -369,13 +403,18 @@ export class ParallelProcessor {
 		basePath: string,
 		maxLength: number,
 		onProgress?: (progress: ProcessingProgress) => void,
+		expandingPaths?: Set<string>,
 	): Promise<{ content: string; metadata: TemplateResult[] }> {
 		this.startTime = Date.now();
 		this.processedTemplates = [];
 
 		// Step 1: Planning - parse all templates
 		log.info("Step 1: Planning templates...");
-		const plannedTasks = await this.planTemplates(content, basePath);
+		const plannedTasks = await this.planTemplates(
+			content,
+			basePath,
+			expandingPaths,
+		);
 
 		if (plannedTasks.length === 0) {
 			return { content, metadata: [] };

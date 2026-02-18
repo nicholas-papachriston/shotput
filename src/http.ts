@@ -15,7 +15,11 @@ export const handleHttp = async (
 	path: string,
 	match: string,
 	remainingLength: number,
-): Promise<{ operationResults: string; combinedRemainingCount: number }> => {
+): Promise<{
+	operationResults: string;
+	combinedRemainingCount: number;
+	replacement?: string;
+}> => {
 	log.info(`Handling HTTP request: ${path}`);
 
 	try {
@@ -40,6 +44,7 @@ export const handleHttp = async (
 		return {
 			operationResults: result.replace(match, processed.content),
 			combinedRemainingCount: processed.remainingLength,
+			replacement: processed.content,
 		};
 	} catch (error) {
 		if (error instanceof SecurityError) {

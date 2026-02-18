@@ -41,7 +41,11 @@ export const handleS3 = async (
 	path: string,
 	match: string,
 	remainingLength: number,
-): Promise<{ operationResults: string; combinedRemainingCount: number }> => {
+): Promise<{
+	operationResults: string;
+	combinedRemainingCount: number;
+	replacement?: string;
+}> => {
 	log.info(`Handling S3 resource: ${path}`);
 
 	try {
@@ -89,6 +93,7 @@ export const handleS3 = async (
 		return {
 			operationResults: result.replace(match, processed.content),
 			combinedRemainingCount: processed.remainingLength,
+			replacement: processed.content,
 		};
 	} catch (error) {
 		log.error(`Failed to process S3 path ${path}: ${error}`);

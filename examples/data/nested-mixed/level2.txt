@@ -1,0 +1,7 @@
+## Level 2 (mixed sources)
+
+Dynamic timestamp from function:
+{{TemplateType.Function:../../data/timestamp-function.js}}
+
+GitHub API quote:
+{{https://api.github.com/zen}}

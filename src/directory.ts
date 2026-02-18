@@ -32,7 +32,11 @@ export const handleDirectory = async (
 	path: string,
 	match: string,
 	remainingLength: number,
-): Promise<{ operationResults: string; combinedRemainingCount: number }> => {
+): Promise<{
+	operationResults: string;
+	combinedRemainingCount: number;
+	replacement?: string;
+}> => {
 	log.info(`Processing directory: ${path}`);
 
 	try {
@@ -89,6 +93,7 @@ export const handleDirectory = async (
 		return {
 			operationResults,
 			combinedRemainingCount: currentRemaining,
+			replacement: directoryContent,
 		};
 	} catch (error) {
 		log.error(`Failed to process directory ${path}: ${error}`);

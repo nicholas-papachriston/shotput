@@ -1,4 +1,4 @@
-import { isAbsolute, resolve } from "node:path";
+import { dirname, isAbsolute, resolve } from "node:path";
 import type { ShotputConfig } from "./config";
 import { handleDirectory } from "./directory";
 import { handleFile } from "./file";
@@ -43,12 +43,15 @@ interface InterpolationResults {
 	remainingLength: number;
 }
 
+const CYCLE_MESSAGE_PREFIX = "[Cycle detected: ";
+
 export const interpolation = async (
 	content: string,
 	config: ShotputConfig,
 	basePath: string = process.cwd(),
 	depth = 0,
 	remainingLength: number = config.maxPromptLength,
+	expandingPaths: Set<string> = new Set(),
 ): Promise<InterpolationResults> => {
 	const matches = content.match(pattern);
 	if (!matches) return { processedTemplate: content, remainingLength };
@@ -72,6 +75,8 @@ export const interpolation = async (
 				content,
 				basePath,
 				remainingLength,
+				undefined,
+				expandingPaths,
 			);
 
 		processedTemplate = processedContent;
@@ -81,125 +86,223 @@ export const interpolation = async (
 			duration: m.processingTime,
 		}));
 
-		// Update finalRemainingLength based on the expansion of content
+		// Remaining budget = characters left until maxPromptLength
 		finalRemainingLength = Math.max(
 			0,
-			remainingLength - (processedContent.length - content.length),
+			config.maxPromptLength - processedContent.length,
 		);
 	} else {
 		// Fall back to sequential processing
 		log.info(`Using sequential processing (depth ${depth}/${maxDepth})`);
-		const resultMetadata = [];
+		const resultMetadata: Array<{
+			path: string;
+			type: string;
+			duration: number;
+		}> = [];
 		let result = content;
+
+		const inclusionBasePathFor = (type: TemplateType, p: string): string => {
+			if (
+				type === TemplateType.File ||
+				type === TemplateType.Glob ||
+				type === TemplateType.Regex
+			) {
+				return dirname(p);
+			}
+			if (type === TemplateType.Directory) return p;
+			return basePath;
+		};
+
+		const applyReplacement = async (
+			handlerResult: {
+				operationResults: string;
+				combinedRemainingCount: number;
+				replacement?: string;
+			},
+			m: string,
+			p: string,
+			templateType: TemplateType,
+			currentResult: string,
+			remLength: number,
+			start: number,
+		) => {
+			const entry = {
+				path: p,
+				type: templateType,
+				duration: Date.now() - start,
+			};
+			const replacement = handlerResult.replacement;
+			if (replacement?.match(pattern) && depth < maxDepth && remLength > 0) {
+				const inclusionBase = inclusionBasePathFor(templateType, p);
+				const nestedExpanding = new Set(expandingPaths);
+				nestedExpanding.add(p);
+				const nested = await interpolation(
+					replacement,
+					config,
+					inclusionBase,
+					depth + 1,
+					remLength,
+					nestedExpanding,
+				);
+				return {
+					result: currentResult.replace(m, nested.processedTemplate),
+					remainingLength: nested.remainingLength,
+					metadata: [entry, ...(nested.resultMetadata ?? [])],
+				};
+			}
+			return {
+				result: handlerResult.operationResults,
+				remainingLength: handlerResult.combinedRemainingCount,
+				metadata: [entry],
+			};
+		};
+
 		for (const match of matches) {
 			const startTime = Date.now();
 			const rawPath = match.slice(2, -2).trim();
 			const path = resolvePath(basePath, rawPath);
 
+			if (expandingPaths.has(path)) {
+				log.warn(`Cycle detected for path: ${path}`);
+				result = result.replace(match, `${CYCLE_MESSAGE_PREFIX}${path}]`);
+				continue;
+			}
+
+			expandingPaths.add(path);
 			try {
 				const templateType = await findTemplateType(path, rawPath);
 
 				switch (templateType) {
 					case TemplateType.File: {
-						const { operationResults, combinedRemainingCount } =
-							await handleFile(
-								config,
-								result,
-								path,
-								match,
-								currentRemainingLength,
-							);
-						currentRemainingLength = combinedRemainingCount;
-						result = operationResults;
-						resultMetadata.push({
-							path,
-							type: templateType,
-							duration: Date.now() - startTime,
-						});
-						continue;
-					}
-					case TemplateType.Directory: {
-						const { operationResults, combinedRemainingCount } =
-							await handleDirectory(
-								config,
-								result,
-								path,
-								match,
-								currentRemainingLength,
-							);
-						currentRemainingLength = combinedRemainingCount;
-						result = operationResults;
-						continue;
-					}
-					case TemplateType.Glob: {
-						const { operationResults, combinedRemainingCount } =
-							await handleGlob(
-								config,
-								result,
-								path,
-								match,
-								currentRemainingLength,
-							);
-						currentRemainingLength = combinedRemainingCount;
-						result = operationResults;
-						resultMetadata.push({
-							path,
-							type: templateType,
-							duration: Date.now() - startTime,
-						});
-						continue;
-					}
-					case TemplateType.Regex: {
-						const { operationResults, combinedRemainingCount } =
-							await handleGlob(
-								config,
-								result,
-								path,
-								match,
-								currentRemainingLength,
-							);
-						currentRemainingLength = combinedRemainingCount;
-						result = operationResults;
-						resultMetadata.push({
-							path,
-							type: templateType,
-							duration: Date.now() - startTime,
-						});
-						continue;
-					}
-					case TemplateType.S3: {
-						const { operationResults, combinedRemainingCount } = await handleS3(
+						const handlerResult = await handleFile(
 							config,
 							result,
 							path,
 							match,
 							currentRemainingLength,
 						);
-						currentRemainingLength = combinedRemainingCount;
-						result = operationResults;
-						resultMetadata.push({
+						const applied = await applyReplacement(
+							handlerResult,
+							match,
 							path,
-							type: templateType,
-							duration: Date.now() - startTime,
-						});
+							templateType,
+							result,
+							currentRemainingLength,
+							startTime,
+						);
+						result = applied.result;
+						currentRemainingLength = applied.remainingLength;
+						resultMetadata.push(...applied.metadata);
+						continue;
+					}
+					case TemplateType.Directory: {
+						const handlerResult = await handleDirectory(
+							config,
+							result,
+							path,
+							match,
+							currentRemainingLength,
+						);
+						const applied = await applyReplacement(
+							handlerResult,
+							match,
+							path,
+							templateType,
+							result,
+							currentRemainingLength,
+							startTime,
+						);
+						result = applied.result;
+						currentRemainingLength = applied.remainingLength;
+						resultMetadata.push(...applied.metadata);
+						continue;
+					}
+					case TemplateType.Glob: {
+						const handlerResult = await handleGlob(
+							config,
+							result,
+							path,
+							match,
+							currentRemainingLength,
+						);
+						const applied = await applyReplacement(
+							handlerResult,
+							match,
+							path,
+							templateType,
+							result,
+							currentRemainingLength,
+							startTime,
+						);
+						result = applied.result;
+						currentRemainingLength = applied.remainingLength;
+						resultMetadata.push(...applied.metadata);
+						continue;
+					}
+					case TemplateType.Regex: {
+						const handlerResult = await handleGlob(
+							config,
+							result,
+							path,
+							match,
+							currentRemainingLength,
+						);
+						const applied = await applyReplacement(
+							handlerResult,
+							match,
+							path,
+							templateType,
+							result,
+							currentRemainingLength,
+							startTime,
+						);
+						result = applied.result;
+						currentRemainingLength = applied.remainingLength;
+						resultMetadata.push(...applied.metadata);
+						continue;
+					}
+					case TemplateType.S3: {
+						const handlerResult = await handleS3(
+							config,
+							result,
+							path,
+							match,
+							currentRemainingLength,
+						);
+						const applied = await applyReplacement(
+							handlerResult,
+							match,
+							path,
+							templateType,
+							result,
+							currentRemainingLength,
+							startTime,
+						);
+						result = applied.result;
+						currentRemainingLength = applied.remainingLength;
+						resultMetadata.push(...applied.metadata);
 						continue;
 					}
 					case TemplateType.Http: {
-						const { operationResults, combinedRemainingCount } =
-							await handleHttp(
-								config,
-								result,
-								path,
-								match,
-								currentRemainingLength,
-							);
-						currentRemainingLength = combinedRemainingCount;
-						result = operationResults;
-						resultMetadata.push({
+						const handlerResult = await handleHttp(
+							config,
+							result,
 							path,
-							type: templateType,
-							duration: Date.now() - startTime,
-						});
+							match,
+							currentRemainingLength,
+						);
+						const applied = await applyReplacement(
+							handlerResult,
+							match,
+							path,
+							templateType,
+							result,
+							currentRemainingLength,
+							startTime,
+						);
+						result = applied.result;
+						currentRemainingLength = applied.remainingLength;
+						resultMetadata.push(...applied.metadata);
 						continue;
 					}
 					case TemplateType.Function: {
@@ -222,21 +325,25 @@ export const interpolation = async (
 						continue;
 					}
 					case TemplateType.Skill: {
-						const { operationResults, combinedRemainingCount } =
-							await handleSkill(
-								config,
-								result,
-								path,
-								match,
-								currentRemainingLength,
-							);
-						currentRemainingLength = combinedRemainingCount;
-						result = operationResults;
-						resultMetadata.push({
+						const handlerResult = await handleSkill(
+							config,
+							result,
 							path,
-							type: templateType,
-							duration: Date.now() - startTime,
-						});
+							match,
+							currentRemainingLength,
+						);
+						const applied = await applyReplacement(
+							handlerResult,
+							match,
+							path,
+							templateType,
+							result,
+							currentRemainingLength,
+							startTime,
+						);
+						result = applied.result;
+						currentRemainingLength = applied.remainingLength;
+						resultMetadata.push(...applied.metadata);
 						continue;
 					}
 					default: {
@@ -277,12 +384,17 @@ export const interpolation = async (
 		log.info(
 			`Found nested templates, recursing to depth ${depth + 1}/${maxDepth}`,
 		);
+		const nestedExpanding = new Set(expandingPaths);
+		for (const m of currentMetadata) {
+			nestedExpanding.add(m.path);
+		}
 		const nestedResults = await interpolation(
 			processedTemplate,
 			config,
 			basePath,
 			depth + 1,
 			finalRemainingLength,
+			nestedExpanding,
 		);
 
 		return {

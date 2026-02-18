@@ -16,7 +16,11 @@ export const handleGlob = async (
 	path: string,
 	match: string,
 	remainingLength: number,
-): Promise<{ operationResults: string; combinedRemainingCount: number }> => {
+): Promise<{
+	operationResults: string;
+	combinedRemainingCount: number;
+	replacement?: string;
+}> => {
 	log.info(`Handling glob: ${path}`);
 
 	try {
@@ -53,6 +57,7 @@ export const handleGlob = async (
 				return {
 					operationResults: result.replace(match, processed.content),
 					combinedRemainingCount: processed.remainingLength,
+					replacement: processed.content,
 				};
 			}
 
@@ -110,6 +115,7 @@ export const handleGlob = async (
 		return {
 			operationResults: result.replace(match, combinedContent),
 			combinedRemainingCount: currentRemaining,
+			replacement: combinedContent,
 		};
 	} catch (error) {
 		if (error instanceof SecurityError) {

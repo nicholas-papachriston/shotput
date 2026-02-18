@@ -19,3 +19,4 @@ await import("./advanced/07-mixed-sources.ts");
 await import("./advanced/08-remote-skills.ts");
 await import("./advanced/09-parallel-processing.ts");
 await import("./advanced/10-nested-templates.ts");
+await import("./advanced/11-nested-mixed-sources.ts");

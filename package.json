@@ -26,7 +26,7 @@
 		"typecheck": "tsc --noEmit",
 		"prepublishOnly": "bun run build && bun run test"
 	},
-	"keywords": ["bun", "node", "prompt engineering", "templating", "llm"],
+	"keywords": ["bun", "node", "context engineering", "templating", "llm", "prompt engineering"],
 	"author": "https://github.com/nicholas-papachriston",
 	"license": "MIT",
 	"devDependencies": {

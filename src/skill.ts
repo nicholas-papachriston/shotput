@@ -256,6 +256,7 @@ export const handleSkill = async (
 ): Promise<{
 	operationResults: string;
 	combinedRemainingCount: number;
+	replacement?: string;
 }> => {
 	// Extract skill path from the full path (remove "skill:" prefix if present)
 	const skillPath = path.startsWith(SKILL_TEMPLATE)
@@ -290,6 +291,7 @@ export const handleSkill = async (
 		return {
 			operationResults: result.replace(match, processed.content),
 			combinedRemainingCount: processed.remainingLength,
+			replacement: processed.content,
 		};
 	} catch (error) {
 		if (error instanceof SecurityError) {

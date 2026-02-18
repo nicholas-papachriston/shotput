@@ -19,7 +19,11 @@ export const handleFile = async (
 	path: string,
 	match: string,
 	remainingLength: number,
-): Promise<{ operationResults: string; combinedRemainingCount: number }> => {
+): Promise<{
+	operationResults: string;
+	combinedRemainingCount: number;
+	replacement?: string;
+}> => {
 	log.info(`Handling file: ${path}`);
 
 	try {
@@ -37,7 +41,14 @@ export const handleFile = async (
 		const fileSize = file.size;
 		if (fileSize > STREAM_THRESHOLD_BYTES) {
 			log.info(`File ${validatedPath} is ${fileSize} bytes, using streaming`);
-			return handleFileStream(config, result, path, match, remainingLength);
+			const streamResult = await handleFileStream(
+				config,
+				result,
+				path,
+				match,
+				remainingLength,
+			);
+			return { ...streamResult, replacement: undefined };
 		}
 
 		const fileContent = `filename:${validatedPath}:\n${await file.text()}`;
@@ -50,6 +61,7 @@ export const handleFile = async (
 		return {
 			operationResults: result.replace(match, processed.content),
 			combinedRemainingCount: processed.remainingLength,
+			replacement: processed.content,
 		};
 	} catch (error) {
 		if (error instanceof SecurityError) {
