@@ -2,6 +2,7 @@ import { mkdir, readdir, stat } from "node:fs/promises";
 import { join } from "node:path";
 import type { ShotputConfig } from "./config";
 import { handleFile } from "./file";
+import { handlerErrorResult } from "./handlerResult";
 import { getLogger } from "./logger";
 import { SecurityError, validatePath } from "./security";
 
@@ -97,13 +98,8 @@ export const handleDirectory = async (
 		};
 	} catch (error) {
 		log.error(`Failed to process directory ${path}: ${error}`);
-		const errorMsg =
-			error instanceof SecurityError
-				? `[Security Error: ${error.message}]`
-				: `[Error processing directory ${path}]`;
-		return {
-			operationResults: match ? result.replace(match, errorMsg) : errorMsg,
-			combinedRemainingCount: remainingLength,
-		};
+		return handlerErrorResult(result, match, remainingLength, error, {
+			message: `[Error processing directory ${path}]`,
+		});
 	}
 };

@@ -1,5 +1,6 @@
 import type { ShotputConfig } from "./config";
 import { processContent } from "./content";
+import { handlerErrorResult } from "./handlerResult";
 import { getLogger } from "./logger";
 import { getS3File } from "./s3-client";
 import { SecurityError, validateS3Path } from "./security";
@@ -97,14 +98,9 @@ export const handleS3 = async (
 		};
 	} catch (error) {
 		log.error(`Failed to process S3 path ${path}: ${error}`);
-		const errorMsg =
-			error instanceof SecurityError
-				? `[Security Error: ${error.message}]`
-				: `[Error reading ${path}]`;
-		return {
-			operationResults: result.replace(match, errorMsg),
-			combinedRemainingCount: remainingLength,
-		};
+		return handlerErrorResult(result, match, remainingLength, error, {
+			path,
+		});
 	}
 };
 

@@ -102,7 +102,11 @@ describe("interpolation", () => {
 
 	it("should handle nested templates", async () => {
 		const template = "{{test/fixtures/nested-1.txt}}";
-		const result = await interpolation(template, defaultConfig);
+		const config = createConfig({
+			...defaultConfig,
+			maxConcurrency: 1,
+		});
+		const result = await interpolation(template, config);
 
 		expect(result.processedTemplate).toContain("Level 1");
 		expect(result.processedTemplate).toContain("Level 2");
@@ -113,6 +117,7 @@ describe("interpolation", () => {
 		const limitedConfig = createConfig({
 			...defaultConfig,
 			maxNestingDepth: 1,
+			maxConcurrency: 1,
 		});
 
 		const template = "{{test/fixtures/nested-1.txt}}";
@@ -120,8 +125,8 @@ describe("interpolation", () => {
 
 		expect(result.processedTemplate).toContain("Level 1");
 		expect(result.processedTemplate).toContain("Level 2");
-		// Level 2 contains {{test/fixtures/test.txt}}, which should NOT be processed at depth 1
-		expect(result.processedTemplate).toContain("{{test/fixtures/test.txt}}");
+		// Level 2 contains {{test.txt}}, which should NOT be processed at depth 1
+		expect(result.processedTemplate).toContain("{{test.txt}}");
 		expect(result.processedTemplate).not.toContain("Hello World!");
 	});
 

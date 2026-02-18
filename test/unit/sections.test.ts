@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { createConfig } from "../../src/config";
 import { shotput } from "../../src/index";
+import type { HookSet } from "../../src/index";
 import { formatMessages, parseOutputSections } from "../../src/sections";
 
 describe("sections", () => {
@@ -88,5 +89,36 @@ describe("sections", () => {
 			{ x: 5 },
 		);
 		expect(sections[0].content).toBe("hello");
+	});
+
+	it("should parse sections after rules, interpolation, and hooks in full pipeline", async () => {
+		const preResolveSuffix = "[preResolve]";
+		const hooks: HookSet = {
+			preResolve: (t) => t + preResolveSuffix,
+			postResolveSource: (result) => ({
+				...result,
+				content: `[wrapped:${result.content.trim().slice(0, 80)}]`,
+			}),
+		};
+		const config = createConfig({
+			template:
+				"{{#section:sys}}prefix {{test/fixtures/test.txt}} suffix{{/section}}",
+			templateDir: process.cwd(),
+			allowedBasePaths: [process.cwd()],
+			outputMode: "sectioned",
+			hooks,
+			maxConcurrency: 1,
+		});
+		const result = await shotput(config);
+		expect(result.error).toBeUndefined();
+		expect(result.sections).toBeDefined();
+		expect(result.sections?.length).toBe(1);
+		expect(result.sections?.[0].name).toBe("sys");
+		const sectionContent = result.sections?.[0].content ?? "";
+		expect(sectionContent).toContain("prefix");
+		expect(sectionContent).toContain("suffix");
+		expect(sectionContent).toContain("[wrapped:");
+		expect(sectionContent).toContain("Hello World");
+		expect(result.content ?? "").toContain(preResolveSuffix);
 	});
 });

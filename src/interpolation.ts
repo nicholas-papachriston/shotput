@@ -1,53 +1,19 @@
-import { dirname, isAbsolute, resolve } from "node:path";
+import { dirname } from "node:path";
 import type { ShotputConfig } from "./config";
 import { handleCustomSource } from "./custom";
-import { handleDirectory } from "./directory";
-import { handleFile } from "./file";
-import { handleFunction } from "./function";
-import { handleGlob } from "./glob";
+import { getHandler } from "./handlers";
 import { getPostResolveSourceHooks, runPostResolveSourceHooks } from "./hooks";
-import { handleHttp } from "./http";
 import { getLogger } from "./logger";
 import { ParallelProcessor } from "./parallelProcessor";
+import { resolveTemplatePath } from "./pathResolve";
 import { getMatchingPlugin } from "./plugins";
 import { evaluateRules } from "./rules";
-import { handleS3 } from "./s3";
-import { handleSkill } from "./skill";
 import { findTemplateType } from "./template";
 import { TemplateType } from "./types";
 
 const log = getLogger("interpolation");
 
 const pattern = /\{\{([^}]+)\}\}/g;
-
-// Prefixes that should NOT have path resolution applied
-const SPECIAL_PREFIXES = [
-	"skill:",
-	"TemplateType.Function:",
-	"http://",
-	"https://",
-	"s3://",
-];
-
-const shouldResolvePath = (filePath: string): boolean => {
-	return !SPECIAL_PREFIXES.some((prefix) => filePath.startsWith(prefix));
-};
-
-const resolvePath = (
-	basePath: string,
-	filePath: string,
-	config: ShotputConfig,
-): string => {
-	// Don't resolve paths for special template types
-	if (!shouldResolvePath(filePath)) {
-		return filePath;
-	}
-	// Custom source paths: if a plugin matches, use path as-is
-	if (getMatchingPlugin(config, filePath)) {
-		return filePath;
-	}
-	return isAbsolute(filePath) ? filePath : resolve(basePath, filePath);
-};
 
 interface InterpolationResults {
 	processedTemplate: string;
@@ -248,139 +214,39 @@ export const interpolation = async (
 		for (const match of matches) {
 			const startTime = Date.now();
 			const rawPath = match.slice(2, -2).trim();
-			let path = resolvePath(basePath, rawPath, configToUse);
+			let path = resolveTemplatePath(basePath, rawPath, configToUse);
 
-			if (expandingPaths.has(path)) {
-				log.warn(`Cycle detected for path: ${path}`);
-				result = result.replace(match, `${CYCLE_MESSAGE_PREFIX}${path}]`);
-				continue;
-			}
-
-			expandingPaths.add(path);
 			try {
 				const templateType = await findTemplateType(path, rawPath, configToUse);
+				if (templateType === TemplateType.String) {
+					continue;
+				}
 				if (templateType === TemplateType.Custom) {
 					path = rawPath;
 				}
+				if (expandingPaths.has(path)) {
+					log.warn(`Cycle detected for path: ${path}`);
+					result = result.replace(match, `${CYCLE_MESSAGE_PREFIX}${path}]`);
+					continue;
+				}
+				expandingPaths.add(path);
 
 				switch (templateType) {
-					case TemplateType.File: {
-						const handlerResult = await handleFile(
+					case TemplateType.File:
+					case TemplateType.Directory:
+					case TemplateType.Glob:
+					case TemplateType.Regex:
+					case TemplateType.S3:
+					case TemplateType.Http:
+					case TemplateType.Skill: {
+						const handler = getHandler(templateType);
+						const handlerResult = await handler(
 							config,
 							result,
 							path,
 							match,
 							currentRemainingLength,
-						);
-						const applied = await applyReplacement(
-							handlerResult,
-							match,
-							path,
-							templateType,
-							result,
-							currentRemainingLength,
-							startTime,
-						);
-						result = applied.result;
-						currentRemainingLength = applied.remainingLength;
-						resultMetadata.push(...applied.metadata);
-						continue;
-					}
-					case TemplateType.Directory: {
-						const handlerResult = await handleDirectory(
-							config,
-							result,
-							path,
-							match,
-							currentRemainingLength,
-						);
-						const applied = await applyReplacement(
-							handlerResult,
-							match,
-							path,
-							templateType,
-							result,
-							currentRemainingLength,
-							startTime,
-						);
-						result = applied.result;
-						currentRemainingLength = applied.remainingLength;
-						resultMetadata.push(...applied.metadata);
-						continue;
-					}
-					case TemplateType.Glob: {
-						const handlerResult = await handleGlob(
-							config,
-							result,
-							path,
-							match,
-							currentRemainingLength,
-						);
-						const applied = await applyReplacement(
-							handlerResult,
-							match,
-							path,
-							templateType,
-							result,
-							currentRemainingLength,
-							startTime,
-						);
-						result = applied.result;
-						currentRemainingLength = applied.remainingLength;
-						resultMetadata.push(...applied.metadata);
-						continue;
-					}
-					case TemplateType.Regex: {
-						const handlerResult = await handleGlob(
-							config,
-							result,
-							path,
-							match,
-							currentRemainingLength,
-						);
-						const applied = await applyReplacement(
-							handlerResult,
-							match,
-							path,
-							templateType,
-							result,
-							currentRemainingLength,
-							startTime,
-						);
-						result = applied.result;
-						currentRemainingLength = applied.remainingLength;
-						resultMetadata.push(...applied.metadata);
-						continue;
-					}
-					case TemplateType.S3: {
-						const handlerResult = await handleS3(
-							config,
-							result,
-							path,
-							match,
-							currentRemainingLength,
-						);
-						const applied = await applyReplacement(
-							handlerResult,
-							match,
-							path,
-							templateType,
-							result,
-							currentRemainingLength,
-							startTime,
-						);
-						result = applied.result;
-						currentRemainingLength = applied.remainingLength;
-						resultMetadata.push(...applied.metadata);
-						continue;
-					}
-					case TemplateType.Http: {
-						const handlerResult = await handleHttp(
-							config,
-							result,
-							path,
-							match,
-							currentRemainingLength,
+							basePath,
 						);
 						const applied = await applyReplacement(
 							handlerResult,
@@ -397,15 +263,15 @@ export const interpolation = async (
 						continue;
 					}
 					case TemplateType.Function: {
-						const { operationResults, combinedRemainingCount } =
-							await handleFunction(
-								config,
-								result,
-								path,
-								match,
-								currentRemainingLength,
-								basePath,
-							);
+						const handler = getHandler(templateType);
+						const { operationResults, combinedRemainingCount } = await handler(
+							config,
+							result,
+							path,
+							match,
+							currentRemainingLength,
+							basePath,
+						);
 						currentRemainingLength = combinedRemainingCount;
 						result = operationResults;
 						resultMetadata.push({
@@ -413,28 +279,6 @@ export const interpolation = async (
 							type: templateType,
 							duration: Date.now() - startTime,
 						});
-						continue;
-					}
-					case TemplateType.Skill: {
-						const handlerResult = await handleSkill(
-							config,
-							result,
-							path,
-							match,
-							currentRemainingLength,
-						);
-						const applied = await applyReplacement(
-							handlerResult,
-							match,
-							path,
-							templateType,
-							result,
-							currentRemainingLength,
-							startTime,
-						);
-						result = applied.result;
-						currentRemainingLength = applied.remainingLength;
-						resultMetadata.push(...applied.metadata);
 						continue;
 					}
 					case TemplateType.Custom: {

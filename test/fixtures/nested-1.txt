@@ -1,1 +1,1 @@
-Level 1 {{test/fixtures/nested-2.txt}}
+Level 1 {{nested-2.txt}}

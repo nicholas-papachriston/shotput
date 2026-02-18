@@ -67,6 +67,13 @@ describe("command resolution", () => {
 		expect(result.processedTemplate).toContain("Severity filter: critical");
 	});
 
+	it("should evaluate both params.scope and params.severity in rule conditions", async () => {
+		const template = "{{command:review scope=src severity=critical}}";
+		const result = await interpolation(template, baseConfig);
+		expect(result.processedTemplate).toContain("Scope is src");
+		expect(result.processedTemplate).toContain("Severity filter: critical");
+	});
+
 	it("should resolve sources inside command body recursively", async () => {
 		const template = "{{command:with-file}}";
 		const result = await interpolation(template, baseConfig);
@@ -80,6 +87,13 @@ describe("command resolution", () => {
 		const result = await interpolation(template, baseConfig);
 		expect(result.processedTemplate).toContain("[Cycle detected:");
 		expect(result.processedTemplate).toContain("command:self");
+	});
+
+	it("should detect cycle across command then file then command", async () => {
+		const template = "{{command:chain-a}}";
+		const result = await interpolation(template, baseConfig);
+		expect(result.processedTemplate).toContain("[Cycle detected:");
+		expect(result.processedTemplate).toContain("command:chain-a");
 	});
 
 	it("should error when command name not found", async () => {

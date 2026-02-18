@@ -91,6 +91,18 @@ describe("resolveSubagent", () => {
 			resolveSubagent({ allowedBasePaths: [process.cwd()] }),
 		).rejects.toThrow("subagentFile");
 	});
+
+	it("should leave section markers as literal text in systemPrompt (no section parsing)", async () => {
+		const result = await resolveSubagent({
+			subagentFile: "test/fixtures/agents/with-sections.md",
+			allowedBasePaths: [process.cwd()],
+			allowHttp: false,
+		});
+		expect(result.systemPrompt).toContain("{{#section:foo}}");
+		expect(result.systemPrompt).toContain("{{/section}}");
+		expect(result.systemPrompt).toContain("this is literal section text");
+		expect("sections" in result).toBe(false);
+	});
 });
 
 describe("shotput with parseSubagentFrontmatter", () => {

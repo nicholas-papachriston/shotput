@@ -1,6 +1,7 @@
 import { join } from "node:path";
 import type { ShotputConfig } from "./config";
 import { processContent } from "./content";
+import { handlerErrorResult } from "./handlerResult";
 import { getLogger } from "./logger";
 import { SecurityError, validatePath, validateSkillSource } from "./security";
 
@@ -296,22 +297,11 @@ export const handleSkill = async (
 	} catch (error) {
 		if (error instanceof SecurityError) {
 			log.error(`Security error loading skill ${skillPath}: ${error.message}`);
-			return {
-				operationResults: result.replace(
-					match,
-					`[Security Error: ${error.message}]`,
-				),
-				combinedRemainingCount: remainingLength,
-			};
+		} else {
+			log.error(`Failed to load skill ${skillPath}: ${error}`);
 		}
-
-		log.error(`Failed to load skill ${skillPath}: ${error}`);
-		return {
-			operationResults: result.replace(
-				match,
-				`[Error loading skill: ${skillPath}]`,
-			),
-			combinedRemainingCount: remainingLength,
-		};
+		return handlerErrorResult(result, match, remainingLength, error, {
+			message: `[Error loading skill: ${skillPath}]`,
+		});
 	}
 };

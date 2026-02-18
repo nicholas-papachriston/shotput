@@ -50,12 +50,49 @@ describe("hooks", () => {
 		expect(resolved[0].content).toBeDefined();
 	});
 
+	it("should run postResolveSource for each source in nested interpolation", async () => {
+		const resolved: SourceResult[] = [];
+		const hooks: HookSet = {
+			postResolveSource: (result) => {
+				resolved.push(result);
+				return result;
+			},
+		};
+		const config = createConfig({
+			template: "{{test/fixtures/hooks-nested-1.txt}}",
+			templateDir: process.cwd(),
+			allowedBasePaths: [process.cwd()],
+			hooks,
+			maxConcurrency: 1,
+		});
+		const result = await shotput(config);
+		expect(result.error).toBeUndefined();
+		expect(resolved.length).toBe(3);
+		const paths = resolved.map((r) => r.path);
+		expect(paths.some((p) => p.includes("hooks-nested-1.txt"))).toBe(true);
+		expect(paths.some((p) => p.includes("hooks-nested-2.txt"))).toBe(true);
+		expect(paths.some((p) => p.includes("test.txt"))).toBe(true);
+	});
+
 	it("should run postAssembly and allow abort with false", async () => {
 		const hooks: HookSet = {
 			postAssembly: () => false,
 		};
 		const config = createConfig({
 			template: "hello",
+			hooks,
+		});
+		const result = await shotput(config);
+		expect(result.error).toBeDefined();
+		expect(result.error?.name).toBe("HookAbortError");
+	});
+
+	it("should set error when preOutput returns false", async () => {
+		const hooks: HookSet = {
+			preOutput: () => false,
+		};
+		const config = createConfig({
+			template: "body",
 			hooks,
 		});
 		const result = await shotput(config);

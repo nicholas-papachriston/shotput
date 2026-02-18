@@ -1,5 +1,6 @@
 import type { ShotputConfig } from "./config";
 import { processContent } from "./content";
+import { handlerErrorResult } from "./handlerResult";
 import { getLogger } from "./logger";
 import { SecurityError, validateUrl } from "./security";
 
@@ -49,27 +50,17 @@ export const handleHttp = async (
 	} catch (error) {
 		if (error instanceof SecurityError) {
 			log.error(`Security error for ${path}: ${error.message}`);
-			return {
-				operationResults: result.replace(
-					match,
-					`[Security Error: ${error.message}]`,
-				),
-				combinedRemainingCount: remainingLength,
-			};
-		}
-
-		if (error instanceof Error && error.name === "TimeoutError") {
+		} else if (error instanceof Error && error.name === "TimeoutError") {
 			log.error(`HTTP request timeout for ${path}`);
-			return {
-				operationResults: result.replace(match, "[Error: Request Timeout]"),
-				combinedRemainingCount: remainingLength,
-			};
+		} else {
+			log.error(`HTTP request failed for ${path}: ${error}`);
 		}
-
-		log.error(`HTTP request failed for ${path}: ${error}`);
-		return {
-			operationResults: result.replace(match, `[Error fetching ${path}]`),
-			combinedRemainingCount: remainingLength,
-		};
+		const message =
+			error instanceof Error && error.name === "TimeoutError"
+				? "[Error: Request Timeout]"
+				: `[Error fetching ${path}]`;
+		return handlerErrorResult(result, match, remainingLength, error, {
+			message,
+		});
 	}
 };

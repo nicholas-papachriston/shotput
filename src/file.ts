@@ -1,6 +1,7 @@
 import type { ShotputConfig } from "./config";
 import { processContent } from "./content";
 import { handleFileStream } from "./fileStream";
+import { handlerErrorResult } from "./handlerResult";
 import { getLogger } from "./logger";
 import { SecurityError, validatePath } from "./security";
 
@@ -66,19 +67,11 @@ export const handleFile = async (
 	} catch (error) {
 		if (error instanceof SecurityError) {
 			log.error(`Security error for ${path}: ${error.message}`);
-			return {
-				operationResults: result.replace(
-					match,
-					`[Security Error: ${error.message}]`,
-				),
-				combinedRemainingCount: remainingLength,
-			};
+		} else {
+			log.error(`Failed to read file ${path}: ${error}`);
 		}
-
-		log.error(`Failed to read file ${path}: ${error}`);
-		return {
-			operationResults: result.replace(match, `[Error reading ${path}]`),
-			combinedRemainingCount: remainingLength,
-		};
+		return handlerErrorResult(result, match, remainingLength, error, {
+			path,
+		});
 	}
 };

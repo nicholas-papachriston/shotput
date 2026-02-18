@@ -1,5 +1,6 @@
 import type { ShotputConfig } from "./config";
 import { processContent } from "./content";
+import { handlerErrorResult } from "./handlerResult";
 import { getLogger } from "./logger";
 import type { SourcePlugin } from "./plugins";
 
@@ -49,9 +50,8 @@ export const handleCustomSource = async (
 		log.error(
 			`Failed to resolve custom source [${plugin.name}] ${path}: ${error}`,
 		);
-		return {
-			operationResults: result.replace(match, `[Error reading ${path}]`),
-			combinedRemainingCount: remainingLength,
-		};
+		return handlerErrorResult(result, match, remainingLength, error, {
+			path,
+		});
 	}
 };

@@ -93,6 +93,37 @@ describe("custom source plugins", () => {
 		expect(result.processedTemplate).toContain("Hello World!");
 	});
 
+	it("should evaluate {{#if}} blocks in content returned by custom source", async () => {
+		const plugin: SourcePlugin = {
+			name: "cond",
+			matches: (rawPath) => rawPath.startsWith("cond://"),
+			canContainTemplates: true,
+			resolve: async () => ({
+				content: "{{#if context.show}}yes{{else}}no{{/if}}",
+				remainingLength: 90000,
+			}),
+		};
+		const configTrue = createConfig({
+			allowedBasePaths: [process.cwd()],
+			customSources: [plugin],
+			context: { show: true },
+			maxConcurrency: 1,
+		});
+		const resultTrue = await interpolation("{{cond://x}}", configTrue);
+		expect(resultTrue.processedTemplate).toContain("yes");
+		expect(resultTrue.processedTemplate).not.toContain("no");
+
+		const configFalse = createConfig({
+			allowedBasePaths: [process.cwd()],
+			customSources: [plugin],
+			context: { show: false },
+			maxConcurrency: 1,
+		});
+		const resultFalse = await interpolation("{{cond://x}}", configFalse);
+		expect(resultFalse.processedTemplate).toContain("no");
+		expect(resultFalse.processedTemplate).not.toContain("yes");
+	});
+
 	it("should not recursively interpolate when canContainTemplates is false", async () => {
 		const plugin: SourcePlugin = {
 			name: "literal",
@@ -179,6 +210,41 @@ describe("custom source plugins", () => {
 		expect(result.processedTemplate).toContain("Before [Error reading ");
 		expect(result.processedTemplate).toContain("broken://x");
 		expect(result.processedTemplate).toContain("] After");
+	});
+
+	it("should trim tasks by estimateLength when over budget in planning", async () => {
+		const smallPlugin: SourcePlugin = {
+			name: "small",
+			matches: (rawPath) => rawPath.startsWith("small://"),
+			canContainTemplates: false,
+			estimateLength: async () => 100,
+			resolve: async () => ({
+				content: "SMALL_CONTENT",
+				remainingLength: 4000,
+			}),
+		};
+		const largePlugin: SourcePlugin = {
+			name: "large",
+			matches: (rawPath) => rawPath.startsWith("large://"),
+			canContainTemplates: false,
+			estimateLength: async () => 80_000,
+			resolve: async () => ({
+				content: "LARGE_CONTENT",
+				remainingLength: 0,
+			}),
+		};
+		const config = createConfig({
+			allowedBasePaths: [process.cwd()],
+			customSources: [smallPlugin, largePlugin],
+			enableContentLengthPlanning: true,
+			maxConcurrency: 2,
+			maxPromptLength: 5_000,
+		});
+		const template = "{{small://a}} {{large://b}}";
+		const result = await interpolation(template, config);
+		expect(result.processedTemplate).toContain("SMALL_CONTENT");
+		expect(result.processedTemplate).toContain("{{large://b}}");
+		expect(result.processedTemplate).not.toContain("LARGE_CONTENT");
 	});
 
 	it("should pass config to plugin resolve context", async () => {

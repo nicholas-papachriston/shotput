@@ -1,9 +1,8 @@
-import { isAbsolute, resolve } from "node:path";
 import type { ShotputConfig } from "./config";
-import { handleCustomSource } from "./custom";
-import { handleFunction } from "./function";
+import { getHandler } from "./handlers";
 import { getPostResolveSourceHooks, runPostResolveSourceHooks } from "./hooks";
 import { getLogger } from "./logger";
+import { resolveTemplatePath } from "./pathResolve";
 import { getMatchingPlugin } from "./plugins";
 import { Semaphore } from "./semaphore";
 import { findTemplateType } from "./template";
@@ -72,7 +71,7 @@ export class ParallelProcessor {
 		for (let i = 0; i < matches.length; i++) {
 			const match = matches[i];
 			const rawPath = match.slice(2, -2).trim();
-			let path = this.resolvePath(basePath, rawPath);
+			let path = resolveTemplatePath(basePath, rawPath, this.config);
 
 			if (expandingPaths?.has(path)) {
 				tasks.push({
@@ -338,50 +337,17 @@ export class ParallelProcessor {
 		}
 
 		const operation = async () => {
-			// Handle function type specially due to extra basePath parameter
-			// Handle custom type by resolving plugin and calling handleCustomSource
-			let operationResults: string;
-			let combinedRemainingCount: number;
-
-			if (task.type === TemplateType.Function) {
-				const result = await handleFunction(
-					this.config,
-					task.match,
-					task.path,
-					task.match,
-					remainingLength,
-					task.basePath || process.cwd(),
-				);
-				operationResults = result.operationResults;
-				combinedRemainingCount = result.combinedRemainingCount;
-			} else if (task.type === TemplateType.Custom) {
-				const plugin = getMatchingPlugin(this.config, task.path);
-				if (!plugin) {
-					throw new Error(`No custom plugin matched for path: ${task.path}`);
-				}
-				const result = await handleCustomSource(
-					plugin,
-					this.config,
-					task.match,
-					task.path,
-					task.match,
-					remainingLength,
-					task.basePath || process.cwd(),
-				);
-				operationResults = result.operationResults;
-				combinedRemainingCount = result.combinedRemainingCount;
-			} else {
-				const handler = await this.getHandler(task.type);
-				const result = await handler(
-					this.config,
-					task.match,
-					task.path,
-					task.match,
-					remainingLength,
-				);
-				operationResults = result.operationResults;
-				combinedRemainingCount = result.combinedRemainingCount;
-			}
+			const handler = getHandler(task.type);
+			const result = await handler(
+				this.config,
+				task.match,
+				task.path,
+				task.match,
+				remainingLength,
+				task.basePath ?? process.cwd(),
+			);
+			const operationResults = result.operationResults;
+			const combinedRemainingCount = result.combinedRemainingCount;
 
 			// The operationResults should be just the replacement content
 			// since we passed only the match as the input
@@ -547,74 +513,5 @@ export class ParallelProcessor {
 			content: resultContent,
 			metadata: this.processedTemplates,
 		};
-	}
-
-	/**
-	 * Resolve path with special prefix handling.
-	 * Custom source paths (matched by a plugin) are left unchanged.
-	 */
-	private resolvePath(basePath: string, filePath: string): string {
-		const SPECIAL_PREFIXES = [
-			"skill:",
-			"TemplateType.Function:",
-			"http://",
-			"https://",
-			"s3://",
-		];
-
-		if (SPECIAL_PREFIXES.some((prefix) => filePath.startsWith(prefix))) {
-			return filePath;
-		}
-
-		// Custom sources: if a plugin matches, use path as-is (no filesystem resolution)
-		if (getMatchingPlugin(this.config, filePath)) {
-			return filePath;
-		}
-
-		return isAbsolute(filePath) ? filePath : resolve(basePath, filePath);
-	}
-
-	/**
-	 * Get the appropriate handler for a template type
-	 */
-	private async getHandler(type: TemplateType) {
-		switch (type) {
-			case TemplateType.File: {
-				const handler = await import("./file");
-				return handler.handleFile;
-			}
-			case TemplateType.Directory: {
-				const handler = await import("./directory");
-				return handler.handleDirectory;
-			}
-			case TemplateType.Glob:
-			case TemplateType.Regex: {
-				const handler = await import("./glob");
-				return handler.handleGlob;
-			}
-			case TemplateType.S3: {
-				const handler = await import("./s3");
-				return handler.handleS3;
-			}
-			case TemplateType.Http: {
-				const handler = await import("./http");
-				return handler.handleHttp;
-			}
-			case TemplateType.Function: {
-				// Function handler is handled specially in processSingleTemplate
-				// due to its extra basePath parameter
-				throw new Error("Function handler should be called directly");
-			}
-			case TemplateType.Skill: {
-				const handler = await import("./skill");
-				return handler.handleSkill;
-			}
-			case TemplateType.Custom: {
-				// Custom is handled explicitly in processSingleTemplate via handleCustomSource
-				throw new Error("Custom handler should be called directly");
-			}
-			default:
-				throw new Error(`Unsupported template type: ${type}`);
-		}
 	}
 }
