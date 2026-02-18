@@ -11,11 +11,11 @@ import {
 	runPreOutputHooks,
 	runPreResolveHooks,
 } from "./hooks";
-import { interpolation } from "./interpolation";
 import { interpolationStream } from "./interpolationStream";
 import { getLogger } from "./logger";
 import { evaluateRules } from "./rules";
 import { formatMessages, parseOutputSections } from "./sections";
+import { consumeStreamToString } from "./streamUtils";
 import { createSubagentPlugin, parseSubagentFrontmatter } from "./subagent";
 import type {
 	ShotputOutput,
@@ -24,8 +24,6 @@ import type {
 } from "./types";
 
 const log = getLogger("shotput");
-
-const STREAM_CHUNK_SIZE = 64 * 1024;
 
 function buildConfig(configOverrides?: Partial<ShotputConfig>): ShotputConfig {
 	let config = createConfig(configOverrides);
@@ -44,21 +42,65 @@ function buildConfig(configOverrides?: Partial<ShotputConfig>): ShotputConfig {
 	return config;
 }
 
-function contentToStream(content: string): ReadableStream<string> {
-	return new ReadableStream({
-		start(controller) {
-			let offset = 0;
-			while (offset < content.length) {
-				const chunk = content.slice(
-					offset,
-					Math.min(offset + STREAM_CHUNK_SIZE, content.length),
-				);
-				controller.enqueue(chunk);
-				offset += chunk.length;
+interface RunStreamingInternalResult {
+	stream: ReadableStream<string>;
+	metadata: Promise<ShotputOutput["metadata"]>;
+	literalMap?: Map<string, string>;
+	literalMapPromise?: Promise<Map<string, string> | undefined>;
+	subagentFrontmatter?: Record<string, unknown>;
+}
+
+async function runStreamingInternal(
+	config: ShotputConfig,
+): Promise<RunStreamingInternalResult> {
+	await ensureDirectoryExists(config.responseDir, config.templateDir);
+
+	let templateContent: string;
+	let subagentFrontmatter: Record<string, unknown> | undefined;
+	if (config.template !== undefined) {
+		templateContent = config.template;
+		if (config.parseSubagentFrontmatter) {
+			const parsed = parseSubagentFrontmatter(templateContent);
+			if (parsed) {
+				templateContent = parsed.body;
+				subagentFrontmatter = parsed.frontmatter as Record<string, unknown>;
 			}
-			controller.close();
-		},
-	});
+		}
+	} else {
+		const templatePath = join(config.templateDir, config.templateFile);
+		templateContent = await Bun.file(templatePath).text();
+		if (config.parseSubagentFrontmatter) {
+			const parsed = parseSubagentFrontmatter(templateContent);
+			if (parsed) {
+				templateContent = parsed.body;
+				subagentFrontmatter = parsed.frontmatter as Record<string, unknown>;
+			}
+		}
+	}
+
+	const preResolveHooks = getPreResolveHooks(config);
+	if (preResolveHooks.length > 0) {
+		templateContent = await runPreResolveHooks(
+			templateContent,
+			preResolveHooks,
+		);
+	}
+
+	templateContent = evaluateRules(templateContent, config);
+
+	const streamResult = interpolationStream(
+		templateContent,
+		config,
+		config.templateDir,
+	);
+
+	return {
+		stream: streamResult.stream,
+		metadata: streamResult.metadata,
+		literalMap: streamResult.literalMap,
+		literalMapPromise: streamResult.literalMapPromise,
+		subagentFrontmatter,
+	};
 }
 
 export type {
@@ -80,49 +122,12 @@ export type {
 const run = async (config: ShotputConfig): Promise<ShotputOutput> => {
 	const startTime = Date.now();
 	try {
-		await ensureDirectoryExists(config.responseDir, config.templateDir);
-
-		// Use provided template content or read from file
-		let templateContent: string;
-		let subagentFrontmatter: Record<string, unknown> | undefined;
-		if (config.template !== undefined) {
-			templateContent = config.template;
-			if (config.parseSubagentFrontmatter) {
-				const parsed = parseSubagentFrontmatter(templateContent);
-				if (parsed) {
-					templateContent = parsed.body;
-					subagentFrontmatter = parsed.frontmatter as Record<string, unknown>;
-				}
-			}
-		} else {
-			const templatePath = join(config.templateDir, config.templateFile);
-			templateContent = await Bun.file(templatePath).text();
-			if (config.parseSubagentFrontmatter) {
-				const parsed = parseSubagentFrontmatter(templateContent);
-				if (parsed) {
-					templateContent = parsed.body;
-					subagentFrontmatter = parsed.frontmatter as Record<string, unknown>;
-				}
-			}
-		}
-
-		const preResolveHooks = getPreResolveHooks(config);
-		if (preResolveHooks.length > 0) {
-			templateContent = await runPreResolveHooks(
-				templateContent,
-				preResolveHooks,
-			);
-		}
-
-		templateContent = evaluateRules(templateContent, config);
-
-		const { processedTemplate, resultMetadata } = await interpolation(
-			templateContent,
-			config,
-			config.templateDir,
-		);
-
+		const { stream, metadata, subagentFrontmatter } =
+			await runStreamingInternal(config);
+		const processedTemplate = await consumeStreamToString(stream);
+		const resolvedMetadata = await metadata;
 		const duration = Date.now() - startTime;
+		const resultMetadata = resolvedMetadata.resultMetadata ?? [];
 		const outputMode = config.outputMode ?? "flat";
 		let resultObject: ShotputOutput = {
 			content: processedTemplate,
@@ -137,7 +142,7 @@ const run = async (config: ShotputConfig): Promise<ShotputOutput> => {
 			const assemblyResult = await runPostAssemblyHooks(
 				{
 					content: processedTemplate,
-					metadata: (resultMetadata ?? []).map((m) => ({
+					metadata: resultMetadata.map((m) => ({
 						type: m.type as import("./types").TemplateType,
 						path: m.path,
 						length: 0,
@@ -243,29 +248,40 @@ export function shotput(
 }
 
 /**
- * Run the same pipeline as shotput but return the final content as a ReadableStream.
- * Callers can pipe the stream to fetch(), write to a file, or consume in chunks.
+ * Run template load, preResolve hooks, and rules, then stream segments in document order
+ * as each placeholder is resolved. Same stream as shotputStreamingSegments; postAssembly,
+ * preOutput, and sectioning are not run.
  */
 export async function shotputStreaming(
 	configOverrides?: Partial<ShotputConfig>,
 ): Promise<ShotputStreamingOutput> {
-	const output = await run(buildConfig(configOverrides));
-	if (output.error) {
+	const config = buildConfig(configOverrides);
+	const startTime = Date.now();
+	try {
+		const { stream, metadata } = await runStreamingInternal(config);
+		const resolvedMetadata = metadata.then((m) => ({
+			...m,
+			duration: Date.now() - startTime,
+		}));
+		return {
+			stream,
+			metadata: resolvedMetadata,
+		};
+	} catch (error) {
+		log.error(`Failed to process template: ${error}`);
 		return {
 			stream: new ReadableStream<string>({
 				start(c) {
 					c.close();
 				},
 			}),
-			metadata: output.metadata,
-			error: output.error,
+			metadata: Promise.resolve({
+				duration: Date.now() - startTime,
+				resultMetadata: [],
+			}),
+			error: error as Error,
 		};
 	}
-	const content = output.content ?? "";
-	return {
-		stream: contentToStream(content),
-		metadata: output.metadata,
-	};
 }
 
 /**
@@ -280,42 +296,17 @@ export async function shotputStreamingSegments(
 	const config = buildConfig(configOverrides);
 	const startTime = Date.now();
 	try {
-		await ensureDirectoryExists(config.responseDir, config.templateDir);
-
-		let templateContent: string;
-		if (config.template !== undefined) {
-			templateContent = config.template;
-		} else {
-			const templatePath = join(config.templateDir, config.templateFile);
-			templateContent = await Bun.file(templatePath).text();
-		}
-
-		const preResolveHooks = getPreResolveHooks(config);
-		if (preResolveHooks.length > 0) {
-			templateContent = await runPreResolveHooks(
-				templateContent,
-				preResolveHooks,
-			);
-		}
-
-		const streamResult = await interpolationStream(
-			templateContent,
-			config,
-			config.templateDir,
-		);
-
-		const baseMetadata = streamResult.metadata;
-		const metadata: Promise<ShotputOutput["metadata"]> = baseMetadata.then(
-			(m) => ({
-				...m,
-				duration: Date.now() - startTime,
-			}),
-		);
-
+		const { stream, metadata, literalMap, literalMapPromise } =
+			await runStreamingInternal(config);
+		const resolvedMetadata = metadata.then((m) => ({
+			...m,
+			duration: Date.now() - startTime,
+		}));
 		return {
-			stream: streamResult.stream,
-			metadata,
-			literalMap: streamResult.literalMap,
+			stream,
+			metadata: resolvedMetadata,
+			literalMap,
+			literalMapPromise,
 		};
 	} catch (error) {
 		log.error(`Failed to process template: ${error}`);

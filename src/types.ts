@@ -107,10 +107,10 @@ export interface ShotputOutput {
 	};
 }
 
-/** Result of runStreaming: content as a ReadableStream plus metadata. */
+/** Result of runStreaming: content as a ReadableStream plus metadata (resolves when stream finishes). */
 export interface ShotputStreamingOutput {
 	stream: ReadableStream<string>;
-	metadata: ShotputOutput["metadata"];
+	metadata: Promise<ShotputOutput["metadata"]>;
 	error?: Error;
 }
 
@@ -119,5 +119,7 @@ export interface ShotputSegmentStreamOutput {
 	stream: ReadableStream<string>;
 	metadata: Promise<ShotputOutput["metadata"]>;
 	literalMap?: Map<string, string>;
+	/** Resolves when the stream is finished; use for literalMap when streaming (sequential path only). */
+	literalMapPromise?: Promise<Map<string, string> | undefined>;
 	error?: Error;
 }

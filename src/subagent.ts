@@ -1,9 +1,10 @@
 import { join } from "node:path";
 import { type ShotputConfig, createConfig } from "./config";
-import { interpolation } from "./interpolation";
+import { interpolationStream } from "./interpolationStream";
 import { getLogger } from "./logger";
 import type { SourcePlugin } from "./plugins";
 import { validatePath } from "./security";
+import { consumeStreamToString } from "./streamUtils";
 import type { ShotputOutput } from "./types";
 
 const log = getLogger("subagent");
@@ -147,11 +148,9 @@ export const resolveSubagent = async (
 
 	const basePath = base;
 	const start = Date.now();
-	const { processedTemplate, resultMetadata } = await interpolation(
-		body,
-		config,
-		basePath,
-	);
+	const { stream, metadata } = interpolationStream(body, config, basePath);
+	const processedTemplate = await consumeStreamToString(stream);
+	const resolvedMetadata = await metadata;
 	const duration = Date.now() - start;
 
 	return {
@@ -159,7 +158,7 @@ export const resolveSubagent = async (
 		agentConfig,
 		metadata: {
 			duration,
-			resultMetadata: resultMetadata ?? [],
+			resultMetadata: resolvedMetadata.resultMetadata ?? [],
 		},
 	};
 };

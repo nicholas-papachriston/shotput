@@ -1,3 +1,7 @@
+/**
+ * Full in-memory interpolation. Used for nested runs (from interpolationStream) and by tests.
+ * Top-level pipeline uses interpolationStream + consumeStreamToString.
+ */
 import type { ShotputConfig } from "./config";
 import { interpolationPattern } from "./interpolationApply";
 import { runSequentialInterpolation } from "./interpolationSequential";

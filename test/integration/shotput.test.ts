@@ -82,7 +82,8 @@ describe("Shotput Integration Tests", () => {
 			streamedContent += value;
 		}
 		expect(streamedContent).toBe(normal.content ?? "");
-		expect(streaming.metadata.resultMetadata?.length).toBe(
+		const streamingMeta = await streaming.metadata;
+		expect(streamingMeta.resultMetadata?.length).toBe(
 			normal.metadata.resultMetadata?.length ?? 0,
 		);
 	});
@@ -630,11 +631,12 @@ describe("Shotput Edge Cases", () => {
 			templateFile: "small-limit.md",
 			responseDir: `${tempDir}/responses`,
 			maxPromptLength: 10,
+			maxConcurrency: 1,
 			allowedBasePaths: [process.cwd(), tempDir],
 		});
 
-		// Result should be truncated
-		expect(result.content?.length).toBeLessThanOrEqual(100);
+		// Result should be truncated (sequential path resolves and truncates; parallel would skip and leave template)
+		expect(result.content?.length).toBeLessThanOrEqual(10);
 	});
 
 	it("should handle template with only whitespace", async () => {
