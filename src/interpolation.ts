@@ -8,7 +8,7 @@ import { ParallelProcessor } from "./parallelProcessor";
 import { resolveTemplatePath } from "./pathResolve";
 import { getMatchingPlugin } from "./plugins";
 import { evaluateRules } from "./rules";
-import { findTemplateType } from "./template";
+import { clearStatCache, findTemplateType } from "./template";
 import { TemplateType } from "./types";
 
 const log = getLogger("interpolation");
@@ -46,6 +46,9 @@ export const interpolation = async (
 	literalBox?: { literals: Map<string, string> },
 	mergeContext?: Record<string, unknown>,
 ): Promise<InterpolationResults> => {
+	if (depth === 0) {
+		clearStatCache();
+	}
 	const effectiveConfig = mergeContext
 		? {
 				...config,

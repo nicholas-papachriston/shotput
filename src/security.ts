@@ -9,6 +9,17 @@ export class SecurityError extends Error {
 	}
 }
 
+const resolvedAllowedPathsCache = new WeakMap<ShotputConfig, string[]>();
+
+function getResolvedAllowedPaths(config: ShotputConfig): string[] {
+	let resolved = resolvedAllowedPathsCache.get(config);
+	if (!resolved) {
+		resolved = config.allowedBasePaths.map((p) => resolve(p));
+		resolvedAllowedPathsCache.set(config, resolved);
+	}
+	return resolved;
+}
+
 /**
  * Validates that a file path is within the allowed base paths.
  */
@@ -21,8 +32,9 @@ export const validatePath = (
 		? resolve(filePath)
 		: resolve(basePath || process.cwd(), filePath);
 
-	const isAllowed = config.allowedBasePaths.some((allowedPath) =>
-		resolvedPath.startsWith(resolve(allowedPath)),
+	const resolvedAllowed = getResolvedAllowedPaths(config);
+	const isAllowed = resolvedAllowed.some((allowedPath) =>
+		resolvedPath.startsWith(allowedPath),
 	);
 
 	if (!isAllowed) {

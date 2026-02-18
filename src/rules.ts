@@ -5,6 +5,17 @@ const log = getLogger("rules");
 
 const IF_CLOSE = "{{/if}}";
 const ELSE_MARKER = "{{else}}";
+/** New regex per call so concurrent evaluateRules() do not share lastIndex. */
+const createIfOpenRegex = () => /\{\{#if\s+(.+?)\}\}/g;
+
+const conditionFnCache = new Map<
+	string,
+	(
+		context: Record<string, unknown>,
+		env: NodeJS.ProcessEnv,
+		params: Record<string, unknown>,
+	) => boolean
+>();
 
 export interface RuleContext {
 	context: Record<string, unknown>;
@@ -14,12 +25,20 @@ export interface RuleContext {
 
 function evaluateConditionJs(expr: string, ctx: RuleContext): boolean {
 	try {
-		const fn = new Function(
-			"context",
-			"env",
-			"params",
-			`return Boolean(${expr})`,
-		);
+		let fn = conditionFnCache.get(expr);
+		if (!fn) {
+			fn = new Function(
+				"context",
+				"env",
+				"params",
+				`return Boolean(${expr})`,
+			) as (
+				context: Record<string, unknown>,
+				env: NodeJS.ProcessEnv,
+				params: Record<string, unknown>,
+			) => boolean;
+			conditionFnCache.set(expr, fn);
+		}
 		return fn(ctx.context, ctx.env, ctx.params ?? {});
 	} catch (err) {
 		log.warn(`Rule condition evaluation failed for "${expr}": ${err}`);
@@ -150,7 +169,7 @@ export function evaluateRules(content: string, config: ShotputConfig): string {
 	const ctx: RuleContext = { context, env, params };
 
 	let result = content;
-	const ifOpenRegex = /\{\{#if\s+(.+?)\}\}/g;
+	const ifOpenRegex = createIfOpenRegex();
 	let match: RegExpExecArray | null;
 	while (true) {
 		ifOpenRegex.lastIndex = 0;
@@ -178,8 +197,10 @@ export function evaluateRules(content: string, config: ShotputConfig): string {
 		const chosen = evaluateCondition(expr, ctx, engine)
 			? consequent
 			: alternate;
-		const fullBlock = result.slice(openStart, closeIndex + IF_CLOSE.length);
-		result = result.replace(fullBlock, chosen);
+		result =
+			result.slice(0, openStart) +
+			chosen +
+			result.slice(closeIndex + IF_CLOSE.length);
 	}
 	return result;
 }

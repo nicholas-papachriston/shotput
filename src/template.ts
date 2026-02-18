@@ -5,10 +5,20 @@ import { getMatchingPlugin } from "./plugins";
 import { SKILL_TEMPLATE } from "./skill";
 import { TemplateType } from "./types";
 
+const GLOB_CHARS = /[*?\[\]]/;
+const HTTP_PREFIX = /^https?:\/\/.+/;
+const S3_PREFIX = /^s3:\/\/.+/;
+
 const regexIndicators = [
 	/^\/.+\/[gimyus]*$/, // Pattern enclosed in forward slashes
 	/[\^\$\(\)\+\{\}]/, // Common regex special characters
 ];
+
+const statCache = new Map<string, { isFile: boolean; isDirectory: boolean }>();
+
+export function clearStatCache(): void {
+	statCache.clear();
+}
 
 export const findTemplateType = async (
 	path: string,
@@ -16,17 +26,22 @@ export const findTemplateType = async (
 	config?: ShotputConfig,
 ): Promise<TemplateType> => {
 	try {
-		try {
-			const stats = await stat(path);
-			if (stats.isFile()) {
-				return TemplateType.File;
+		let statResult = statCache.get(path);
+		if (!statResult) {
+			try {
+				const stats = await stat(path);
+				statResult = {
+					isFile: stats.isFile(),
+					isDirectory: stats.isDirectory(),
+				};
+				statCache.set(path, statResult);
+			} catch {
+				// Ignore stat errors
 			}
-
-			if (stats.isDirectory()) {
-				return TemplateType.Directory;
-			}
-		} catch {
-			// Ignore stat errors
+		}
+		if (statResult) {
+			if (statResult.isFile) return TemplateType.File;
+			if (statResult.isDirectory) return TemplateType.Directory;
 		}
 
 		if (path.startsWith(SKILL_TEMPLATE)) {
@@ -46,15 +61,15 @@ export const findTemplateType = async (
 			return TemplateType.Function;
 		}
 
-		if (/[\*\?\[\]]/.test(path)) {
+		if (GLOB_CHARS.test(path)) {
 			return TemplateType.Glob;
 		}
 
-		if (/^https?:\/\/.+/.test(path)) {
+		if (HTTP_PREFIX.test(path)) {
 			return TemplateType.Http;
 		}
 
-		if (/^s3:\/\/.+/.test(path)) {
+		if (S3_PREFIX.test(path)) {
 			return TemplateType.S3;
 		}
 

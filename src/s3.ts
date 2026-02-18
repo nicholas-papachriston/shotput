@@ -3,7 +3,7 @@ import { processContent } from "./content";
 import { handlerErrorResult } from "./handlerResult";
 import { getLogger } from "./logger";
 import { getS3File } from "./s3-client";
-import { SecurityError, validateS3Path } from "./security";
+import { validateS3Path } from "./security";
 
 const log = getLogger("s3");
 

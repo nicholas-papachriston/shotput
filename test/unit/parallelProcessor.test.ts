@@ -142,7 +142,11 @@ describe("ParallelProcessor", () => {
 			fs.writeFileSync(f2, "B");
 
 			const content = `{{${f1}}} {{${f2}}}`;
-			const result = await processor.processTemplatesWithPlanning(
+			// Use maxConcurrency: 1 so completion order matches document order and the test is deterministic
+			const orderProcessor = new ParallelProcessor(
+				createConfig({ ...testConfig, maxConcurrency: 1 }),
+			);
+			const result = await orderProcessor.processTemplatesWithPlanning(
 				content,
 				tempDir,
 				1000,

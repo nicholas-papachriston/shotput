@@ -15,6 +15,8 @@ interface TemplateTask {
 	type: TemplateType;
 	path: string;
 	match: string;
+	/** Start index of this match in the original content; used for ordered assembly. */
+	matchIndex: number;
 	basePath?: string;
 	originalIndex: number;
 	estimatedLength?: number;
@@ -59,17 +61,38 @@ export class ParallelProcessor {
 		basePath: string,
 		expandingPaths?: Set<string>,
 	): Promise<TemplateTask[]> {
-		const pattern = /\{\{([^}]+)\}\}/g;
-		const matches = content.match(pattern);
+		// Find all {{...}} in document order; inner content must not contain "}" (same as /\{\{([^}]+)\}\}/)
+		const matchesWithIndex: { match: string; index: number }[] = [];
+		let pos = 0;
+		while (pos < content.length) {
+			const open = content.indexOf("{{", pos);
+			if (open === -1) break;
+			let searchFrom = open + 2;
+			let matched = false;
+			while (searchFrom < content.length) {
+				const close = content.indexOf("}}", searchFrom);
+				if (close === -1) break;
+				const inner = content.slice(open + 2, close);
+				if (!inner.includes("}")) {
+					const match = content.slice(open, close + 2);
+					matchesWithIndex.push({ match, index: open });
+					pos = close + 2;
+					matched = true;
+					break;
+				}
+				searchFrom = close + 1;
+			}
+			if (!matched) pos = open + 1;
+		}
 
-		if (!matches) {
+		if (matchesWithIndex.length === 0) {
 			return [];
 		}
 
 		const tasks: TemplateTask[] = [];
 
-		for (let i = 0; i < matches.length; i++) {
-			const match = matches[i];
+		for (let i = 0; i < matchesWithIndex.length; i++) {
+			const { match, index: matchIndex } = matchesWithIndex[i];
 			const rawPath = match.slice(2, -2).trim();
 			let path = resolveTemplatePath(basePath, rawPath, this.config);
 
@@ -78,6 +101,7 @@ export class ParallelProcessor {
 					type: TemplateType.File,
 					path,
 					match,
+					matchIndex,
 					originalIndex: i,
 					priority: this.calculatePriority(TemplateType.File, i),
 					isCycle: true,
@@ -103,6 +127,7 @@ export class ParallelProcessor {
 					type: templateType,
 					path,
 					match,
+					matchIndex,
 					basePath,
 					originalIndex: i,
 					priority: this.calculatePriority(templateType, i),
@@ -461,12 +486,17 @@ export class ParallelProcessor {
 
 		const results = await Promise.all(processingPromises);
 
-		// Replace templates sequentially in original order for correctness
-		let resultContent = content;
+		// Process in document order (by matchIndex) so output order is deterministic
+		results.sort((a, b) => a.task.matchIndex - b.task.matchIndex);
+
+		const parts: { start: number; end: number; replacement: string }[] = [];
 		let remainingLength = maxLength;
 
 		for (const { task, processed, result } of results) {
 			this.processedTemplates.push(result);
+
+			const start = task.matchIndex;
+			const end = task.matchIndex + task.match.length;
 
 			if (!result.error && processed) {
 				let replacement = processed.replacement;
@@ -485,16 +515,22 @@ export class ParallelProcessor {
 					);
 					replacement = afterHook.content;
 				}
-				resultContent = resultContent.replace(processed.match, replacement);
+				parts.push({ start, end, replacement });
 				remainingLength -= processed.length;
 			} else if (result.error) {
-				// Handle failed templates by replacing with error message
-				// Use the error message from the result if it's already formatted
 				const errorMsg = result.error.startsWith("[")
 					? result.error
 					: `[Error reading ${task.path}]`;
-				resultContent = resultContent.replace(task.match, errorMsg);
+				parts.push({ start, end, replacement: errorMsg });
 			}
+		}
+
+		// Build final content from original string and replacements by position
+		let resultContent = content;
+		for (let i = parts.length - 1; i >= 0; i--) {
+			const { start, end, replacement } = parts[i];
+			resultContent =
+				resultContent.slice(0, start) + replacement + resultContent.slice(end);
 		}
 
 		// Final progress update

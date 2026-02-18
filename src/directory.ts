@@ -4,7 +4,7 @@ import type { ShotputConfig } from "./config";
 import { handleFile } from "./file";
 import { handlerErrorResult } from "./handlerResult";
 import { getLogger } from "./logger";
-import { SecurityError, validatePath } from "./security";
+import { validatePath } from "./security";
 
 const log = getLogger("directory");
 
@@ -46,7 +46,7 @@ export const handleDirectory = async (
 
 		const entries = await readdir(validatedPath);
 		let currentRemaining = remainingLength;
-		let directoryContent = "";
+		const chunks: string[] = [];
 
 		for (const entry of entries) {
 			if (currentRemaining <= 0) {
@@ -67,7 +67,7 @@ export const handleDirectory = async (
 					"",
 					currentRemaining,
 				);
-				directoryContent += subDirResult.operationResults;
+				chunks.push(subDirResult.operationResults);
 				currentRemaining = subDirResult.combinedRemainingCount;
 			} else {
 				// Handle file
@@ -80,10 +80,12 @@ export const handleDirectory = async (
 					placeholder,
 					currentRemaining,
 				);
-				directoryContent += fileResult.operationResults;
+				chunks.push(fileResult.operationResults);
 				currentRemaining = fileResult.combinedRemainingCount;
 			}
 		}
+
+		const directoryContent = chunks.join("");
 
 		// If match is provided, replace it in the original result.
 		// Otherwise (recursive call), return the content directly.

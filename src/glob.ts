@@ -6,6 +6,7 @@ import { getLogger } from "./logger";
 import { SecurityError, validatePath } from "./security";
 
 const log = getLogger("glob");
+const WILDCARD_CHARS = /[*?\[\]]/;
 
 /**
  * Handles glob patterns by scanning the file system and interpolating matching files.
@@ -27,7 +28,7 @@ export const handleGlob = async (
 	try {
 		// Determine base path for security validation
 		// Find the first character that indicates a wildcard
-		const firstWildcard = path.search(/[*?\[\]]/);
+		const firstWildcard = path.search(WILDCARD_CHARS);
 		const basePath =
 			firstWildcard !== -1 ? path.slice(0, firstWildcard) : dirname(path);
 
@@ -70,7 +71,7 @@ export const handleGlob = async (
 		}
 
 		const glob = new Bun.Glob(path);
-		let combinedContent = "";
+		const chunks: string[] = [];
 		let currentRemaining = remainingLength;
 
 		// Scan for matching files
@@ -102,7 +103,7 @@ export const handleGlob = async (
 					);
 				}
 
-				combinedContent += processed.content;
+				chunks.push(processed.content);
 				currentRemaining = processed.remainingLength;
 			} catch (error) {
 				if (error instanceof SecurityError) {
@@ -113,6 +114,7 @@ export const handleGlob = async (
 			}
 		}
 
+		const combinedContent = chunks.join("");
 		return {
 			operationResults: result.replace(match, combinedContent),
 			combinedRemainingCount: currentRemaining,
