@@ -1,6 +1,9 @@
 import type { ShotputConfig } from "./config";
 import { interpolation } from "./interpolation";
-import { interpolationPattern } from "./interpolationApply";
+import {
+	getInterpolationMatchesWithIndices,
+	interpolationPattern,
+} from "./interpolationApply";
 import { runSequentialInterpolation } from "./interpolationSequential";
 import { getLogger } from "./logger";
 import { ParallelProcessor } from "./parallelProcessor";
@@ -49,13 +52,15 @@ export function interpolationStream(
 		contentAfterRules,
 		effectiveConfig,
 	);
-	const matches = contentAfterVariables.match(interpolationPattern);
+	const matchEntries = getInterpolationMatchesWithIndices(
+		contentAfterVariables,
+	);
 	const resolvedLiteralBox =
 		literalBox ??
 		(depth === 0 ? { literals: new Map<string, string>() } : undefined);
 	const configToUse = effectiveConfig;
 
-	if (!matches) {
+	if (matchEntries.length === 0) {
 		const stream = new ReadableStream<string>({
 			start(controller) {
 				controller.enqueue(contentAfterVariables);
@@ -92,7 +97,6 @@ export function interpolationStream(
 	const maxDepth = config.maxNestingDepth;
 	const useParallel =
 		config.enableContentLengthPlanning && config.maxConcurrency > 1;
-	const matchesArr = matches;
 
 	async function innerRun(
 		controller: ReadableStreamDefaultController<string>,
@@ -197,7 +201,7 @@ export function interpolationStream(
 				expandingPaths,
 				resolvedLiteralBox,
 				configToUse,
-				matchesArr,
+				matchEntries,
 				(cont, inclusionBase, d, remLen, expPaths, litBox, mergeCtx) =>
 					interpolation(
 						cont,

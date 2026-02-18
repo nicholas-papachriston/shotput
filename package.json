@@ -21,6 +21,7 @@
 		"test:watch": "bun test --watch && bun run clean:temp",
 		"test:coverage": "bun test --coverage && bun run clean:temp",
 		"examples": "bun run examples/index.ts",
+		"benchmark": "bun run examples/benchmark/run-all.ts && uv run examples/benchmark/jinja2_benchmark.py",
 		"fix": "bunx biome check --fix --unsafe .",
 		"lint": "bunx biome check .",
 		"typecheck": "tsc --noEmit",
@@ -39,7 +40,14 @@
 	"devDependencies": {
 		"@biomejs/biome": "latest",
 		"@types/bun": "latest",
+		"@types/ejs": "latest",
+		"@types/mustache": "latest",
+		"@types/nunjucks": "latest",
 		"@types/node": "latest",
+		"ejs": "latest",
+		"handlebars": "latest",
+		"mustache": "latest",
+		"nunjucks": "latest",
 		"typescript": "latest"
 	}
 }

@@ -7,6 +7,7 @@ import type {
 } from "./interpolationApply";
 import {
 	type HandlerResultForApply,
+	type MatchWithIndices,
 	applyReplacement,
 	interpolationPattern,
 } from "./interpolationApply";
@@ -42,7 +43,7 @@ export async function runSequentialInterpolation(
 	expandingPaths: Set<string>,
 	resolvedLiteralBox: { literals: Map<string, string> } | undefined,
 	configToUse: ShotputConfig,
-	matches: RegExpMatchArray,
+	matchEntries: MatchWithIndices[],
 	interpolationFn: RunSequentialInterpolationFn,
 	emit?: SegmentSink,
 ): Promise<{
@@ -56,7 +57,8 @@ export async function runSequentialInterpolation(
 	const resultMetadata: InterpolationResultMeta[] = [];
 	let result = content;
 	let currentRemainingLength = remainingLength;
-	let lastEnd = 0;
+	let lastEndInResult = 0;
+	let lastEmittedInResult = 0;
 
 	const runInterpolationForApply = (
 		cont: string,
@@ -77,19 +79,25 @@ export async function runSequentialInterpolation(
 			mergeContext,
 		);
 
-	let totalEmittedLength = 0;
-	let lastEndInResult = 0;
+	function replaceAt(
+		str: string,
+		startInResult: number,
+		endInResult: number,
+		replacement: string,
+	): string {
+		return str.slice(0, startInResult) + replacement + str.slice(endInResult);
+	}
 
-	for (const match of matches) {
-		const matchIndex = content.indexOf(match, lastEnd);
-		if (matchIndex < 0) continue;
+	for (const { match } of matchEntries) {
 		const matchIndexInResult = result.indexOf(match, lastEndInResult);
 		if (matchIndexInResult < 0) continue;
+		const startInResult = matchIndexInResult;
+		const endInResult = matchIndexInResult + match.length;
 
 		if (emit) {
-			const prefix = content.slice(lastEnd, matchIndex);
+			const prefix = result.slice(lastEmittedInResult, startInResult);
 			emit(prefix);
-			totalEmittedLength += prefix.length;
+			lastEmittedInResult = startInResult;
 		}
 
 		const startTime = Date.now();
@@ -101,10 +109,9 @@ export async function runSequentialInterpolation(
 			if (templateType === TemplateType.String) {
 				if (emit) {
 					emit(match);
-					totalEmittedLength += match.length;
+					lastEmittedInResult = startInResult + match.length;
 				}
-				lastEndInResult = matchIndexInResult + match.length;
-				lastEnd = matchIndex + match.length;
+				lastEndInResult = startInResult + match.length;
 				continue;
 			}
 			if (templateType === TemplateType.Custom) {
@@ -113,15 +120,12 @@ export async function runSequentialInterpolation(
 			if (expandingPaths.has(path)) {
 				log.warn(`Cycle detected for path: ${path}`);
 				const cycleMessage = `${CYCLE_MESSAGE_PREFIX}${path}]`;
-				result = result.replace(match, cycleMessage);
+				result = replaceAt(result, startInResult, endInResult, cycleMessage);
+				lastEndInResult = startInResult + cycleMessage.length;
 				if (emit) {
 					emit(cycleMessage);
-					totalEmittedLength += cycleMessage.length;
-					lastEndInResult = matchIndexInResult + cycleMessage.length;
-				} else {
-					lastEndInResult = matchIndexInResult + match.length;
+					lastEmittedInResult = startInResult + cycleMessage.length;
 				}
-				lastEnd = matchIndex + match.length;
 				continue;
 			}
 			expandingPaths.add(path);
@@ -159,23 +163,19 @@ export async function runSequentialInterpolation(
 							resolvedLiteralBox,
 							runInterpolationForApply,
 						);
-						if (emit) {
-							const replLen =
-								applied.result.length - result.length + match.length;
-							const replacement = applied.result.slice(
-								matchIndexInResult,
-								matchIndexInResult + replLen,
-							);
-							emit(replacement);
-							totalEmittedLength += replacement.length;
-							lastEndInResult = matchIndexInResult + replLen;
-						} else {
-							lastEndInResult = matchIndexInResult + match.length;
-						}
+						const replacement = applied.result.slice(
+							startInResult,
+							startInResult +
+								(applied.result.length - result.length + match.length),
+						);
 						result = applied.result;
+						lastEndInResult = startInResult + replacement.length;
+						if (emit) {
+							emit(replacement);
+							lastEmittedInResult = startInResult + replacement.length;
+						}
 						currentRemainingLength = applied.remainingLength;
 						resultMetadata.push(...applied.metadata);
-						lastEnd = matchIndex + match.length;
 						continue;
 					}
 					case TemplateType.Function: {
@@ -188,27 +188,23 @@ export async function runSequentialInterpolation(
 							currentRemainingLength,
 							basePath,
 						);
+						const replacement = operationResults.slice(
+							startInResult,
+							startInResult +
+								(operationResults.length - result.length + match.length),
+						);
+						result = operationResults;
+						lastEndInResult = startInResult + replacement.length;
 						if (emit) {
-							const replLen =
-								operationResults.length - result.length + match.length;
-							const replacement = operationResults.slice(
-								matchIndexInResult,
-								matchIndexInResult + replLen,
-							);
 							emit(replacement);
-							totalEmittedLength += replacement.length;
-							lastEndInResult = matchIndexInResult + replLen;
-						} else {
-							lastEndInResult = matchIndexInResult + match.length;
+							lastEmittedInResult = startInResult + replacement.length;
 						}
 						currentRemainingLength = combinedRemainingCount;
-						result = operationResults;
 						resultMetadata.push({
 							path,
 							type: templateType,
 							duration: Date.now() - startTime,
 						});
-						lastEnd = matchIndex + match.length;
 						continue;
 					}
 					case TemplateType.Custom: {
@@ -216,15 +212,12 @@ export async function runSequentialInterpolation(
 						if (!plugin) {
 							log.warn(`No custom plugin matched for path: ${path}`);
 							const errMsg = `[Error reading ${path}]`;
-							result = result.replace(match, errMsg);
+							result = replaceAt(result, startInResult, endInResult, errMsg);
+							lastEndInResult = startInResult + errMsg.length;
 							if (emit) {
 								emit(errMsg);
-								totalEmittedLength += errMsg.length;
-								lastEndInResult = matchIndexInResult + errMsg.length;
-							} else {
-								lastEndInResult = matchIndexInResult + match.length;
+								lastEmittedInResult = startInResult + errMsg.length;
 							}
-							lastEnd = matchIndex + match.length;
 							continue;
 						}
 						const handlerResult = await handleCustomSource(
@@ -258,20 +251,17 @@ export async function runSequentialInterpolation(
 								resolvedLiteralBox,
 								runInterpolationForApply,
 							);
-							if (emit) {
-								const replLen =
-									applied.result.length - result.length + match.length;
-								const replacement = applied.result.slice(
-									matchIndexInResult,
-									matchIndexInResult + replLen,
-								);
-								emit(replacement);
-								totalEmittedLength += replacement.length;
-								lastEndInResult = matchIndexInResult + replLen;
-							} else {
-								lastEndInResult = matchIndexInResult + match.length;
-							}
+							const replacement = applied.result.slice(
+								startInResult,
+								startInResult +
+									(applied.result.length - result.length + match.length),
+							);
 							result = applied.result;
+							lastEndInResult = startInResult + replacement.length;
+							if (emit) {
+								emit(replacement);
+								lastEmittedInResult = startInResult + replacement.length;
+							}
 							currentRemainingLength = applied.remainingLength;
 							resultMetadata.push(...applied.metadata);
 						} else {
@@ -282,31 +272,26 @@ export async function runSequentialInterpolation(
 							) {
 								const key = `${LITERAL_PLACEHOLDER_PREFIX}${resolvedLiteralBox.literals.size}__`;
 								resolvedLiteralBox.literals.set(key, handlerResult.replacement);
-								result = result.replace(match, key);
+								result = replaceAt(result, startInResult, endInResult, key);
+								lastEndInResult = startInResult + key.length;
 								if (emit) {
 									emit(key);
-									totalEmittedLength += key.length;
-									lastEndInResult = matchIndexInResult + key.length;
-								} else {
-									lastEndInResult = matchIndexInResult + match.length;
+									lastEmittedInResult = startInResult + key.length;
 								}
 							} else {
-								if (emit) {
-									const replLen =
-										handlerResult.operationResults.length -
-										result.length +
-										match.length;
-									const replacement = handlerResult.operationResults.slice(
-										matchIndexInResult,
-										matchIndexInResult + replLen,
-									);
-									emit(replacement);
-									totalEmittedLength += replacement.length;
-									lastEndInResult = matchIndexInResult + replLen;
-								} else {
-									lastEndInResult = matchIndexInResult + match.length;
-								}
+								const replacement = handlerResult.operationResults.slice(
+									startInResult,
+									startInResult +
+										(handlerResult.operationResults.length -
+											result.length +
+											match.length),
+								);
 								result = handlerResult.operationResults;
+								lastEndInResult = startInResult + replacement.length;
+								if (emit) {
+									emit(replacement);
+									lastEmittedInResult = startInResult + replacement.length;
+								}
 							}
 							currentRemainingLength = handlerResult.combinedRemainingCount;
 							resultMetadata.push({
@@ -315,7 +300,6 @@ export async function runSequentialInterpolation(
 								duration: Date.now() - startTime,
 							});
 						}
-						lastEnd = matchIndex + match.length;
 						continue;
 					}
 					default: {
@@ -329,10 +313,8 @@ export async function runSequentialInterpolation(
 						});
 						if (emit) {
 							emit(match);
-							totalEmittedLength += match.length;
+							lastEmittedInResult = startInResult + match.length;
 						}
-						lastEndInResult = matchIndexInResult + match.length;
-						lastEnd = matchIndex + match.length;
 						continue;
 					}
 				}
@@ -342,21 +324,18 @@ export async function runSequentialInterpolation(
 		} catch (err) {
 			log.error(`Failed to read path ${path}: ${err}`);
 			const errMsg = `[Error reading ${path}]`;
-			result = result.replace(match, errMsg);
+			result = replaceAt(result, startInResult, endInResult, errMsg);
+			lastEndInResult = startInResult + errMsg.length;
 			if (emit) {
 				emit(errMsg);
-				totalEmittedLength += errMsg.length;
-				lastEndInResult = matchIndexInResult + errMsg.length;
-			} else {
-				lastEndInResult = matchIndexInResult + match.length;
+				lastEmittedInResult = startInResult + errMsg.length;
 			}
-			lastEnd = matchIndex + match.length;
 		}
 	}
 
 	const suffix =
-		emit && result.length > totalEmittedLength
-			? result.slice(totalEmittedLength)
+		emit && result.length > lastEmittedInResult
+			? result.slice(lastEmittedInResult)
 			: undefined;
 
 	return {

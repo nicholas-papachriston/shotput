@@ -58,10 +58,12 @@ export function evaluateRules(content: string, config: ShotputConfig): string {
 			const chosen = evaluateCondition(expr, ctx, engine)
 				? consequent
 				: alternate;
-			result =
-				result.slice(0, openStart) +
-				chosen +
-				result.slice(closeIndex + IF_CLOSE.length);
+			const ifSegments = [
+				result.slice(0, openStart),
+				chosen,
+				result.slice(closeIndex + IF_CLOSE.length),
+			];
+			result = ifSegments.join("");
 			continue;
 		}
 
@@ -87,10 +89,12 @@ export function evaluateRules(content: string, config: ShotputConfig): string {
 			const substituted = substituteVariables(evaluated, mergedConfig);
 			chunks.push(substituted);
 		}
-		result =
-			result.slice(0, openStart) +
-			chunks.join("") +
-			result.slice(closeIndex + EACH_CLOSE.length);
+		const eachSegments = [
+			result.slice(0, openStart),
+			chunks.join(""),
+			result.slice(closeIndex + EACH_CLOSE.length),
+		];
+		result = eachSegments.join("");
 	}
 	return result;
 }

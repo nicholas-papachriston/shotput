@@ -3,7 +3,10 @@
  * Top-level pipeline uses interpolationStream + consumeStreamToString.
  */
 import type { ShotputConfig } from "./config";
-import { interpolationPattern } from "./interpolationApply";
+import {
+	getInterpolationMatchesWithIndices,
+	interpolationPattern,
+} from "./interpolationApply";
 import { runSequentialInterpolation } from "./interpolationSequential";
 import { getLogger } from "./logger";
 import { ParallelProcessor } from "./parallelProcessor";
@@ -16,11 +19,8 @@ const log = getLogger("interpolation");
 
 const REGEX_ESCAPE = /[.*+?^${}()|[\]\\]/g;
 
-export interface InterpolationResults {
-	processedTemplate: string;
-	resultMetadata?: Array<{ path: string; type: string; duration: number }>;
-	remainingLength: number;
-}
+/** Cache compiled regex for substituteLiterals keyed by sorted keys (same keys => reuse regex). */
+const substituteLiteralsRegexCache = new Map<string, RegExp>();
 
 function substituteLiterals(
 	content: string,
@@ -28,9 +28,20 @@ function substituteLiterals(
 ): string {
 	if (literals.size === 0) return content;
 	const keys = [...literals.keys()].sort((a, b) => b.length - a.length);
-	const escaped = keys.map((k) => k.replace(REGEX_ESCAPE, "\\$&"));
-	const regex = new RegExp(escaped.join("|"), "g");
+	const cacheKey = JSON.stringify(keys);
+	let regex = substituteLiteralsRegexCache.get(cacheKey);
+	if (!regex) {
+		const escaped = keys.map((k) => k.replace(REGEX_ESCAPE, "\\$&"));
+		regex = new RegExp(escaped.join("|"), "g");
+		substituteLiteralsRegexCache.set(cacheKey, regex);
+	}
 	return content.replace(regex, (match) => literals.get(match) ?? match);
+}
+
+export interface InterpolationResults {
+	processedTemplate: string;
+	resultMetadata?: Array<{ path: string; type: string; duration: number }>;
+	remainingLength: number;
 }
 
 export const interpolation = async (
@@ -57,14 +68,16 @@ export const interpolation = async (
 		contentAfterRules,
 		effectiveConfig,
 	);
-	const matches = contentAfterVariables.match(interpolationPattern);
+	const matchEntries = getInterpolationMatchesWithIndices(
+		contentAfterVariables,
+	);
 	const resolvedLiteralBox =
 		literalBox ??
 		(depth === 0 ? { literals: new Map<string, string>() } : undefined);
 
 	const configToUse = effectiveConfig;
 
-	if (!matches) {
+	if (matchEntries.length === 0) {
 		const out = { processedTemplate: contentAfterVariables, remainingLength };
 		if (depth === 0 && resolvedLiteralBox?.literals.size) {
 			out.processedTemplate = substituteLiterals(
@@ -121,7 +134,7 @@ export const interpolation = async (
 			expandingPaths,
 			resolvedLiteralBox,
 			configToUse,
-			matches,
+			matchEntries,
 			(cont, inclusionBase, d, remLen, expPaths, litBox, mergeCtx) =>
 				interpolation(
 					cont,

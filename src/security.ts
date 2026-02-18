@@ -1,5 +1,4 @@
 import { isAbsolute, resolve } from "node:path";
-import { URL } from "node:url";
 import type { ShotputConfig } from "./config";
 
 export class SecurityError extends Error {
@@ -10,6 +9,7 @@ export class SecurityError extends Error {
 }
 
 const resolvedAllowedPathsCache = new WeakMap<ShotputConfig, string[]>();
+const allowedDomainsRegexCache = new WeakMap<ShotputConfig, RegExp[]>();
 
 function getResolvedAllowedPaths(config: ShotputConfig): string[] {
 	let resolved = resolvedAllowedPathsCache.get(config);
@@ -18,6 +18,20 @@ function getResolvedAllowedPaths(config: ShotputConfig): string[] {
 		resolvedAllowedPathsCache.set(config, resolved);
 	}
 	return resolved;
+}
+
+function getAllowedDomainsRegexes(config: ShotputConfig): RegExp[] {
+	let regexes = allowedDomainsRegexCache.get(config);
+	if (!regexes) {
+		regexes = config.allowedDomains.map((domain) => {
+			const regexPattern = domain.startsWith(".")
+				? `^https?://[^/]+\\${domain}(/.*)?$`
+				: `^https?://${domain.replace(/\./g, "\\.")}(?:/.*)?$`;
+			return new RegExp(regexPattern);
+		});
+		allowedDomainsRegexCache.set(config, regexes);
+	}
+	return regexes;
 }
 
 /**
@@ -106,13 +120,7 @@ export const validateUrl = (config: ShotputConfig, url: string): void => {
 
 		// Check against allowed domains if specified
 		if (config.allowedDomains.length > 0) {
-			const allowedRegexes = config.allowedDomains.map((domain) => {
-				const regexPattern = domain.startsWith(".")
-					? `^https?://[^/]+\\${domain}(/.*)?$`
-					: `^https?://${domain.replace(/\./g, "\\.")}(?:/.*)?$`;
-				return new RegExp(regexPattern);
-			});
-
+			const allowedRegexes = getAllowedDomainsRegexes(config);
 			const isAllowed = allowedRegexes.some((pattern) => pattern.test(url));
 			if (!isAllowed) {
 				throw new SecurityError(`Domain not in allowlist: ${hostname}`);

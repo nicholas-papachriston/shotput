@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import type { MessageOutput, Section } from "./types";
 
 const SECTION_CLOSE = "{{/section}}";
@@ -9,7 +8,9 @@ function parseStable(attrs: string | undefined): boolean {
 }
 
 function sha256Hex(content: string): string {
-	return createHash("sha256").update(content, "utf8").digest("hex");
+	const hasher = new Bun.CryptoHasher("sha256");
+	hasher.update(content, "utf8");
+	return hasher.digest("hex");
 }
 
 /**

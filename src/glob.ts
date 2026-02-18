@@ -1,4 +1,5 @@
 import { dirname } from "node:path";
+import { Glob } from "bun";
 import type { ShotputConfig } from "./config";
 import { processContent } from "./content";
 import { handlerErrorResult } from "./handlerResult";
@@ -70,7 +71,7 @@ export const handleGlob = async (
 			};
 		}
 
-		const glob = new Bun.Glob(path);
+		const glob = new Glob(path);
 		const chunks: string[] = [];
 		let currentRemaining = remainingLength;
 

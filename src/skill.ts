@@ -1,4 +1,5 @@
 import { join } from "node:path";
+import { Glob } from "bun";
 import type { ShotputConfig } from "./config";
 import { processContent } from "./content";
 import { handlerErrorResult } from "./handlerResult";
@@ -92,10 +93,13 @@ ${parsed.instructions}`;
 			const refDirValidated = validatePath(config, referenceDir);
 
 			// Check if reference directory exists
-			const glob = new Bun.Glob("*.md");
+			const glob = new Glob("*.md");
 			let referenceContent = "";
 
-			for await (const refFile of glob.scan(refDirValidated)) {
+			for await (const refFile of glob.scan({
+				cwd: refDirValidated,
+				onlyFiles: true,
+			})) {
 				const refPath = join(refDirValidated, refFile);
 				const refContent = await Bun.file(refPath).text();
 				referenceContent += `\n\n### Reference: ${refFile}\n\n${refContent}`;

@@ -6,6 +6,30 @@ import { TemplateType } from "./types";
 
 export const interpolationPattern = /\{\{([^}]+)\}\}/g;
 
+export interface MatchWithIndices {
+	match: string;
+	start: number;
+	end: number;
+}
+
+/** One pass over content to get all {{...}} matches with start/end. Avoids repeated indexOf in hot path. */
+export function getInterpolationMatchesWithIndices(
+	content: string,
+): MatchWithIndices[] {
+	const re = new RegExp(interpolationPattern.source, "g");
+	const out: MatchWithIndices[] = [];
+	for (;;) {
+		const e = re.exec(content);
+		if (e === null) break;
+		out.push({
+			match: e[0],
+			start: e.index,
+			end: e.index + e[0].length,
+		});
+	}
+	return out;
+}
+
 export type InterpolationResultMeta = {
 	path: string;
 	type: string;
