@@ -1,32 +1,17 @@
 import type { ShotputConfig } from "./config";
+import {
+	detectContentLengths,
+	trimTasksByLength,
+} from "./contentLengthPlanning";
 import { getHandler } from "./handlers";
 import { getPostResolveSourceHooks, runPostResolveSourceHooks } from "./hooks";
 import { getLogger } from "./logger";
-import { resolveTemplatePath } from "./pathResolve";
-import { getMatchingPlugin } from "./plugins";
+import { type TemplateTask, planTemplates } from "./parallelPlan";
 import { Semaphore } from "./semaphore";
-import { findTemplateType } from "./template";
 import { getCountFn } from "./tokens";
 import type { ProcessingProgress, TemplateResult } from "./types";
-import { TemplateType } from "./types";
-
-/** When tokenizer is set, planning uses token estimates; convert bytes to tokens with this. */
-const CHARS_PER_TOKEN = 4;
 
 const log = getLogger("parallelProcessor");
-
-interface TemplateTask {
-	type: TemplateType;
-	path: string;
-	match: string;
-	/** Start index of this match in the original content; used for ordered assembly. */
-	matchIndex: number;
-	basePath?: string;
-	originalIndex: number;
-	estimatedLength?: number;
-	priority: number;
-	isCycle?: boolean;
-}
 
 interface ProcessedContent {
 	match: string;
@@ -57,264 +42,6 @@ export class ParallelProcessor {
 		};
 	}
 
-	/**
-	 * Parse template content to extract all template patterns
-	 */
-	private async planTemplates(
-		content: string,
-		basePath: string,
-		expandingPaths?: Set<string>,
-	): Promise<TemplateTask[]> {
-		// Find all {{...}} in document order; inner content must not contain "}" (same as /\{\{([^}]+)\}\}/)
-		const matchesWithIndex: { match: string; index: number }[] = [];
-		let pos = 0;
-		while (pos < content.length) {
-			const open = content.indexOf("{{", pos);
-			if (open === -1) break;
-			let searchFrom = open + 2;
-			let matched = false;
-			while (searchFrom < content.length) {
-				const close = content.indexOf("}}", searchFrom);
-				if (close === -1) break;
-				const inner = content.slice(open + 2, close);
-				if (!inner.includes("}")) {
-					const match = content.slice(open, close + 2);
-					matchesWithIndex.push({ match, index: open });
-					pos = close + 2;
-					matched = true;
-					break;
-				}
-				searchFrom = close + 1;
-			}
-			if (!matched) pos = open + 1;
-		}
-
-		if (matchesWithIndex.length === 0) {
-			return [];
-		}
-
-		const tasks: TemplateTask[] = [];
-
-		for (let i = 0; i < matchesWithIndex.length; i++) {
-			const { match, index: matchIndex } = matchesWithIndex[i];
-			const rawPath = match.slice(2, -2).trim();
-			let path = resolveTemplatePath(basePath, rawPath, this.config);
-
-			if (expandingPaths?.has(path)) {
-				tasks.push({
-					type: TemplateType.File,
-					path,
-					match,
-					matchIndex,
-					originalIndex: i,
-					priority: this.calculatePriority(TemplateType.File, i),
-					isCycle: true,
-				});
-				continue;
-			}
-
-			try {
-				const templateType = await findTemplateType(path, rawPath, this.config);
-
-				// Skip unknown/string types to allow them to remain in the template
-				// This prevents things like {{markers}} from being replaced by error messages
-				if (templateType === TemplateType.String) {
-					continue;
-				}
-
-				// Custom sources use raw path as canonical path (no filesystem resolution)
-				if (templateType === TemplateType.Custom) {
-					path = rawPath;
-				}
-
-				tasks.push({
-					type: templateType,
-					path,
-					match,
-					matchIndex,
-					basePath,
-					originalIndex: i,
-					priority: this.calculatePriority(templateType, i),
-				});
-			} catch (error) {
-				log.warn(`Failed to determine template type for ${path}: ${error}`);
-				// Don't add to tasks if type is unknown or failed
-			}
-		}
-
-		log.info(`Planned ${tasks.length} templates for processing`);
-		return tasks;
-	}
-
-	/**
-	 * Calculate priority for template processing
-	 * Lower numbers = higher priority (processed first)
-	 */
-	private calculatePriority(type: TemplateType, index: number): number {
-		// Priority based on template type
-		const typePriority: Record<TemplateType, number> = {
-			[TemplateType.String]: 100,
-			[TemplateType.File]: 10,
-			[TemplateType.Directory]: 50,
-			[TemplateType.Glob]: 40,
-			[TemplateType.Regex]: 40,
-			[TemplateType.S3]: 30,
-			[TemplateType.Http]: 20,
-			[TemplateType.Function]: 60,
-			[TemplateType.Skill]: 70,
-			[TemplateType.Custom]: 35,
-		};
-
-		// Maintain original order within same type
-		return (typePriority[type] ?? 100) + index * 0.01;
-	}
-
-	/**
-	 * Attempt to get content length without fetching full content
-	 */
-	private async estimateContentLength(task: TemplateTask): Promise<number> {
-		try {
-			switch (task.type) {
-				case TemplateType.File: {
-					const file = Bun.file(task.path);
-					return file.size;
-				}
-
-				case TemplateType.Http: {
-					const response = await fetch(task.path, {
-						method: "HEAD",
-						signal: AbortSignal.timeout(this.config.httpTimeout),
-					});
-					const contentLength = response.headers.get("content-length");
-					return contentLength ? Number.parseInt(contentLength, 10) : 0;
-				}
-
-				case TemplateType.S3: {
-					// For S3, we'd need to make a HEAD request
-					// This is a simplified estimation
-					return 0;
-				}
-
-				case TemplateType.Custom: {
-					const plugin = getMatchingPlugin(this.config, task.path);
-					if (plugin?.estimateLength) {
-						return await plugin.estimateLength(task.path, this.config);
-					}
-					return 0;
-				}
-
-				default:
-					return 0;
-			}
-		} catch (error) {
-			log.info(`Could not estimate content length for ${task.path}: ${error}`);
-			return 0;
-		}
-	}
-
-	/**
-	 * Detect content lengths for all templates in parallel
-	 */
-	private async detectContentLengths(
-		tasks: TemplateTask[],
-		onProgress?: (progress: ProcessingProgress) => void,
-	): Promise<TemplateTask[]> {
-		if (!this.config.enableContentLengthPlanning) {
-			return tasks;
-		}
-
-		log.info("Detecting content lengths for planning...");
-
-		onProgress?.({
-			current: 0,
-			total: tasks.length,
-			currentTemplate: "",
-			stage: "parsing",
-		});
-
-		const estimationPromises = tasks.map(async (task, index) => {
-			await this.semaphore.acquire();
-
-			try {
-				const estimatedLength = await this.estimateContentLength(task);
-				task.estimatedLength = estimatedLength;
-
-				onProgress?.({
-					current: index + 1,
-					total: tasks.length,
-					currentTemplate: task.path,
-					stage: "parsing",
-				});
-
-				return task;
-			} finally {
-				this.semaphore.release();
-			}
-		});
-
-		const tasksWithLengths = await Promise.all(estimationPromises);
-
-		// When tokenizer is set, convert byte estimates to token estimates for planning
-		if (this.config.tokenizer) {
-			for (const task of tasksWithLengths) {
-				const bytes = task.estimatedLength ?? 0;
-				task.estimatedLength = Math.ceil(bytes / CHARS_PER_TOKEN);
-			}
-		}
-
-		const totalEstimatedLength = tasksWithLengths.reduce(
-			(sum, task) => sum + (task.estimatedLength ?? 0),
-			0,
-		);
-		const unit = this.config.tokenizer ? "tokens" : "bytes";
-		log.info(
-			`Total estimated content length: ${totalEstimatedLength} ${unit}, max allowed: ${this.config.maxPromptLength}`,
-		);
-
-		return tasksWithLengths;
-	}
-
-	/**
-	 * Trim tasks based on content length and priority
-	 */
-	private trimTasksByLength(
-		tasks: TemplateTask[],
-		maxLength: number,
-	): TemplateTask[] {
-		// Sort by priority (lower = higher priority)
-		const sortedTasks = [...tasks].sort((a, b) => a.priority - b.priority);
-
-		let accumulatedLength = 0;
-		const selectedTasks: TemplateTask[] = [];
-
-		for (const task of sortedTasks) {
-			const estimatedLength = task.estimatedLength ?? 0;
-
-			if (
-				accumulatedLength + estimatedLength <= maxLength ||
-				estimatedLength === 0
-			) {
-				selectedTasks.push(task);
-				accumulatedLength += estimatedLength;
-			} else {
-				log.warn(
-					`Skipping ${task.path} due to length constraints (accumulated: ${accumulatedLength}, estimated: ${estimatedLength}, max: ${maxLength})`,
-				);
-			}
-		}
-
-		// Restore original order
-		selectedTasks.sort((a, b) => a.originalIndex - b.originalIndex);
-
-		log.info(
-			`Trimmed to ${selectedTasks.length} templates (from ${tasks.length})`,
-		);
-		return selectedTasks;
-	}
-
-	/**
-	 * Retry a failed operation with exponential backoff
-	 */
 	private async retryWithBackoff<T>(
 		operation: () => Promise<T>,
 		taskPath: string,
@@ -340,9 +67,6 @@ export class ParallelProcessor {
 		}
 	}
 
-	/**
-	 * Process a single template with retry logic
-	 */
 	private async processSingleTemplate(
 		task: TemplateTask,
 		remainingLength: number,
@@ -432,9 +156,6 @@ export class ParallelProcessor {
 		}
 	}
 
-	/**
-	 * Main parallel processing with planning and retry logic
-	 */
 	async processTemplatesWithPlanning(
 		content: string,
 		basePath: string,
@@ -445,11 +166,11 @@ export class ParallelProcessor {
 		this.startTime = Date.now();
 		this.processedTemplates = [];
 
-		// Step 1: Planning - parse all templates
 		log.info("Step 1: Planning templates...");
-		const plannedTasks = await this.planTemplates(
+		const plannedTasks = await planTemplates(
 			content,
 			basePath,
+			this.config,
 			expandingPaths,
 		);
 
@@ -457,25 +178,23 @@ export class ParallelProcessor {
 			return { content, metadata: [] };
 		}
 
-		// Step 2: Content length detection
 		log.info("Step 2: Detecting content lengths...");
-		const tasksWithLengths = await this.detectContentLengths(
+		const tasksWithLengths = await detectContentLengths(
+			this.config,
 			plannedTasks,
+			this.semaphore,
 			onProgress,
 		);
 
-		// Step 3: Trim based on content length
 		log.info("Step 3: Trimming by content length...");
 		const selectedTasks = this.config.enableContentLengthPlanning
-			? this.trimTasksByLength(tasksWithLengths, maxLength)
+			? trimTasksByLength(tasksWithLengths, maxLength)
 			: tasksWithLengths;
 
-		// Step 4: Process in parallel
 		log.info(
 			`Step 4: Processing ${selectedTasks.length} templates in parallel...`,
 		);
 
-		// Fetch content in parallel for performance
 		const processingPromises = selectedTasks.map(async (task, index) => {
 			await this.semaphore.acquire();
 
@@ -497,7 +216,6 @@ export class ParallelProcessor {
 
 		const results = await Promise.all(processingPromises);
 
-		// Process in document order (by matchIndex) so output order is deterministic
 		results.sort((a, b) => a.task.matchIndex - b.task.matchIndex);
 
 		const parts: { start: number; end: number; replacement: string }[] = [];
@@ -536,7 +254,6 @@ export class ParallelProcessor {
 			}
 		}
 
-		// Build final content from original string and replacements by position
 		let resultContent = content;
 		for (let i = parts.length - 1; i >= 0; i--) {
 			const { start, end, replacement } = parts[i];
@@ -544,7 +261,6 @@ export class ParallelProcessor {
 				resultContent.slice(0, start) + replacement + resultContent.slice(end);
 		}
 
-		// Final progress update
 		onProgress?.({
 			current: selectedTasks.length,
 			total: selectedTasks.length,
