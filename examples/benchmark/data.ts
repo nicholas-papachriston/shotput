@@ -3,9 +3,9 @@
  * Tuned to be intensive (many variables, conditionals, large loop).
  */
 
-export const ITEM_COUNT = 20_0000;
+export const ITEM_COUNT = 20_000;
 export const FLAG_COUNT = 8_000;
-export const EXTRA_KEYS = 10_000;
+export const EXTRA_KEYS = 1_000;
 
 export const TAGS_PER_ITEM = 5;
 

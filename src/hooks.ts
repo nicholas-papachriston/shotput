@@ -1,5 +1,9 @@
 import type { ShotputOutput, TemplateResult, TemplateType } from "./types";
 
+/**
+ * Thrown when a hook aborts the pipeline by returning false.
+ * postAssembly and preOutput hooks can abort; shotput returns output with error set.
+ */
 export class HookAbortError extends Error {
 	constructor(message: string) {
 		super(message);
@@ -7,8 +11,15 @@ export class HookAbortError extends Error {
 	}
 }
 
+/**
+ * Runs before rules and interpolation. Receives raw template string.
+ * Return modified template. Use for pre-processing (e.g. variable injection).
+ */
 export type PreResolveHook = (template: string) => Promise<string> | string;
 
+/**
+ * Per-source result passed to postResolveSource hooks.
+ */
 export interface SourceResult {
 	type: TemplateType;
 	path: string;
@@ -17,28 +28,56 @@ export interface SourceResult {
 	metadata: TemplateResult;
 }
 
+/**
+ * Runs after each source is resolved, before concatenation.
+ * Receives SourceResult; return modified result. Use for per-source transforms (e.g. token counting).
+ */
 export type PostResolveSourceHook = (
 	result: SourceResult,
 ) => Promise<SourceResult> | SourceResult;
 
+/**
+ * Context passed to postAssembly hook: full content and metadata before sectioning.
+ */
 export interface AssemblyContext {
 	content: string;
 	metadata: TemplateResult[];
 	remainingLength: number;
 }
 
+/**
+ * Runs after interpolation, before section parsing.
+ * Receive AssemblyContext; return modified context or false to abort.
+ * Use for global transforms (e.g. PII redaction, LLM-based compression).
+ */
 export type PostAssemblyHook = (
 	ctx: AssemblyContext,
 ) => Promise<AssemblyContext | false> | AssemblyContext | false;
 
+/**
+ * Runs after sectioning, before returning output.
+ * Receive ShotputOutput; return modified output or false to abort.
+ * Use for final tweaks (e.g. formatting, validation).
+ */
 export type PreOutputHook = (
 	output: ShotputOutput,
 ) => Promise<ShotputOutput | false> | ShotputOutput | false;
 
+/**
+ * Lifecycle hooks for the shotput pipeline.
+ * Register via config.hooks. Hooks run in order; postAssembly and preOutput can abort by returning false.
+ *
+ * Pipeline order: preResolve -> rules -> resolve sources -> postResolveSource (per source) ->
+ * concatenate -> postAssembly -> section parse -> preOutput -> return.
+ */
 export interface HookSet {
+	/** Before rules and interpolation */
 	preResolve?: PreResolveHook | PreResolveHook[];
+	/** After each source is resolved */
 	postResolveSource?: PostResolveSourceHook | PostResolveSourceHook[];
+	/** After full content assembled, before section parse. Return false to abort. */
 	postAssembly?: PostAssemblyHook | PostAssemblyHook[];
+	/** After sectioning, before return. Return false to abort. */
 	preOutput?: PreOutputHook | PreOutputHook[];
 }
 

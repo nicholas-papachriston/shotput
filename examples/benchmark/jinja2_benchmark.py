@@ -15,9 +15,9 @@ except ImportError:
 	print("Install Jinja2: uv add jinja2  or  pip install jinja2", file=sys.stderr)
 	sys.exit(1)
 
-ITEM_COUNT = 20_0000
+ITEM_COUNT = 20_000
 FLAG_COUNT = 8_000
-EXTRA_KEYS = 10_000
+EXTRA_KEYS = 1_000
 TAGS_PER_ITEM = 5
 RUNS = 5
 

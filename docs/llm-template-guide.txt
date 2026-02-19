@@ -1,0 +1,108 @@
+> Shotput template syntax reference: source placeholders, rules (conditionals/loops),
+> sections, commands, subagents. Use for building high-fidelity AI agent prompts.
+
+# Shotput Template Authoring Guide for LLMs
+
+## Syntax Quick Reference
+
+| Construct | Syntax | Notes |
+|-----------|--------|-------|
+| File | {{./path/to/file.md}} | Relative to templateDir |
+| Directory | {{./dir/}} | All files concatenated, order preserved |
+| Glob | {{./data/*.json}} | Order preserved |
+| Regex | {{\regex\/g}} | File paths matching regex |
+| HTTP | {{https://example.com/data.json}} | Respects allowedDomains |
+| S3 | {{s3://bucket/path}} | Credentials from env |
+| Skill | {{skill:name}} or {{skill:name:full}} | Local or {{skill:github:org/repo}} |
+| Function | {{TemplateType.Function:/path/fn.js}} | allowFunctions required |
+| Variable | {{context.x}}, {{params.y}}, {{env.Z}} | Nested paths: {{context.project.name}} |
+| Conditional | {{#if expr}}...{{else}}...{{/if}} | expr: context/params/env paths, ==, !=, &&, \|\| |
+| Loop | {{#each context.list}}...{{/each}} | Inside: {{context.__loop.item}}, {{context.__loop.index}} |
+| Section | {{#section:name stable=true}}...{{/section}} | For outputMode sectioned/messages |
+| Command | {{command:name key=val}} | Needs commandsDir, YAML frontmatter |
+| Subagent | {{subagent:name}} | Needs subagentsDir, YAML frontmatter |
+
+## High-Fidelity Patterns
+
+What makes templates "high fidelity" for AI agent use:
+
+- **Stable sections for KV-cache**: Use {{#section:system stable=true}} for identity, AGENTS.md, org policies; content rarely changes between turns.
+
+- **Variable sections**: Use sections without stable or omit stable=true for per-request context (VecForge retrieval, recent changes).
+
+- **Rules for conditional context**: {{#if context.mode === "security"}} to include mode-specific skills/config.
+
+- **Loops for dynamic lists**: {{#each context.relevantFiles}} to iterate over runtime-provided items.
+
+- **Commands for slash actions**: /review, /onboard map to {{command:review}} with params from frontmatter.
+
+- **Subagents for role composition**: resolveSubagent("reviewer") returns system prompt from {{subagent:reviewer}}.
+
+- **Output modes**: outputMode: "sectioned" for per-section budgets; outputMode: "messages" with sectionRoles for chat API (system/user/assistant).
+
+## Example 1: Flat Prompt with Rules and Variables
+
+# Task Prompt
+
+Task: {{context.taskName}}
+Request ID: {{params.requestId}}
+
+## Context
+{{./project/AGENTS.md}}
+
+{{#if context.mode === "security"}}
+## Security Guidelines
+{{skill:security-checklist}}
+{{/if}}
+
+{{#each context.files}}
+- File {{context.__loop.index}}: {{context.__loop.item}}
+{{/each}}
+
+## Instructions
+Complete the task using the above context.
+
+## Example 2: Sectioned Prompt with Stable Prefix
+
+{{#section:system stable=true}}
+# Code Reviewer
+
+You are a code reviewer. Follow the guidelines below.
+
+## Project Conventions
+{{./AGENTS.md}}
+
+## Review Checklist
+{{skill:code-review}}
+{{/section}}
+
+{{#section:context}}
+# Request Context
+
+Files to review:
+{{#each context.files}}
+- {{context.__loop.item}}
+{{/each}}
+
+Diff:
+{{./diff.txt}}
+{{/section}}
+
+{{#section:history}}
+# Conversation History
+(Recent turns inserted here)
+{{/section}}
+
+## Pitfalls and Constraints
+
+- **maxNestingDepth**: 3 by default; nested {{file}} inside {{file}} limited.
+
+- **Expression engine**: expressionEngine: "safe" restricts to ==, !=, &&, || and context/params/env paths; "js" (default) allows full JavaScript.
+
+- **Path security**: allowedBasePaths must include templateDir for relative paths to resolve.
+
+- **Cycles**: Avoid {{fileA}} containing {{fileB}} where fileB includes fileA.
+
+- **Section blocks**: Require outputMode: "sectioned" or "messages" to parse. With outputMode: "flat", section markers pass through as literal text.
+
+- **Command params**: Use {{$param}} in command templates for frontmatter parameter substitution; params flow into context.params for rules.

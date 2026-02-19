@@ -1,0 +1,8 @@
+# Shotput
+
+> Shotput template syntax reference: source placeholders, rules (conditionals/loops),
+> sections, commands, subagents. Use for building high-fidelity AI agent prompts.
+
+## Template Authoring
+
+- [Shotput Template Guide for LLMs](docs/llm-template-guide.txt): Full syntax reference, high-fidelity patterns, examples, pitfalls

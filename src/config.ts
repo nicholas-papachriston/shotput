@@ -1,39 +1,45 @@
 /**
- * @prop debug - whether to log debug messages
- * @prop debugFile - file to write the template to when debugging
- * @prop template - optional template content as string (overrides templateFile if provided)
- * @prop templateDir - ex: .
- * @prop templateFile - ex: ./template.md
- * @prop responseDir - ex: ./responses
- * @prop [maxPromptLength] - def: 100000
- * @prop [maxBucketFiles] - def: 100000 - how many files to attempt to parse from a bucket
- * @prop [awsS3Url] - ex: <ACCOUNT_ID>.s3.amazonaws.com
- * @prop [cloudflareR2Url] - ex: <ACCOUNT_ID>.r2.cloudflarestorage.com
- * @prop [httpTimeout] - def: 30000 - HTTP request timeout in milliseconds
- * @prop [httpStreamThresholdBytes] - def: 1048576 - use response body stream when Content-Length >= this (1MB)
- * @prop [maxConcurrency] - def: 4 - maximum concurrent operations
- * @prop [maxRetries] - def: 3 - maximum retry attempts for failed operations
- * @prop [retryDelay] - def: 1000 - initial retry delay in milliseconds
- * @prop [retryBackoffMultiplier] - def: 2 - exponential backoff multiplier
- * @prop [enableContentLengthPlanning] - def: true - enable planning phase for content length detection
- * @prop [allowedBasePaths] - def: [process.cwd()] - allowed base paths for file access
- * @prop [allowedDomains] - def: [] - allowed HTTP domains (empty = all allowed)
- * @prop [allowHttp] - def: true - whether HTTP requests are allowed
- * @prop [allowFunctions] - def: false - whether function execution is allowed
- * @prop [allowedFunctionPaths] - def: [] - allowed paths for function execution
- * @prop [maxNestingDepth] - def: 3 - maximum depth for nested template interpolation
- * @prop [customSources] - optional array of custom source plugins for extensible source types
- * @prop [context] - optional context object for rule conditions ({{#if context.key}})
- * @prop [expressionEngine] - "js" (default) or "safe" for condition evaluation
- * @prop [tokenizer] - when set, maxPromptLength and planning/trimming use token count; "openai"|"cl100k_base" use heuristic; pass (text)=>number for exact counts (e.g. tiktoken)
- * @prop [tokenizerWorker] - when set, token counting runs in a worker (path to worker script)
- * @prop [hooks] - optional lifecycle hooks (preResolve, postResolveSource, postAssembly, preOutput)
- * @prop [outputMode] - "flat" | "sectioned" | "messages"
- * @prop [sectionBudgets] - per-section max length overrides
- * @prop [sectionRoles] - section name to role for messages mode
- * @prop [commandsDir] - directory for command templates (default ./commands)
- * @prop [parseSubagentFrontmatter] - when true, strip subagent YAML frontmatter and set output.frontmatter
- * @prop [subagentsDir] - directory for subagent definitions (default ./.agents)
+ * Configuration for Shotput template resolution.
+ *
+ * Pass partial config to shotput(); omitted values come from env vars or defaults.
+ * Key template-related options: template or templateFile, templateDir, allowedBasePaths,
+ * context (for {{#if context.x}}), outputMode (for {{#section:name}}), sectionRoles.
+ *
+ * @prop debug - Whether to log debug messages. Default: false
+ * @prop debugFile - Path to write resolved template when debug is true. Default: "./templates/template_debug.txt"
+ * @prop template - Inline template string; overrides templateFile when provided
+ * @prop templateDir - Base directory for relative paths (e.g. {{./file.md}}). Default: "./templates"
+ * @prop templateFile - Template file name when not using template. Default: "template.md"
+ * @prop responseDir - Output directory. Default: "./responses"
+ * @prop maxPromptLength - Max output length (chars or tokens when tokenizer set). Default: 100000
+ * @prop maxBucketFiles - Max files from S3 prefix. Default: 100000
+ * @prop awsS3Url - S3 endpoint. Default: "s3.amazonaws.com"
+ * @prop cloudflareR2Url - R2 endpoint for Cloudflare R2
+ * @prop httpTimeout - HTTP request timeout in ms. Default: 30000
+ * @prop httpStreamThresholdBytes - Stream HTTP body when Content-Length >= this (1MB default)
+ * @prop maxConcurrency - Max concurrent fetches. Default: 4
+ * @prop maxRetries - Retry attempts for failed operations. Default: 3
+ * @prop retryDelay - Initial retry delay in ms. Default: 1000
+ * @prop retryBackoffMultiplier - Exponential backoff multiplier. Default: 2
+ * @prop enableContentLengthPlanning - Enable planning phase and trimming. Default: true
+ * @prop allowedBasePaths - Base paths for {{./path}} resolution. Must include templateDir
+ * @prop allowedDomains - Allowed HTTP domains (empty = all). Comma-separated
+ * @prop allowHttp - Allow HTTP/HTTPS requests. Default: true
+ * @prop allowFunctions - Allow {{TemplateType.Function:/path}}. Default: false
+ * @prop allowedFunctionPaths - Paths allowed for function execution
+ * @prop maxNestingDepth - Max nested {{file}} depth. Default: 3
+ * @prop customSources - Custom SourcePlugin array for extensible source types
+ * @prop context - Object for {{context.x}} and {{#if context.x}} rules
+ * @prop expressionEngine - "js" (full) or "safe" (restricted) for {{#if}} expressions. Default: "js"
+ * @prop tokenizer - When set, maxPromptLength is in tokens. "openai"|"cl100k_base" or (text)=>number
+ * @prop tokenizerWorker - Path to worker for async token counting
+ * @prop hooks - Lifecycle hooks: preResolve, postResolveSource, postAssembly, preOutput
+ * @prop outputMode - "flat" | "sectioned" | "messages". Use sectioned/messages with {{#section:name}}. Default: "flat"
+ * @prop sectionBudgets - Per-section max length: { sectionName: chars }
+ * @prop sectionRoles - Map section names to roles for messages mode: { sectionName: "system"|"user"|"assistant" }
+ * @prop commandsDir - Directory for {{command:name}} templates. Default: "./commands"
+ * @prop parseSubagentFrontmatter - Strip YAML frontmatter and set output.frontmatter. Default: false
+ * @prop subagentsDir - Directory for {{subagent:name}} definitions. Default: "./.agents"
  */
 export interface ShotputConfig {
 	debug: boolean;

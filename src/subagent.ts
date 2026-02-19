@@ -11,6 +11,11 @@ const log = getLogger("subagent");
 
 export const SUBAGENT_PREFIX = "subagent:";
 
+/**
+ * Agent config parsed from YAML frontmatter in subagent definition files.
+ * Common fields: model, temperature, tools, permissions, description, mode.
+ * Supports additional unknown fields for extensibility.
+ */
 export interface SubagentConfig {
 	model?: string;
 	temperature?: number;
@@ -21,9 +26,16 @@ export interface SubagentConfig {
 	[key: string]: unknown;
 }
 
+/**
+ * Result of resolveSubagent(): system prompt plus agent config and metadata.
+ * Handoff point for agent frameworks (e.g. Agent Oxide).
+ */
 export interface ResolvedSubagent {
+	/** Resolved template body; use as system prompt */
 	systemPrompt: string;
+	/** Parsed YAML frontmatter (model, tools, etc.) */
 	agentConfig: SubagentConfig;
+	/** Processing metadata: duration, resultMetadata */
 	metadata: ShotputOutput["metadata"];
 }
 
@@ -124,6 +136,23 @@ export const createSubagentPlugin = (): SourcePlugin => ({
 /**
  * Load a subagent definition file, resolve its template body, and return
  * the system prompt plus agent config (frontmatter).
+ *
+ * Use when you have a file path to a subagent .md file and need the resolved
+ * system prompt and config for an agent framework. The file is parsed for
+ * YAML frontmatter; the body is resolved via shotput ({{placeholders}}, rules).
+ *
+ * @param configInput - Shotput config plus subagentFile (path to .md)
+ * @returns Resolved system prompt, agent config from frontmatter, and metadata
+ *
+ * @example
+ * ```ts
+ * const { systemPrompt, agentConfig } = await resolveSubagent({
+ *   subagentFile: "./agents/reviewer.md",
+ *   allowedBasePaths: ["./"],
+ *   context: { language: "rust" },
+ * });
+ * // Use systemPrompt and agentConfig with your agent runtime.
+ * ```
  */
 export const resolveSubagent = async (
 	configInput: Partial<ShotputConfig> & { subagentFile?: string },

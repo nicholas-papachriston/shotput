@@ -110,11 +110,15 @@ async function runStreamingInternal(
 	};
 }
 
+export type { ShotputConfig } from "./config";
 export type {
+	MessageOutput,
+	OutputMode,
+	Section,
 	ShotputOutput,
 	ShotputSegmentStreamOutput,
 	ShotputStreamingOutput,
-};
+} from "./types";
 export { HookAbortError } from "./hooks";
 export type {
 	HookSet,
@@ -255,28 +259,33 @@ export function compileShotputTemplate(
 }
 
 /**
- * Create a new Shotput instance with optional configuration overrides.
+ * Process a Shotput template and return the resolved content.
  *
- * @param config - Partial configuration to override defaults
+ * @param configOverrides - Partial configuration. Omit to use env vars and defaults.
+ *   Use `template` for inline content, or `templateFile` for file-based templates.
+ *   Set `outputMode: "sectioned"` or `"messages"` when using `{{#section:name}}` blocks.
+ * @returns Resolved content, sections, or messages depending on outputMode.
+ *   Check `result.error` if processing threw.
  *
  * @example
  * ```ts
- * // Use with file-based template
- * const template = shotput({
- *   debug: true,
- *   allowHttp: true,
- *   allowedDomains: ['api.example.com']
- * }).then(console.log).catch(console.error);
+ * const result = await shotput({
+ *   template: "Hello {{./data.txt}}!",
+ *   templateDir: "./data",
+ *   allowedBasePaths: ["./data"],
+ * });
+ * console.log(result.content);
  * ```
  *
  * @example
  * ```ts
- * // Use with inline template content
- * const template = shotput({
- *   template: 'Hello {{./data.txt}}!',
- *   templateDir: '/path/to/base',
- *   allowedBasePaths: ['/path/to/base']
- * }).then(console.log).catch(console.error);
+ * const result = await shotput({
+ *   templateDir: "./templates",
+ *   templateFile: "prompt.md",
+ *   outputMode: "messages",
+ *   sectionRoles: { system: "system", context: "user" },
+ * });
+ * console.log(result.messages);
  * ```
  */
 export function shotput(
@@ -286,9 +295,19 @@ export function shotput(
 }
 
 /**
- * Run template load, preResolve hooks, and rules, then stream segments in document order
- * as each placeholder is resolved. Same stream as shotputStreamingSegments; postAssembly,
- * preOutput, and sectioning are not run.
+ * Stream resolved segments in document order as each placeholder is resolved.
+ *
+ * Runs template load, preResolve hooks, and rules. PostAssembly, preOutput, and
+ * sectioning are not run. Use when you need incremental output for large templates.
+ *
+ * @param configOverrides - Partial configuration (same as shotput).
+ * @returns Stream of string segments and metadata promise.
+ *
+ * @example
+ * ```ts
+ * const { stream, metadata } = await shotputStreaming({ template, templateDir, allowedBasePaths });
+ * // Consume stream via stream.getReader() and read(); metadata resolves when stream ends.
+ * ```
  */
 export async function shotputStreaming(
 	configOverrides?: Partial<ShotputConfig>,
@@ -323,10 +342,14 @@ export async function shotputStreaming(
 }
 
 /**
- * Run template load, preResolve hooks, and rules, then stream segments in document order
- * as each placeholder is resolved. PostAssembly, preOutput, and sectioning are not run;
- * consumers can concatenate the stream and run hooks if needed. literalMap can be used
- * for client-side substituteLiterals when custom sources emit literal placeholders.
+ * Stream segments in document order as each placeholder is resolved.
+ *
+ * Same as shotputStreaming but also returns literalMap and literalMapPromise.
+ * Use literalMap when custom sources emit literal placeholders for client-side
+ * substitution after concatenating the stream.
+ *
+ * @param configOverrides - Partial configuration (same as shotput).
+ * @returns Stream, metadata promise, optional literalMap and literalMapPromise.
  */
 export async function shotputStreamingSegments(
 	configOverrides?: Partial<ShotputConfig>,
