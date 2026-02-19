@@ -65,6 +65,15 @@ export interface HandlerResultForApply {
 	mergeContext?: Record<string, unknown>;
 }
 
+function replaceAt(
+	str: string,
+	start: number,
+	end: number,
+	replacement: string,
+): string {
+	return str.slice(0, start) + replacement + str.slice(end);
+}
+
 export async function applyReplacement(
 	handlerResult: HandlerResultForApply,
 	m: string,
@@ -88,6 +97,7 @@ export async function applyReplacement(
 		literalBox: { literals: Map<string, string> } | undefined,
 		mergeContext: Record<string, unknown> | undefined,
 	) => Promise<ApplyInterpolationResult>,
+	matchIndices?: { start: number; end: number },
 ): Promise<{
 	result: string;
 	remainingLength: number;
@@ -98,6 +108,10 @@ export async function applyReplacement(
 		type: templateType,
 		duration: Date.now() - start,
 	};
+	const doReplace = (content: string, repl: string) =>
+		matchIndices != null
+			? replaceAt(content, matchIndices.start, matchIndices.end, repl)
+			: content.replace(m, repl);
 	let replacement = handlerResult.replacement;
 	let effectiveHandlerResult = handlerResult;
 	const postSourceHooks = getPostResolveSourceHooks(config);
@@ -123,7 +137,7 @@ export async function applyReplacement(
 		effectiveHandlerResult = {
 			...handlerResult,
 			replacement,
-			operationResults: currentResult.replace(m, replacement),
+			operationResults: doReplace(currentResult, replacement),
 		};
 	}
 	const afterRules = replacement ? evaluateRules(replacement, config) : "";
@@ -143,7 +157,7 @@ export async function applyReplacement(
 			handlerResult.mergeContext,
 		);
 		return {
-			result: currentResult.replace(m, nested.processedTemplate),
+			result: doReplace(currentResult, nested.processedTemplate),
 			remainingLength: nested.remainingLength,
 			metadata: [entry, ...(nested.resultMetadata ?? [])],
 		};
@@ -151,7 +165,7 @@ export async function applyReplacement(
 	const finalContent = afterRules.length > 0 ? afterRules : (replacement ?? "");
 	const resultStr =
 		replacement != null
-			? currentResult.replace(m, finalContent)
+			? doReplace(currentResult, finalContent)
 			: effectiveHandlerResult.operationResults;
 	return {
 		result: resultStr,

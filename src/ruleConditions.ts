@@ -17,21 +17,35 @@ const conditionFnCache = new Map<
 	) => boolean
 >();
 
+const FLAGS_PATH_REGEX = /^context\.flags\.(\w+)$/;
+
 export function evaluateConditionJs(expr: string, ctx: RuleContext): boolean {
+	const trimmed = expr.trim();
+	const flagsMatch = FLAGS_PATH_REGEX.exec(trimmed);
+	if (flagsMatch) {
+		const key = flagsMatch[1];
+		const flags = ctx.context?.["flags"];
+		const val =
+			flags != null && typeof flags === "object"
+				? (flags as Record<string, unknown>)[key]
+				: undefined;
+		return Boolean(val);
+	}
+
 	try {
-		let fn = conditionFnCache.get(expr);
+		let fn = conditionFnCache.get(trimmed);
 		if (!fn) {
 			fn = new Function(
 				"context",
 				"env",
 				"params",
-				`return Boolean(${expr})`,
+				`return Boolean(${trimmed})`,
 			) as (
 				context: Record<string, unknown>,
 				env: NodeJS.ProcessEnv,
 				params: Record<string, unknown>,
 			) => boolean;
-			conditionFnCache.set(expr, fn);
+			conditionFnCache.set(trimmed, fn);
 		}
 		return fn(ctx.context, ctx.env, ctx.params ?? {});
 	} catch (err) {

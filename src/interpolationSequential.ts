@@ -57,7 +57,7 @@ export async function runSequentialInterpolation(
 	const resultMetadata: InterpolationResultMeta[] = [];
 	let result = content;
 	let currentRemainingLength = remainingLength;
-	let lastEndInResult = 0;
+	let offset = 0;
 	let lastEmittedInResult = 0;
 
 	const runInterpolationForApply = (
@@ -88,11 +88,19 @@ export async function runSequentialInterpolation(
 		return str.slice(0, startInResult) + replacement + str.slice(endInResult);
 	}
 
-	for (const { match } of matchEntries) {
-		const matchIndexInResult = result.indexOf(match, lastEndInResult);
-		if (matchIndexInResult < 0) continue;
-		const startInResult = matchIndexInResult;
-		const endInResult = matchIndexInResult + match.length;
+	for (const { match, start, end } of matchEntries) {
+		let startInResult = start + offset;
+		let endInResult = end + offset;
+		if (
+			startInResult < 0 ||
+			endInResult > result.length ||
+			result.slice(startInResult, endInResult) !== match
+		) {
+			const idx = result.indexOf(match);
+			if (idx < 0) continue;
+			startInResult = idx;
+			endInResult = idx + match.length;
+		}
 
 		if (emit) {
 			const prefix = result.slice(lastEmittedInResult, startInResult);
@@ -111,7 +119,6 @@ export async function runSequentialInterpolation(
 					emit(match);
 					lastEmittedInResult = startInResult + match.length;
 				}
-				lastEndInResult = startInResult + match.length;
 				continue;
 			}
 			if (templateType === TemplateType.Custom) {
@@ -121,7 +128,7 @@ export async function runSequentialInterpolation(
 				log.warn(`Cycle detected for path: ${path}`);
 				const cycleMessage = `${CYCLE_MESSAGE_PREFIX}${path}]`;
 				result = replaceAt(result, startInResult, endInResult, cycleMessage);
-				lastEndInResult = startInResult + cycleMessage.length;
+				offset += cycleMessage.length - match.length;
 				if (emit) {
 					emit(cycleMessage);
 					lastEmittedInResult = startInResult + cycleMessage.length;
@@ -162,6 +169,7 @@ export async function runSequentialInterpolation(
 							expandingPaths,
 							resolvedLiteralBox,
 							runInterpolationForApply,
+							{ start: startInResult, end: endInResult },
 						);
 						const replacement = applied.result.slice(
 							startInResult,
@@ -169,7 +177,7 @@ export async function runSequentialInterpolation(
 								(applied.result.length - result.length + match.length),
 						);
 						result = applied.result;
-						lastEndInResult = startInResult + replacement.length;
+						offset += applied.result.length - result.length;
 						if (emit) {
 							emit(replacement);
 							lastEmittedInResult = startInResult + replacement.length;
@@ -194,7 +202,7 @@ export async function runSequentialInterpolation(
 								(operationResults.length - result.length + match.length),
 						);
 						result = operationResults;
-						lastEndInResult = startInResult + replacement.length;
+						offset += operationResults.length - result.length;
 						if (emit) {
 							emit(replacement);
 							lastEmittedInResult = startInResult + replacement.length;
@@ -213,7 +221,7 @@ export async function runSequentialInterpolation(
 							log.warn(`No custom plugin matched for path: ${path}`);
 							const errMsg = `[Error reading ${path}]`;
 							result = replaceAt(result, startInResult, endInResult, errMsg);
-							lastEndInResult = startInResult + errMsg.length;
+							offset += errMsg.length - match.length;
 							if (emit) {
 								emit(errMsg);
 								lastEmittedInResult = startInResult + errMsg.length;
@@ -250,6 +258,7 @@ export async function runSequentialInterpolation(
 								expandingPaths,
 								resolvedLiteralBox,
 								runInterpolationForApply,
+								{ start: startInResult, end: endInResult },
 							);
 							const replacement = applied.result.slice(
 								startInResult,
@@ -257,7 +266,7 @@ export async function runSequentialInterpolation(
 									(applied.result.length - result.length + match.length),
 							);
 							result = applied.result;
-							lastEndInResult = startInResult + replacement.length;
+							offset += applied.result.length - result.length;
 							if (emit) {
 								emit(replacement);
 								lastEmittedInResult = startInResult + replacement.length;
@@ -273,7 +282,7 @@ export async function runSequentialInterpolation(
 								const key = `${LITERAL_PLACEHOLDER_PREFIX}${resolvedLiteralBox.literals.size}__`;
 								resolvedLiteralBox.literals.set(key, handlerResult.replacement);
 								result = replaceAt(result, startInResult, endInResult, key);
-								lastEndInResult = startInResult + key.length;
+								offset += key.length - match.length;
 								if (emit) {
 									emit(key);
 									lastEmittedInResult = startInResult + key.length;
@@ -287,7 +296,7 @@ export async function runSequentialInterpolation(
 											match.length),
 								);
 								result = handlerResult.operationResults;
-								lastEndInResult = startInResult + replacement.length;
+								offset += handlerResult.operationResults.length - result.length;
 								if (emit) {
 									emit(replacement);
 									lastEmittedInResult = startInResult + replacement.length;
@@ -325,7 +334,7 @@ export async function runSequentialInterpolation(
 			log.error(`Failed to read path ${path}: ${err}`);
 			const errMsg = `[Error reading ${path}]`;
 			result = replaceAt(result, startInResult, endInResult, errMsg);
-			lastEndInResult = startInResult + errMsg.length;
+			offset += errMsg.length - match.length;
 			if (emit) {
 				emit(errMsg);
 				lastEmittedInResult = startInResult + errMsg.length;

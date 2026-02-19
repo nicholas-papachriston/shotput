@@ -2,7 +2,10 @@ export const IF_CLOSE = "{{/if}}";
 export const ELSE_MARKER = "{{else}}";
 export const EACH_CLOSE = "{{/each}}";
 
-/** New regex per call so concurrent callers do not share lastIndex. */
+/** Single combined regex for if/each - one exec() instead of two, no allocation per call. */
+const BLOCK_OPEN_REGEX = /\{\{#(if|each)\s+(.+?)\}\}/g;
+
+/** New regex per call for backwards compatibility; prefer findNextBlock. */
 export const createIfOpenRegex = () => /\{\{#if\s+(.+?)\}\}/g;
 export const createEachOpenRegex = () => /\{\{#each\s+(.+?)\}\}/g;
 
@@ -58,6 +61,7 @@ export function findMatchingEachClose(
  * Returns -1 if no else at this level.
  */
 export function findElseAtDepth(blockContent: string): number {
+	if (!blockContent.includes(ELSE_MARKER)) return -1;
 	let depth = 0;
 	let pos = 0;
 	while (pos < blockContent.length) {
@@ -83,8 +87,68 @@ export function findElseAtDepth(blockContent: string): number {
 	return -1;
 }
 
+export interface ParsedBlock {
+	kind: "if" | "each";
+	expr: string;
+	openStart: number;
+	openEnd: number;
+	closeIndex: number;
+	closeTagLength: number;
+	elseIndex: number;
+}
+
+const PARSE_CACHE_CAP = 100;
+const parseCache = new Map<string, ParsedBlock[]>();
+
+function parseAllBlocksUncached(content: string): ParsedBlock[] {
+	const blocks: ParsedBlock[] = [];
+	BLOCK_OPEN_REGEX.lastIndex = 0;
+	let m: RegExpExecArray | null = BLOCK_OPEN_REGEX.exec(content);
+	while (m !== null) {
+		const kind = m[1] as "if" | "each";
+		const expr = (m[2] ?? "").trim();
+		const openStart = m.index;
+		const openEnd = m.index + m[0].length;
+		const closeTag = kind === "if" ? IF_CLOSE : EACH_CLOSE;
+		const closeTagLength = closeTag.length;
+		const findClose = kind === "if" ? findMatchingClose : findMatchingEachClose;
+		const closeIndex = findClose(content, openEnd);
+		if (closeIndex === -1) break;
+		const blockContent = content.slice(openEnd, closeIndex);
+		const elseIndex = kind === "if" ? findElseAtDepth(blockContent) : -1;
+		blocks.push({
+			kind,
+			expr,
+			openStart,
+			openEnd,
+			closeIndex,
+			closeTagLength,
+			elseIndex,
+		});
+		m = BLOCK_OPEN_REGEX.exec(content);
+	}
+	return blocks;
+}
+
+/**
+ * Parse all {{#if}} and {{#each}} blocks in one pass. Returns blocks in document order.
+ * Results are cached by template string (FIFO, cap 100) for repeated renders.
+ */
+export function parseAllBlocks(content: string): ParsedBlock[] {
+	let cached = parseCache.get(content);
+	if (cached !== undefined) return cached;
+	cached = parseAllBlocksUncached(content);
+	if (parseCache.size >= PARSE_CACHE_CAP) {
+		const firstKey = parseCache.keys().next().value;
+		if (firstKey !== undefined) parseCache.delete(firstKey);
+	}
+	parseCache.set(content, cached);
+	return cached;
+}
+
 /**
  * Find the next {{#if}} or {{#each}} in content and return which one and its match.
+ * Uses single combined regex to avoid two exec() passes and RegExp allocations.
  */
 export function findNextBlock(
 	content: string,
@@ -92,17 +156,14 @@ export function findNextBlock(
 	| { kind: "if"; match: RegExpExecArray }
 	| { kind: "each"; match: RegExpExecArray }
 	| null {
-	const ifRegex = createIfOpenRegex();
-	const eachRegex = createEachOpenRegex();
-	const ifMatch = ifRegex.exec(content);
-	const eachMatch = eachRegex.exec(content);
-	if (!ifMatch && !eachMatch) return null;
-	if (ifMatch && !eachMatch) return { kind: "if", match: ifMatch };
-	if (eachMatch && !ifMatch) return { kind: "each", match: eachMatch };
-	if (ifMatch && eachMatch) {
-		return ifMatch.index <= eachMatch.index
-			? { kind: "if", match: ifMatch }
-			: { kind: "each", match: eachMatch };
-	}
-	return null;
+	BLOCK_OPEN_REGEX.lastIndex = 0;
+	const m = BLOCK_OPEN_REGEX.exec(content);
+	if (!m) return null;
+	const kind = m[1] as "if" | "each";
+	const expr = m[2] ?? "";
+	// match[1] must be the expression for rules.ts compatibility
+	const fakeExecArray = [m[0], expr] as unknown as RegExpExecArray;
+	(fakeExecArray as { index: number; input: string }).index = m.index;
+	(fakeExecArray as { index: number; input: string }).input = content;
+	return { kind, match: fakeExecArray };
 }
