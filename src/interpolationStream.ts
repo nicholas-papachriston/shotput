@@ -129,10 +129,13 @@ export function interpolationStream(
 				emit,
 			);
 			const processedContent = parallelResult.content;
-			const processedTemplate = substituteVariables(
-				evaluateRules(processedContent, effectiveConfig),
-				effectiveConfig,
-			);
+			const processedTemplate =
+				parallelResult.replacementsNeedRulesAndVars === false
+					? processedContent
+					: substituteVariables(
+							evaluateRules(processedContent, effectiveConfig),
+							effectiveConfig,
+						);
 			currentMetadata = parallelResult.metadata.map((m) => ({
 				path: m.path,
 				type: m.type,

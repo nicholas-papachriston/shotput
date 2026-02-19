@@ -1,6 +1,10 @@
 import type { ShotputConfig } from "./config";
 
 const pathKeysCache = new Map<string, string[]>();
+const variableResolverCache = new Map<
+	string,
+	{ type: "context" | "params" | "env"; keyPath: string }
+>();
 
 function getPathKeys(path: string): string[] {
 	let keys = pathKeysCache.get(path);
@@ -25,61 +29,70 @@ function getByPath(obj: Record<string, unknown>, path: string): unknown {
 /**
  * Resolve a variable path (context.xxx, params.xxx, env.xxx) to a string value.
  * Used for {{context.x}}, {{params.x}}, {{env.X}} substitution in template body.
+ * Uses a resolver cache to avoid repeated prefix parsing for repeated paths.
  */
 export function getVariableValue(path: string, config: ShotputConfig): string {
 	const trimmed = path.trim();
 	if (!trimmed) return "";
 
-	if (trimmed.startsWith("context.")) {
-		const keyPath = trimmed.slice(8).trim();
-		const ctx = config.context ?? {};
-		const value = getByPath(ctx as Record<string, unknown>, keyPath);
-		return value != null ? String(value) : "";
-	}
-	if (trimmed.startsWith("params.")) {
-		const params = (config as { params?: Record<string, unknown> }).params;
-		if (!params) return "";
-		const keyPath = trimmed.slice(7).trim();
-		const value = getByPath(params, keyPath);
-		return value != null ? String(value) : "";
-	}
-	if (trimmed.startsWith("env.")) {
-		const key = trimmed.slice(4).trim();
-		const env = typeof process !== "undefined" ? process.env : {};
-		const value = env[key];
-		return value != null ? String(value) : "";
+	let resolved = variableResolverCache.get(trimmed);
+	if (!resolved) {
+		if (trimmed.startsWith("context.")) {
+			resolved = { type: "context", keyPath: trimmed.slice(8).trim() };
+		} else if (trimmed.startsWith("params.")) {
+			resolved = { type: "params", keyPath: trimmed.slice(7).trim() };
+		} else if (trimmed.startsWith("env.")) {
+			resolved = { type: "env", keyPath: trimmed.slice(4).trim() };
+		} else {
+			return "";
+		}
+		variableResolverCache.set(trimmed, resolved);
 	}
 
-	return "";
+	if (resolved.type === "context") {
+		const ctx = config.context ?? {};
+		const value = getByPath(ctx as Record<string, unknown>, resolved.keyPath);
+		return value != null ? String(value) : "";
+	}
+	if (resolved.type === "params") {
+		const params = (config as { params?: Record<string, unknown> }).params;
+		if (!params) return "";
+		const value = getByPath(params, resolved.keyPath);
+		return value != null ? String(value) : "";
+	}
+	const env = typeof process !== "undefined" ? process.env : {};
+	const value = env[resolved.keyPath];
+	return value != null ? String(value) : "";
 }
 
 /** Match {{context.xxx}}, {{params.xxx}}, {{env.xxx}} (full placeholder only). */
 const VARIABLE_PLACEHOLDER =
 	/\{\{\s*(context\.[^}]*|params\.[^}]*|env\.[^}]*)\s*\}\}/g;
 
-/** Fast path: replace __loop vars with direct lookup. Use before substituteVariables in each iterations. */
-const LOOP_INDEX_PLACEHOLDER = /\{\{\s*context\.__loop\.index\s*\}\}/g;
-const LOOP_ITEM_NAME_PLACEHOLDER = /\{\{\s*context\.__loop\.item\.name\s*\}\}/g;
-const LOOP_ITEM_VALUE_PLACEHOLDER =
-	/\{\{\s*context\.__loop\.item\.value\s*\}\}/g;
-const LOOP_ITEM_PLACEHOLDER = /\{\{\s*context\.__loop\.item\s*\}\}/g;
+/** Single regex for all __loop placeholders; most specific patterns first. */
+const LOOP_PLACEHOLDER =
+	/\{\{\s*context\.__loop\.(item\.name|item\.value|index|item)\s*\}\}/g;
 
 export function substituteLoopItemVariables(
 	content: string,
 	item: unknown,
 	index: number,
 ): string {
+	if (!content.includes("context.__loop")) return content;
 	const itemObj =
 		item != null && typeof item === "object"
 			? (item as Record<string, unknown>)
 			: {};
 	const nameVal = itemObj["name"] != null ? String(itemObj["name"]) : "";
 	const valueVal = itemObj["value"] != null ? String(itemObj["value"]) : "";
-	return content
-		.replace(LOOP_INDEX_PLACEHOLDER, String(index))
-		.replace(LOOP_ITEM_NAME_PLACEHOLDER, nameVal)
-		.replace(LOOP_ITEM_VALUE_PLACEHOLDER, valueVal)
-		.replace(LOOP_ITEM_PLACEHOLDER, item != null ? String(item) : "");
+	const itemVal = item != null ? String(item) : "";
+	const indexVal = String(index);
+	return content.replace(LOOP_PLACEHOLDER, (_, kind: string) => {
+		if (kind === "item.name") return nameVal;
+		if (kind === "item.value") return valueVal;
+		if (kind === "index") return indexVal;
+		return itemVal;
+	});
 }
 
 /**

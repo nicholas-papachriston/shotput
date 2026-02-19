@@ -168,6 +168,7 @@ export class ParallelProcessor {
 	): Promise<{
 		content: string;
 		metadata: TemplateResult[];
+		replacementsNeedRulesAndVars: boolean;
 		pendingSuffix?: string;
 	}> {
 		this.startTime = Date.now();
@@ -182,7 +183,7 @@ export class ParallelProcessor {
 		);
 
 		if (plannedTasks.length === 0) {
-			return { content, metadata: [] };
+			return { content, metadata: [], replacementsNeedRulesAndVars: false };
 		}
 
 		log.info("Step 2: Detecting content lengths...");
@@ -227,6 +228,15 @@ export class ParallelProcessor {
 
 		const parts: { start: number; end: number; replacement: string }[] = [];
 		let remainingLength = maxLength;
+		let replacementsNeedRulesAndVars = false;
+		const RULE_VAR_MARKERS = [
+			"{{#",
+			"{{/",
+			"{{else",
+			"{{context.",
+			"{{params.",
+			"{{env.",
+		];
 
 		for (const { task, processed, result } of results) {
 			this.processedTemplates.push(result);
@@ -252,21 +262,40 @@ export class ParallelProcessor {
 					replacement = afterHook.content;
 				}
 				parts.push({ start, end, replacement });
+				if (replacement.includes("{{")) {
+					for (const m of RULE_VAR_MARKERS) {
+						if (replacement.includes(m)) {
+							replacementsNeedRulesAndVars = true;
+							break;
+						}
+					}
+				}
 				remainingLength -= processed.length;
 			} else if (result.error) {
 				const errorMsg = result.error.startsWith("[")
 					? result.error
 					: `[Error reading ${task.path}]`;
 				parts.push({ start, end, replacement: errorMsg });
+				if (errorMsg.includes("{{")) {
+					for (const m of RULE_VAR_MARKERS) {
+						if (errorMsg.includes(m)) {
+							replacementsNeedRulesAndVars = true;
+							break;
+						}
+					}
+				}
 			}
 		}
 
-		let resultContent = content;
-		for (let i = parts.length - 1; i >= 0; i--) {
-			const { start, end, replacement } = parts[i];
-			resultContent =
-				resultContent.slice(0, start) + replacement + resultContent.slice(end);
+		const segments: string[] = [];
+		let lastEnd = 0;
+		for (const part of parts) {
+			segments.push(content.slice(lastEnd, part.start));
+			segments.push(part.replacement);
+			lastEnd = part.end;
 		}
+		segments.push(content.slice(lastEnd));
+		const resultContent = segments.join("");
 
 		let pendingSuffix: string | undefined;
 		if (emit) {
@@ -293,6 +322,7 @@ export class ParallelProcessor {
 		return {
 			content: resultContent,
 			metadata: this.processedTemplates,
+			replacementsNeedRulesAndVars,
 			...(pendingSuffix !== undefined && { pendingSuffix }),
 		};
 	}

@@ -3,9 +3,9 @@
  * Tuned to be intensive (many variables, conditionals, large loop).
  */
 
-export const ITEM_COUNT = 2000;
-export const FLAG_COUNT = 80;
-export const EXTRA_KEYS = 100;
+export const ITEM_COUNT = 20_0000;
+export const FLAG_COUNT = 8_000;
+export const EXTRA_KEYS = 10_000;
 
 export interface BenchmarkContext {
 	title: string;

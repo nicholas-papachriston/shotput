@@ -171,13 +171,13 @@ export async function runSequentialInterpolation(
 							runInterpolationForApply,
 							{ start: startInResult, end: endInResult },
 						);
-						const replacement = applied.result.slice(
-							startInResult,
-							startInResult +
-								(applied.result.length - result.length + match.length),
-						);
+						const oldLen = result.length;
 						result = applied.result;
-						offset += applied.result.length - result.length;
+						offset += result.length - oldLen;
+						const replacement = result.slice(
+							startInResult,
+							startInResult + (result.length - oldLen + match.length),
+						);
 						if (emit) {
 							emit(replacement);
 							lastEmittedInResult = startInResult + replacement.length;
@@ -196,13 +196,13 @@ export async function runSequentialInterpolation(
 							currentRemainingLength,
 							basePath,
 						);
-						const replacement = operationResults.slice(
-							startInResult,
-							startInResult +
-								(operationResults.length - result.length + match.length),
-						);
+						const oldLen = result.length;
 						result = operationResults;
-						offset += operationResults.length - result.length;
+						offset += result.length - oldLen;
+						const replacement = result.slice(
+							startInResult,
+							startInResult + (result.length - oldLen + match.length),
+						);
 						if (emit) {
 							emit(replacement);
 							lastEmittedInResult = startInResult + replacement.length;
@@ -260,13 +260,13 @@ export async function runSequentialInterpolation(
 								runInterpolationForApply,
 								{ start: startInResult, end: endInResult },
 							);
-							const replacement = applied.result.slice(
-								startInResult,
-								startInResult +
-									(applied.result.length - result.length + match.length),
-							);
+							const oldLen = result.length;
 							result = applied.result;
-							offset += applied.result.length - result.length;
+							offset += result.length - oldLen;
+							const replacement = result.slice(
+								startInResult,
+								startInResult + (result.length - oldLen + match.length),
+							);
 							if (emit) {
 								emit(replacement);
 								lastEmittedInResult = startInResult + replacement.length;
@@ -288,15 +288,13 @@ export async function runSequentialInterpolation(
 									lastEmittedInResult = startInResult + key.length;
 								}
 							} else {
-								const replacement = handlerResult.operationResults.slice(
-									startInResult,
-									startInResult +
-										(handlerResult.operationResults.length -
-											result.length +
-											match.length),
-								);
+								const oldLen = result.length;
 								result = handlerResult.operationResults;
-								offset += handlerResult.operationResults.length - result.length;
+								offset += result.length - oldLen;
+								const replacement = result.slice(
+									startInResult,
+									startInResult + (result.length - oldLen + match.length),
+								);
 								if (emit) {
 									emit(replacement);
 									lastEmittedInResult = startInResult + replacement.length;

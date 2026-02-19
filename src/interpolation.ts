@@ -100,19 +100,25 @@ export const interpolation = async (
 			`Using parallel processing (depth ${depth}/${maxDepth}) with content length planning`,
 		);
 		const processor = new ParallelProcessor(config);
-		const { content: processedContent, metadata } =
-			await processor.processTemplatesWithPlanning(
-				contentAfterVariables,
-				basePath,
-				remainingLength,
-				undefined,
-				expandingPaths,
-			);
-
-		processedTemplate = substituteVariables(
-			evaluateRules(processedContent, effectiveConfig),
-			effectiveConfig,
+		const {
+			content: processedContent,
+			metadata,
+			replacementsNeedRulesAndVars,
+		} = await processor.processTemplatesWithPlanning(
+			contentAfterVariables,
+			basePath,
+			remainingLength,
+			undefined,
+			expandingPaths,
 		);
+
+		processedTemplate =
+			replacementsNeedRulesAndVars === false
+				? processedContent
+				: substituteVariables(
+						evaluateRules(processedContent, effectiveConfig),
+						effectiveConfig,
+					);
 		currentMetadata = metadata.map((m) => ({
 			path: m.path,
 			type: m.type,

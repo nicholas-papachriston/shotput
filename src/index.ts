@@ -13,6 +13,7 @@ import {
 } from "./hooks";
 import { interpolationStream } from "./interpolationStream";
 import { getLogger } from "./logger";
+import { parseAllBlocks } from "./ruleBlocks";
 import { evaluateRules } from "./rules";
 import { formatMessages, parseOutputSections } from "./sections";
 import { consumeStreamToString } from "./streamUtils";
@@ -215,6 +216,37 @@ const run = async (config: ShotputConfig): Promise<ShotputOutput> => {
 		};
 	}
 };
+
+/**
+ * Pre-compile a template for repeated renders. Warms the block parse cache and returns
+ * a render function that accepts config overrides (e.g. context). Use when rendering
+ * the same template many times with varying context.
+ *
+ * @param template - Template string
+ * @param baseConfig - Base configuration (templateDir, allowedBasePaths, context, etc.)
+ * @returns Async render function that merges baseConfig with overrides and runs shotput
+ *
+ * @example
+ * ```ts
+ * const compiled = compileShotputTemplate(template, { templateDir, allowedBasePaths });
+ * const out1 = await compiled({ context: { items: [...] } });
+ * const out2 = await compiled({ context: { items: [...] } }); // reuses cached parse
+ * ```
+ */
+export function compileShotputTemplate(
+	template: string,
+	baseConfig?: Partial<ShotputConfig>,
+): (
+	configOverrides?: Partial<ShotputConfig>,
+) => Promise<import("./types").ShotputOutput> {
+	parseAllBlocks(template);
+	return (configOverrides?: Partial<ShotputConfig>) =>
+		shotput({
+			...baseConfig,
+			template,
+			...configOverrides,
+		});
+}
 
 /**
  * Create a new Shotput instance with optional configuration overrides.

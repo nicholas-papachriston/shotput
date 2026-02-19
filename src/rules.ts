@@ -1,10 +1,5 @@
 import type { ShotputConfig } from "./config";
-import {
-	ELSE_MARKER,
-	type ParsedBlock,
-	findElseAtDepth,
-	parseAllBlocks,
-} from "./ruleBlocks";
+import { ELSE_MARKER, type ParsedBlock, parseAllBlocks } from "./ruleBlocks";
 import {
 	type RuleContext,
 	evaluateCondition,
@@ -37,6 +32,8 @@ function getTopLevelBlocks(blocks: ParsedBlock[]): ParsedBlock[] {
  * Builds output via segments + single join; processes top-level blocks in O(n).
  */
 export function evaluateRules(content: string, config: ShotputConfig): string {
+	if (!content.includes("{{#")) return content;
+
 	const context = config.context ?? {};
 	const env = typeof process !== "undefined" ? process.env : {};
 	const params = (config as { params?: Record<string, unknown> }).params;
@@ -56,7 +53,7 @@ export function evaluateRules(content: string, config: ShotputConfig): string {
 		out.push(content.slice(pos, block.openStart));
 
 		if (block.kind === "if") {
-			const elseIdx = findElseAtDepth(blockContent);
+			const elseIdx = block.elseIndex;
 			const consequent =
 				elseIdx === -1 ? blockContent : blockContent.slice(0, elseIdx);
 			const alternate =
@@ -69,11 +66,17 @@ export function evaluateRules(content: string, config: ShotputConfig): string {
 		} else {
 			const arr = getArrayFromExpr(block.expr, ctx);
 			const chunks: string[] = [];
+			const loopState: { item: unknown; index: number } = {
+				item: undefined,
+				index: 0,
+			};
+			const loopContext = Object.create(context) as Record<string, unknown>;
+			loopContext["__loop"] = loopState;
+			const loopConfig = Object.create(config) as ShotputConfig;
+			loopConfig.context = loopContext;
 			for (let i = 0; i < arr.length; i++) {
-				const loopContext = Object.create(context) as Record<string, unknown>;
-				loopContext["__loop"] = { item: arr[i], index: i };
-				const loopConfig = Object.create(config) as ShotputConfig;
-				loopConfig.context = loopContext;
+				loopState.item = arr[i];
+				loopState.index = i;
 				const evaluated = evaluateRules(blockContent, loopConfig);
 				const withLoop = substituteLoopItemVariables(evaluated, arr[i], i);
 				const substituted = substituteVariables(withLoop, loopConfig);
