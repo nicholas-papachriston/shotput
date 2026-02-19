@@ -7,9 +7,17 @@ export const ITEM_COUNT = 20_0000;
 export const FLAG_COUNT = 8_000;
 export const EXTRA_KEYS = 10_000;
 
+export const TAGS_PER_ITEM = 5;
+
 export interface BenchmarkContext {
 	title: string;
-	items: Array<{ id: number; name: string; value: number }>;
+	items: Array<{
+		id: number;
+		name: string;
+		value: number;
+		tags: string[];
+		isHigh: boolean;
+	}>;
 	flags: Record<string, boolean>;
 	meta: { version: string; env: string };
 	[key: string]: unknown;
@@ -18,10 +26,17 @@ export interface BenchmarkContext {
 function buildContext(): BenchmarkContext {
 	const items: BenchmarkContext["items"] = [];
 	for (let i = 0; i < ITEM_COUNT; i++) {
+		const tags: string[] = [];
+		for (let t = 0; t < TAGS_PER_ITEM; t++) {
+			tags.push(`tag-${i}-${t}`);
+		}
+		const value = i % 100;
 		items.push({
 			id: i,
 			name: `item-${i}`,
-			value: i % 100,
+			value,
+			tags,
+			isHigh: value >= 50,
 		});
 	}
 	const flags: Record<string, boolean> = {};
@@ -43,22 +58,28 @@ function buildContext(): BenchmarkContext {
 
 export const benchmarkContext = buildContext();
 
-/** Shotput: {{context.x}}, {{#if}}, {{#each}}, {{context.__loop.item}} */
+/** Shotput: {{context.x}}, {{#if}}, {{#each}}, nested loops, nested conditionals */
 export function getShotputTemplate(): string {
 	const lines: string[] = [
 		"# {{context.title}}\n",
 		"Meta: {{context.meta.version}} / {{context.meta.env}}\n",
 	];
 	for (let i = 0; i < FLAG_COUNT; i++) {
+		const next = (i + 1) % FLAG_COUNT;
 		lines.push(
-			`{{#if context.flags.flag_${i}}}\nFlag ${i} is on.\n{{else}}\nFlag ${i} is off.\n{{/if}}\n`,
+			`{{#if context.flags.flag_${i}}}\n{{#if context.flags.flag_${next}}}\nFlag ${i}+${next} both on.\n{{else}}\nFlag ${i} on, ${next} off.\n{{/if}}\n{{else}}\n{{#if context.flags.flag_${next}}}\nFlag ${i} off, ${next} on.\n{{else}}\nFlag ${i}+${next} both off.\n{{/if}}\n{{/if}}\n`,
 		);
 	}
 	lines.push("\n## Items\n");
 	lines.push("{{#each context.items}}\n");
 	lines.push(
-		"{{context.__loop.index}}: {{context.__loop.item.name}} = {{context.__loop.item.value}}\n",
+		"{{context.__loop.index}}: {{context.__loop.item.name}} = {{context.__loop.item.value}}",
 	);
+	lines.push(" {{#if context.__loop.item.value >= 50}}[HIGH]{{else}}[low]{{/if}}");
+	lines.push(" tags: ");
+	lines.push("{{#each context.__loop.item.tags}}\n");
+	lines.push("{{context.__loop.index}}-{{context.__loop.item}} ");
+	lines.push("{{/each}}\n");
 	lines.push("{{/each}}\n");
 	lines.push("\n## Extra keys\n");
 	for (let i = 0; i < EXTRA_KEYS; i++) {
@@ -67,42 +88,50 @@ export function getShotputTemplate(): string {
 	return lines.join("");
 }
 
-/** Jinja2 / Nunjucks style: {{ context.x }}, {% if %}, {% for %} */
+/** Jinja2 / Nunjucks style: nested if/for, filters */
 export function getJinja2Template(): string {
 	const lines: string[] = [
-		"# {{ context.title }}\n",
+		"# {{ context.title | upper }}\n",
 		"Meta: {{ context.meta.version }} / {{ context.meta.env }}\n",
 	];
 	for (let i = 0; i < FLAG_COUNT; i++) {
+		const next = (i + 1) % FLAG_COUNT;
 		lines.push(
-			`{% if context.flags.flag_${i} %}\nFlag ${i} is on.\n{% else %}\nFlag ${i} is off.\n{% endif %}\n`,
+			`{% if context.flags.flag_${i} %}{% if context.flags.flag_${next} %}Flag ${i}+${next} both on.\n{% else %}Flag ${i} on, ${next} off.\n{% endif %}{% else %}{% if context.flags.flag_${next} %}Flag ${i} off, ${next} on.\n{% else %}Flag ${i}+${next} both off.\n{% endif %}{% endif %}\n`,
 		);
 	}
 	lines.push("\n## Items\n");
 	lines.push("{% for item in context.items %}\n");
-	lines.push("{{ loop.index0 }}: {{ item.name }} = {{ item.value }}\n");
+	lines.push(
+		"{{ loop.index0 }}: {{ item.name }} = {{ item.value }}{% if item.value >= 50 %} [HIGH]{% else %} [low]{% endif %} tags: ",
+	);
+	lines.push("{% for tag in item.tags %}{{ loop.index0 }}-{{ tag | default('n/a') }} {% endfor %}\n");
 	lines.push("{% endfor %}\n");
 	lines.push("\n## Extra keys\n");
 	for (let i = 0; i < EXTRA_KEYS; i++) {
-		lines.push(`key_${i}: {{ context.key_${i} }}\n`);
+		lines.push(`key_${i}: {{ context.key_${i} | default('') }}\n`);
 	}
 	return lines.join("");
 }
 
-/** Handlebars: {{context.x}}, {{#if}}, {{#each context.items}} {{this}} */
+/** Handlebars: nested if/each */
 export function getHandlebarsTemplate(): string {
 	const lines: string[] = [
 		"# {{context.title}}\n",
 		"Meta: {{context.meta.version}} / {{context.meta.env}}\n",
 	];
 	for (let i = 0; i < FLAG_COUNT; i++) {
+		const next = (i + 1) % FLAG_COUNT;
 		lines.push(
-			`{{#if context.flags.flag_${i}}}\nFlag ${i} is on.\n{{else}}\nFlag ${i} is off.\n{{/if}}\n`,
+			`{{#if context.flags.flag_${i}}}{{#if context.flags.flag_${next}}}Flag ${i}+${next} both on.\n{{else}}Flag ${i} on, ${next} off.\n{{/if}}{{else}}{{#if context.flags.flag_${next}}}Flag ${i} off, ${next} on.\n{{else}}Flag ${i}+${next} both off.\n{{/if}}{{/if}}\n`,
 		);
 	}
 	lines.push("\n## Items\n");
 	lines.push("{{#each context.items}}\n");
-	lines.push("{{@index}}: {{this.name}} = {{this.value}}\n");
+	lines.push(
+		"{{@index}}: {{this.name}} = {{this.value}}{{#if this.isHigh}} [HIGH]{{else}} [low]{{/if}} tags: ",
+	);
+	lines.push("{{#each this.tags}}{{@index}}-{{this}} {{/each}}\n");
 	lines.push("{{/each}}\n");
 	lines.push("\n## Extra keys\n");
 	for (let i = 0; i < EXTRA_KEYS; i++) {
@@ -124,7 +153,9 @@ export function getMustacheTemplate(): string {
 	}
 	lines.push("\n## Items\n");
 	lines.push("{{#context.items}}\n");
-	lines.push("{{name}} = {{value}}\n");
+	lines.push(
+		"{{name}} = {{value}}{{#isHigh}} [HIGH]{{/isHigh}}{{^isHigh}} [low]{{/isHigh}} tags: {{#tags}}{{.}} {{/tags}}\n",
+	);
 	lines.push("{{/context.items}}\n");
 	lines.push("\n## Extra keys\n");
 	for (let i = 0; i < EXTRA_KEYS; i++) {
@@ -146,7 +177,9 @@ export function getEjsTemplate(): string {
 	}
 	lines.push("\n## Items\n");
 	lines.push("<% context.items.forEach(function(item, i) { %>\n");
-	lines.push("<%= i %>: <%= item.name %> = <%= item.value %>\n");
+	lines.push(
+		"<%= i %>: <%= item.name %> = <%= item.value %><%= item.value >= 50 ? ' [HIGH]' : ' [low]' %> tags: <% item.tags.forEach(function(tag, ti) { %><%= ti %>-<%= tag %> <% }); %>\n",
+	);
 	lines.push("<% }); %>\n");
 	lines.push("\n## Extra keys\n");
 	for (let i = 0; i < EXTRA_KEYS; i++) {

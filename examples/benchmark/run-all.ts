@@ -25,11 +25,19 @@ import {
 
 const RUNS = 5;
 
+function formatBytes(bytes: number): string {
+	if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+	if (bytes >= 1024) return `${(bytes / 1024).toFixed(2)} KB`;
+	return `${bytes} B`;
+}
+
 interface Result {
 	name: string;
 	medianMs: number;
 	avgMs: number;
 	outputLength: number;
+	heapMax: number;
+	heapAvg: number;
 }
 
 async function benchShotput(): Promise<Result> {
@@ -47,21 +55,27 @@ async function benchShotput(): Promise<Result> {
 	await shotput(config as Parameters<typeof shotput>[0]);
 
 	const times: number[] = [];
+	const heapUsed: number[] = [];
 	let outLen = 0;
 	for (let i = 0; i < RUNS; i++) {
 		const start = performance.now();
 		const r = await shotput(config as Parameters<typeof shotput>[0]);
 		times.push(performance.now() - start);
+		heapUsed.push(process.memoryUsage().heapUsed);
 		if (i === 0) outLen = (r.content ?? "").length;
 	}
 	times.sort((a, b) => a - b);
 	const median = times[Math.floor(RUNS / 2)];
 	const avg = times.reduce((s, t) => s + t, 0) / RUNS;
+	const heapMax = Math.max(...heapUsed);
+	const heapAvg = heapUsed.reduce((s, h) => s + h, 0) / RUNS;
 	return {
 		name: "Shotput (Bun)",
 		medianMs: median,
 		avgMs: avg,
 		outputLength: outLen,
+		heapMax,
+		heapAvg,
 	};
 }
 
@@ -69,21 +83,27 @@ function benchEjs(): Result {
 	const template = getEjsTemplate();
 	Ejs.render(template, { context: benchmarkContext });
 	const times: number[] = [];
+	const heapUsed: number[] = [];
 	let outLen = 0;
 	for (let i = 0; i < RUNS; i++) {
 		const start = performance.now();
 		const out = Ejs.render(template, { context: benchmarkContext });
 		times.push(performance.now() - start);
+		heapUsed.push(process.memoryUsage().heapUsed);
 		if (i === 0) outLen = out.length;
 	}
 	times.sort((a, b) => a - b);
 	const median = times[Math.floor(RUNS / 2)];
 	const avg = times.reduce((s, t) => s + t, 0) / RUNS;
+	const heapMax = Math.max(...heapUsed);
+	const heapAvg = heapUsed.reduce((s, h) => s + h, 0) / RUNS;
 	return {
 		name: "EJS (Bun)",
 		medianMs: median,
 		avgMs: avg,
 		outputLength: outLen,
+		heapMax,
+		heapAvg,
 	};
 }
 
@@ -91,21 +111,27 @@ function benchHandlebars(): Result {
 	const template = Handlebars.compile(getHandlebarsTemplate());
 	template({ context: benchmarkContext });
 	const times: number[] = [];
+	const heapUsed: number[] = [];
 	let outLen = 0;
 	for (let i = 0; i < RUNS; i++) {
 		const start = performance.now();
 		const out = template({ context: benchmarkContext });
 		times.push(performance.now() - start);
+		heapUsed.push(process.memoryUsage().heapUsed);
 		if (i === 0) outLen = out.length;
 	}
 	times.sort((a, b) => a - b);
 	const median = times[Math.floor(RUNS / 2)];
 	const avg = times.reduce((s, t) => s + t, 0) / RUNS;
+	const heapMax = Math.max(...heapUsed);
+	const heapAvg = heapUsed.reduce((s, h) => s + h, 0) / RUNS;
 	return {
 		name: "Handlebars (Bun)",
 		medianMs: median,
 		avgMs: avg,
 		outputLength: outLen,
+		heapMax,
+		heapAvg,
 	};
 }
 
@@ -114,6 +140,7 @@ function benchNunjucks(): Result {
 	nunjucks.configure({ autoescape: false });
 	nunjucks.renderString(templateSrc, { context: benchmarkContext });
 	const times: number[] = [];
+	const heapUsed: number[] = [];
 	let outLen = 0;
 	for (let i = 0; i < RUNS; i++) {
 		const start = performance.now();
@@ -121,16 +148,21 @@ function benchNunjucks(): Result {
 			context: benchmarkContext,
 		});
 		times.push(performance.now() - start);
+		heapUsed.push(process.memoryUsage().heapUsed);
 		if (i === 0) outLen = out.length;
 	}
 	times.sort((a, b) => a - b);
 	const median = times[Math.floor(RUNS / 2)];
 	const avg = times.reduce((s, t) => s + t, 0) / RUNS;
+	const heapMax = Math.max(...heapUsed);
+	const heapAvg = heapUsed.reduce((s, h) => s + h, 0) / RUNS;
 	return {
 		name: "Nunjucks (Bun)",
 		medianMs: median,
 		avgMs: avg,
 		outputLength: outLen,
+		heapMax,
+		heapAvg,
 	};
 }
 
@@ -138,21 +170,27 @@ function benchMustache(): Result {
 	const template = getMustacheTemplate();
 	Mustache.render(template, { context: benchmarkContext });
 	const times: number[] = [];
+	const heapUsed: number[] = [];
 	let outLen = 0;
 	for (let i = 0; i < RUNS; i++) {
 		const start = performance.now();
 		const out = Mustache.render(template, { context: benchmarkContext });
 		times.push(performance.now() - start);
+		heapUsed.push(process.memoryUsage().heapUsed);
 		if (i === 0) outLen = out.length;
 	}
 	times.sort((a, b) => a - b);
 	const median = times[Math.floor(RUNS / 2)];
 	const avg = times.reduce((s, t) => s + t, 0) / RUNS;
+	const heapMax = Math.max(...heapUsed);
+	const heapAvg = heapUsed.reduce((s, h) => s + h, 0) / RUNS;
 	return {
 		name: "Mustache (Bun)",
 		medianMs: median,
 		avgMs: avg,
 		outputLength: outLen,
+		heapMax,
+		heapAvg,
 	};
 }
 
@@ -186,7 +224,7 @@ async function main(): Promise<void> {
 	for (const r of byMedian) {
 		const ratio = (r.medianMs / fastest).toFixed(2);
 		console.log(
-			`  ${r.name.padEnd(20)}  median: ${r.medianMs.toFixed(2).padStart(8)} ms  avg: ${r.avgMs.toFixed(2).padStart(8)} ms  output: ${r.outputLength.toLocaleString()} chars  (relative: ${ratio}x)`,
+			`  ${r.name.padEnd(20)}  median: ${r.medianMs.toFixed(2).padStart(8)} ms  avg: ${r.avgMs.toFixed(2).padStart(8)} ms  heap max: ${formatBytes(r.heapMax).padStart(10)}  heap avg: ${formatBytes(r.heapAvg).padStart(10)}  output: ${r.outputLength.toLocaleString()} chars  (relative: ${ratio}x)`,
 		);
 	}
 }
