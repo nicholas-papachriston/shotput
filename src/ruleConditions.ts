@@ -18,16 +18,21 @@ const conditionFnCache = new Map<
 >();
 
 const FLAGS_PATH_REGEX = /^context\.flags\.(\w+)$/;
+const flagsKeyCache = new Map<string, string | null>();
 
 export function evaluateConditionJs(expr: string, ctx: RuleContext): boolean {
 	const trimmed = expr.trim();
-	const flagsMatch = FLAGS_PATH_REGEX.exec(trimmed);
-	if (flagsMatch) {
-		const key = flagsMatch[1];
+	let flagsKey = flagsKeyCache.get(trimmed);
+	if (flagsKey === undefined) {
+		const flagsMatch = FLAGS_PATH_REGEX.exec(trimmed);
+		flagsKey = flagsMatch ? flagsMatch[1] ?? null : null;
+		flagsKeyCache.set(trimmed, flagsKey);
+	}
+	if (flagsKey !== null) {
 		const flags = ctx.context?.["flags"];
 		const val =
 			flags != null && typeof flags === "object"
-				? (flags as Record<string, unknown>)[key]
+				? (flags as Record<string, unknown>)[flagsKey]
 				: undefined;
 		return Boolean(val);
 	}
@@ -79,12 +84,28 @@ function getSafeValue(path: string, ctx: RuleContext): unknown {
 	return undefined;
 }
 
+const VALUE_PATH_KEYS_CAP = 20_000;
+const valuePathKeysCache = new Map<string, string[]>();
+
+function getValuePathKeys(path: string): string[] {
+	let keys = valuePathKeysCache.get(path);
+	if (!keys) {
+		if (valuePathKeysCache.size >= VALUE_PATH_KEYS_CAP) {
+			const first = valuePathKeysCache.keys().next().value;
+			if (first !== undefined) valuePathKeysCache.delete(first);
+		}
+		keys = path.split(".");
+		valuePathKeysCache.set(path, keys);
+	}
+	return keys;
+}
+
 /** Resolve dot path (e.g. context.foo.bar) to a value for {{#each}}. */
 export function getValueByPath(path: string, ctx: RuleContext): unknown {
 	const trimmed = path.trim();
 	if (trimmed.startsWith("context.")) {
 		const keyPath = trimmed.slice(8).trim();
-		const keys = keyPath.split(".");
+		const keys = getValuePathKeys(keyPath);
 		let current: unknown = ctx.context;
 		for (const k of keys) {
 			if (current == null || typeof current !== "object") return undefined;
@@ -94,7 +115,7 @@ export function getValueByPath(path: string, ctx: RuleContext): unknown {
 	}
 	if (trimmed.startsWith("params.")) {
 		const keyPath = trimmed.slice(7).trim();
-		const keys = keyPath.split(".");
+		const keys = getValuePathKeys(keyPath);
 		let current: unknown = ctx.params;
 		for (const k of keys) {
 			if (current == null || typeof current !== "object") return undefined;

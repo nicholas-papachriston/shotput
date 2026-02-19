@@ -9,9 +9,13 @@ import { substituteLoopVariables } from "./variables";
 
 export type { RuleContext } from "./ruleConditions";
 
+const topLevelBlocksCache = new WeakMap<ParsedBlock[], ParsedBlock[]>();
+
 /** O(n) top-level blocks: not contained by any outer block with closeEnd > openStart. */
 function getTopLevelBlocks(blocks: ParsedBlock[]): ParsedBlock[] {
-	const top: ParsedBlock[] = [];
+	const cached = topLevelBlocksCache.get(blocks);
+	if (cached !== undefined) return cached;
+	const out: ParsedBlock[] = [];
 	const stack: ParsedBlock[] = [];
 	for (const block of blocks) {
 		while (stack.length > 0) {
@@ -20,10 +24,11 @@ function getTopLevelBlocks(blocks: ParsedBlock[]): ParsedBlock[] {
 			if (prevCloseEnd <= block.openStart) stack.pop();
 			else break;
 		}
-		if (stack.length === 0) top.push(block);
+		if (stack.length === 0) out.push(block);
 		stack.push(block);
 	}
-	return top;
+	topLevelBlocksCache.set(blocks, out);
+	return out;
 }
 
 /**
@@ -52,13 +57,13 @@ export function evaluateRules(
 	}
 
 	const topLevelBlocks = getTopLevelBlocks(blocks);
-	const out: string[] = [];
+	const segments: string[] = [];
 	let pos = 0;
 
 	for (const block of topLevelBlocks) {
 		const blockContent = content.slice(block.openEnd, block.closeIndex);
 
-		out.push(content.slice(pos, block.openStart));
+		segments.push(content.slice(pos, block.openStart));
 
 		if (block.kind === "if") {
 			const elseIdx = block.elseIndex;
@@ -70,13 +75,20 @@ export function evaluateRules(
 				? consequent
 				: alternate;
 			const evaluatedChosen = evaluateRules(chosen, config, undefined);
-			out.push(evaluatedChosen);
+			segments.push(evaluatedChosen);
 		} else {
 			const arr = getArrayFromExpr(block.expr, ctx);
 			const chunks: string[] = [];
-			const loopState: { item: unknown; index: number } = {
+			const loopState: {
+				item: unknown;
+				index: number;
+				first: boolean;
+				last: boolean;
+			} = {
 				item: undefined,
 				index: 0,
+				first: false,
+				last: false,
 			};
 			const loopContext = Object.create(context) as Record<string, unknown>;
 			loopContext["__loop"] = loopState;
@@ -86,6 +98,8 @@ export function evaluateRules(
 			for (let i = 0; i < arr.length; i++) {
 				loopState.item = arr[i];
 				loopState.index = i;
+				loopState.first = i === 0;
+				loopState.last = i === arr.length - 1;
 				const evaluated = evaluateRules(
 					blockContent,
 					loopConfig,
@@ -99,12 +113,12 @@ export function evaluateRules(
 				);
 				chunks.push(substituted);
 			}
-			out.push(chunks.join(""));
+			segments.push(chunks.join(""));
 		}
 
 		pos = block.closeIndex + block.closeTagLength;
 	}
 
-	out.push(content.slice(pos));
-	return out.join("");
+	segments.push(content.slice(pos));
+	return segments.join("");
 }

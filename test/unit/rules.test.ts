@@ -125,6 +125,15 @@ describe("rules", () => {
 			expect(evaluateRules(template, config)).toBe("[0]x[1]y");
 		});
 
+		it("should expose context.__loop.first and context.__loop.last", () => {
+			const config = createConfig({
+				context: { list: ["a", "b", "c"] },
+			});
+			const template =
+				"{{#each context.list}}{{#if context.__loop.first}}[first]{{/if}}{{context.__loop.item}}{{#if context.__loop.last}}[last]{{/if}}{{/each}}";
+			expect(evaluateRules(template, config)).toBe("[first]abc[last]");
+		});
+
 		it("should render empty string for empty array", () => {
 			const config = createConfig({
 				context: { list: [] },

@@ -82,12 +82,13 @@ const VARIABLE_PLACEHOLDER =
 
 /** Single regex for all __loop placeholders; most specific patterns first. */
 const LOOP_PLACEHOLDER =
-	/\{\{\s*context\.__loop\.(item\.name|item\.value|index|item)\s*\}\}/g;
+	/\{\{\s*context\.__loop\.(item\.name|item\.value|index|item|first|last)\s*\}\}/g;
 
 export function substituteLoopItemVariables(
 	content: string,
 	item: unknown,
 	index: number,
+	loopState?: { first?: boolean; last?: boolean },
 ): string {
 	if (!content.includes("context.__loop")) return content;
 	const itemObj =
@@ -102,6 +103,8 @@ export function substituteLoopItemVariables(
 		if (kind === "item.name") return nameVal;
 		if (kind === "item.value") return valueVal;
 		if (kind === "index") return indexVal;
+		if (kind === "first") return String(loopState?.first ?? false);
+		if (kind === "last") return String(loopState?.last ?? false);
 		return itemVal;
 	});
 }
@@ -112,7 +115,7 @@ export function substituteLoopItemVariables(
  * Reduces two replace passes to one for each each-block iteration.
  */
 const COMBINED_LOOP_VAR_PLACEHOLDER =
-	/\{\{\s*(context\.__loop\.(item\.name|item\.value|index|item)|context\.[^}]*|params\.[^}]*|env\.[^}]*)\s*\}\}/g;
+	/\{\{\s*(context\.__loop\.(item\.name|item\.value|index|item|first|last)|context\.[^}]*|params\.[^}]*|env\.[^}]*)\s*\}\}/g;
 
 export function substituteLoopVariables(
 	content: string,
@@ -136,6 +139,10 @@ export function substituteLoopVariables(
 	const itemVal = item != null ? String(item) : "";
 	const indexVal = String(index);
 
+	const loopState = config.context?.__loop as
+		| { first?: boolean; last?: boolean }
+		| undefined;
+
 	return content.replace(
 		COMBINED_LOOP_VAR_PLACEHOLDER,
 		(_match: string, inner: string, loopKind?: string) => {
@@ -144,6 +151,8 @@ export function substituteLoopVariables(
 				if (loopKind === "item.value") return valueVal;
 				if (loopKind === "index") return indexVal;
 				if (loopKind === "item") return itemVal;
+				if (loopKind === "first") return String(loopState?.first ?? false);
+				if (loopKind === "last") return String(loopState?.last ?? false);
 			}
 			return getVariableValue(inner, config);
 		},

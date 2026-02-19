@@ -17,6 +17,8 @@ export interface BenchmarkContext {
 		value: number;
 		tags: string[];
 		isHigh: boolean;
+		isFirst?: boolean;
+		isLast?: boolean;
 	}>;
 	flags: Record<string, boolean>;
 	meta: { version: string; env: string };
@@ -37,6 +39,8 @@ function buildContext(): BenchmarkContext {
 			value,
 			tags,
 			isHigh: value >= 50,
+			isFirst: i === 0,
+			isLast: i === ITEM_COUNT - 1,
 		});
 	}
 	const flags: Record<string, boolean> = {};
@@ -58,7 +62,7 @@ function buildContext(): BenchmarkContext {
 
 export const benchmarkContext = buildContext();
 
-/** Shotput: {{context.x}}, {{#if}}, {{#each}}, nested loops, nested conditionals */
+/** Shotput: {{context.x}}, {{#if}}, {{#each}}, __loop.first/last, nested conditionals */
 export function getShotputTemplate(): string {
 	const lines: string[] = [
 		"# {{context.title}}\n",
@@ -72,6 +76,7 @@ export function getShotputTemplate(): string {
 	}
 	lines.push("\n## Items\n");
 	lines.push("{{#each context.items}}\n");
+	lines.push("{{#if context.__loop.first}}[first] {{/if}}");
 	lines.push(
 		"{{context.__loop.index}}: {{context.__loop.item.name}} = {{context.__loop.item.value}}",
 	);
@@ -82,6 +87,7 @@ export function getShotputTemplate(): string {
 	lines.push("{{#each context.__loop.item.tags}}\n");
 	lines.push("{{context.__loop.index}}-{{context.__loop.item}} ");
 	lines.push("{{/each}}\n");
+	lines.push("{{#if context.__loop.last}} [last]{{/if}}\n");
 	lines.push("{{/each}}\n");
 	lines.push("\n## Extra keys\n");
 	for (let i = 0; i < EXTRA_KEYS; i++) {
@@ -90,7 +96,7 @@ export function getShotputTemplate(): string {
 	return lines.join("");
 }
 
-/** Jinja2 / Nunjucks style: nested if/for, filters */
+/** Jinja2 / Nunjucks: nested if/for, filters (| upper, | default), loop.first/last/length */
 export function getJinja2Template(): string {
 	const lines: string[] = [
 		"# {{ context.title | upper }}\n",
@@ -102,14 +108,16 @@ export function getJinja2Template(): string {
 			`{% if context.flags.flag_${i} %}{% if context.flags.flag_${next} %}Flag ${i}+${next} both on.\n{% else %}Flag ${i} on, ${next} off.\n{% endif %}{% else %}{% if context.flags.flag_${next} %}Flag ${i} off, ${next} on.\n{% else %}Flag ${i}+${next} both off.\n{% endif %}{% endif %}\n`,
 		);
 	}
-	lines.push("\n## Items\n");
+	lines.push("\n## Items (total: {{ context.items | length }})\n");
 	lines.push("{% for item in context.items %}\n");
+	lines.push("{% if loop.first %}[first] {% endif %}");
 	lines.push(
 		"{{ loop.index0 }}: {{ item.name }} = {{ item.value }}{% if item.value >= 50 %} [HIGH]{% else %} [low]{% endif %} tags: ",
 	);
 	lines.push(
-		"{% for tag in item.tags %}{{ loop.index0 }}-{{ tag | default('n/a') }} {% endfor %}\n",
+		"{% for tag in item.tags %}{{ loop.index0 }}-{{ tag | default('n/a') }} {% endfor %}",
 	);
+	lines.push("{% if loop.last %} [last]{% endif %}\n");
 	lines.push("{% endfor %}\n");
 	lines.push("\n## Extra keys\n");
 	for (let i = 0; i < EXTRA_KEYS; i++) {
@@ -118,7 +126,7 @@ export function getJinja2Template(): string {
 	return lines.join("");
 }
 
-/** Handlebars: nested if/each */
+/** Handlebars: nested if/each, @first/@last in each */
 export function getHandlebarsTemplate(): string {
 	const lines: string[] = [
 		"# {{context.title}}\n",
@@ -132,10 +140,12 @@ export function getHandlebarsTemplate(): string {
 	}
 	lines.push("\n## Items\n");
 	lines.push("{{#each context.items}}\n");
+	lines.push("{{#if @first}}[first] {{/if}}");
 	lines.push(
 		"{{@index}}: {{this.name}} = {{this.value}}{{#if this.isHigh}} [HIGH]{{else}} [low]{{/if}} tags: ",
 	);
-	lines.push("{{#each this.tags}}{{@index}}-{{this}} {{/each}}\n");
+	lines.push("{{#each this.tags}}{{@index}}-{{this}} {{/each}}");
+	lines.push("{{#if @last}} [last]{{/if}}\n");
 	lines.push("{{/each}}\n");
 	lines.push("\n## Extra keys\n");
 	for (let i = 0; i < EXTRA_KEYS; i++) {
@@ -144,7 +154,7 @@ export function getHandlebarsTemplate(): string {
 	return lines.join("");
 }
 
-/** Mustache: {{context.x}}, {{#context.flags.flag_i}}, {{#context.items}} */
+/** Mustache: sections, inverted {{^}}, {{.}} in loop, isFirst/isLast from context */
 export function getMustacheTemplate(): string {
 	const lines: string[] = [
 		"# {{context.title}}\n",
@@ -157,9 +167,11 @@ export function getMustacheTemplate(): string {
 	}
 	lines.push("\n## Items\n");
 	lines.push("{{#context.items}}\n");
+	lines.push("{{#isFirst}}[first] {{/isFirst}}");
 	lines.push(
-		"{{name}} = {{value}}{{#isHigh}} [HIGH]{{/isHigh}}{{^isHigh}} [low]{{/isHigh}} tags: {{#tags}}{{.}} {{/tags}}\n",
+		"{{name}} = {{value}}{{#isHigh}} [HIGH]{{/isHigh}}{{^isHigh}} [low]{{/isHigh}} tags: {{#tags}}{{.}} {{/tags}}",
 	);
+	lines.push("{{#isLast}} [last]{{/isLast}}\n");
 	lines.push("{{/context.items}}\n");
 	lines.push("\n## Extra keys\n");
 	for (let i = 0; i < EXTRA_KEYS; i++) {
@@ -168,7 +180,7 @@ export function getMustacheTemplate(): string {
 	return lines.join("");
 }
 
-/** EJS: <%= context.x %>, <% if %>, <% context.items.forEach %> */
+/** EJS: full JS, forEach, ternary, first/last via index checks */
 export function getEjsTemplate(): string {
 	const lines: string[] = [
 		"# <%= context.title %>\n",
@@ -181,9 +193,11 @@ export function getEjsTemplate(): string {
 	}
 	lines.push("\n## Items\n");
 	lines.push("<% context.items.forEach(function(item, i) { %>\n");
+	lines.push("<% if (i === 0) { %>[first] <% } %>");
 	lines.push(
-		"<%= i %>: <%= item.name %> = <%= item.value %><%= item.value >= 50 ? ' [HIGH]' : ' [low]' %> tags: <% item.tags.forEach(function(tag, ti) { %><%= ti %>-<%= tag %> <% }); %>\n",
+		"<%= i %>: <%= item.name %> = <%= item.value %><%= item.value >= 50 ? ' [HIGH]' : ' [low]' %> tags: <% item.tags.forEach(function(tag, ti) { %><%= ti %>-<%= tag %> <% }); %>",
 	);
+	lines.push("<% if (i === context.items.length - 1) { %> [last]<% } %>\n");
 	lines.push("<% }); %>\n");
 	lines.push("\n## Extra keys\n");
 	for (let i = 0; i < EXTRA_KEYS; i++) {

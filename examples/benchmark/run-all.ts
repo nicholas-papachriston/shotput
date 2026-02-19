@@ -10,7 +10,7 @@ import Ejs from "ejs";
 import Handlebars from "handlebars";
 import Mustache from "mustache";
 import nunjucks from "nunjucks";
-import { shotput } from "../../src/index";
+import { compileShotputTemplate, shotput } from "../../src/index";
 import {
 	EXTRA_KEYS,
 	FLAG_COUNT,
@@ -71,6 +71,47 @@ async function benchShotput(): Promise<Result> {
 	const heapAvg = heapUsed.reduce((s, h) => s + h, 0) / RUNS;
 	return {
 		name: "Shotput (Bun)",
+		medianMs: median,
+		avgMs: avg,
+		outputLength: outLen,
+		heapMax,
+		heapAvg,
+	};
+}
+
+async function benchShotputCompiled(): Promise<Result> {
+	const template = getShotputTemplate();
+	const baseConfig = {
+		templateDir: join(import.meta.dir, ".."),
+		responseDir: join(import.meta.dir, ".."),
+		allowedBasePaths: [join(import.meta.dir, "../..")],
+		enableContentLengthPlanning: false,
+		maxConcurrency: 1,
+		debug: false,
+	};
+	const render = compileShotputTemplate(
+		template,
+		baseConfig as Parameters<typeof compileShotputTemplate>[1],
+	);
+	await render({ context: benchmarkContext });
+
+	const times: number[] = [];
+	const heapUsed: number[] = [];
+	let outLen = 0;
+	for (let i = 0; i < RUNS; i++) {
+		const start = performance.now();
+		const r = await render({ context: benchmarkContext });
+		times.push(performance.now() - start);
+		heapUsed.push(process.memoryUsage().heapUsed);
+		if (i === 0) outLen = (r.content ?? "").length;
+	}
+	times.sort((a, b) => a - b);
+	const median = times[Math.floor(RUNS / 2)];
+	const avg = times.reduce((s, t) => s + t, 0) / RUNS;
+	const heapMax = Math.max(...heapUsed);
+	const heapAvg = heapUsed.reduce((s, h) => s + h, 0) / RUNS;
+	return {
+		name: "Shotput compiled (Bun)",
 		medianMs: median,
 		avgMs: avg,
 		outputLength: outLen,
@@ -205,6 +246,9 @@ async function main(): Promise<void> {
 
 	console.log("Running Shotput...");
 	results.push(await benchShotput());
+
+	console.log("Running Shotput (compiled)...");
+	results.push(await benchShotputCompiled());
 
 	console.log("Running EJS...");
 	results.push(benchEjs());
