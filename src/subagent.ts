@@ -6,6 +6,7 @@ import type { SourcePlugin } from "./plugins";
 import { validatePath } from "./security";
 import { consumeStreamToString } from "./streamUtils";
 import type { ShotputOutput } from "./types";
+import { parseYaml } from "./yaml";
 
 const log = getLogger("subagent");
 
@@ -40,7 +41,8 @@ export interface ResolvedSubagent {
 }
 
 /**
- * Parse YAML frontmatter between --- markers. Supports scalars and simple arrays.
+ * Parse YAML frontmatter between --- markers using Bun.YAML.parse.
+ * Returns null if no frontmatter or YAML is invalid.
  */
 export const parseSubagentFrontmatter = (
 	content: string,
@@ -50,47 +52,15 @@ export const parseSubagentFrontmatter = (
 
 	const yamlContent = match[1];
 	const body = match[2].trim();
-	const frontmatter: SubagentConfig = {};
-
-	const lines = yamlContent.split("\n");
-	let i = 0;
-	while (i < lines.length) {
-		const line = lines[i];
-		const scalarMatch = line.match(/^(\w+):\s*(.+)$/);
-		if (scalarMatch) {
-			const key = scalarMatch[1];
-			let value: unknown = scalarMatch[2].trim();
-			if (value === "true") value = true;
-			else if (value === "false") value = false;
-			else if (value === "" || value === "null") value = undefined;
-			else if (typeof value === "string" && /^\d+(\.\d+)?$/.test(value))
-				value = Number.parseFloat(value);
-			else if (
-				typeof value === "string" &&
-				(value.startsWith('"') || value.startsWith("'"))
-			)
-				value = value.slice(1, -1);
-			frontmatter[key] = value;
-			i++;
-			continue;
+	try {
+		const parsed = parseYaml(yamlContent);
+		if (parsed == null || typeof parsed !== "object" || Array.isArray(parsed)) {
+			return null;
 		}
-		const arrayMatch = line.match(/^(\w+):\s*$/);
-		if (arrayMatch) {
-			const key = arrayMatch[1];
-			const arr: string[] = [];
-			i++;
-			while (i < lines.length && lines[i].startsWith("  ")) {
-				const item = lines[i].replace(/^\s*-\s*/, "").trim();
-				if (item) arr.push(item.replace(/^["']|["']$/g, ""));
-				i++;
-			}
-			frontmatter[key] = arr;
-			continue;
-		}
-		i++;
+		return { frontmatter: parsed as SubagentConfig, body };
+	} catch {
+		return null;
 	}
-
-	return { frontmatter, body };
 };
 
 /**

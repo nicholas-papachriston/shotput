@@ -2,6 +2,7 @@ import { join } from "node:path";
 import { getLogger } from "./logger";
 import type { SourcePlugin } from "./plugins";
 import { validatePath } from "./security";
+import { parseYaml } from "./yaml";
 
 const log = getLogger("command");
 
@@ -51,8 +52,8 @@ export const parseCommandInvocation = (
 };
 
 /**
- * Parse command markdown: --- yaml --- body. Returns frontmatter and body.
- * Minimal YAML: name, description, parameters with nested type/default.
+ * Parse command markdown: --- yaml --- body using Bun.YAML.parse.
+ * Expects name (required), description, parameters with nested type/default.
  */
 const parseCommandMd = (
 	content: string,
@@ -64,43 +65,53 @@ const parseCommandMd = (
 	const yamlContent = match[1];
 	const body = match[2].trim();
 
-	const nameMatch = yamlContent.match(/^name:\s*(.+)$/m);
-	if (!nameMatch) {
+	let parsed: unknown;
+	try {
+		parsed = parseYaml(yamlContent);
+	} catch (e) {
+		throw new Error(
+			`Invalid command frontmatter - YAML parse error: ${e instanceof Error ? e.message : String(e)}`,
+		);
+	}
+	if (parsed == null || typeof parsed !== "object" || Array.isArray(parsed)) {
+		throw new Error("Invalid command frontmatter - not an object");
+	}
+	const obj = parsed as Record<string, unknown>;
+	const name = obj["name"];
+	if (typeof name !== "string" || !name.trim()) {
 		throw new Error("Invalid command frontmatter - missing name");
 	}
-	const descriptionMatch = yamlContent.match(/^description:\s*(.+)$/m);
-
-	const parameters: CommandFrontmatter["parameters"] = {};
-	const paramBlock = yamlContent.match(/^parameters:\s*\n((?:\s{2,}.+\n?)*)/m);
-	if (paramBlock) {
-		const lines = paramBlock[1].split("\n");
-		let currentParam: string | null = null;
-		for (const line of lines) {
-			const paramMatch = line.match(/^\s{2}(\w+):\s*$/);
-			if (paramMatch) {
-				currentParam = paramMatch[1];
-				parameters[currentParam] = {};
-			} else if (currentParam && line.startsWith("    ")) {
-				const defaultMatch = line.match(/default:\s*(.+)$/);
-				const typeMatch = line.match(/type:\s*(.+)$/);
-				if (defaultMatch) {
-					const v = defaultMatch[1].trim();
-					parameters[currentParam].default =
-						v.startsWith('"') || v.startsWith("'") ? v.slice(1, -1) : v;
-				}
-				if (typeMatch) parameters[currentParam].type = typeMatch[1].trim();
-			} else {
-				currentParam = null;
+	const description =
+		typeof obj["description"] === "string"
+			? (obj["description"] as string).trim()
+			: undefined;
+	const rawParams = obj["parameters"];
+	let parameters: CommandFrontmatter["parameters"] | undefined;
+	if (
+		rawParams != null &&
+		typeof rawParams === "object" &&
+		!Array.isArray(rawParams)
+	) {
+		parameters = {};
+		for (const [key, spec] of Object.entries(rawParams)) {
+			if (spec != null && typeof spec === "object" && !Array.isArray(spec)) {
+				const s = spec as Record<string, unknown>;
+				parameters[key] = {
+					type:
+						typeof s["type"] === "string" ? (s["type"] as string) : undefined,
+					default: s["default"],
+					description:
+						typeof s["description"] === "string"
+							? (s["description"] as string)
+							: undefined,
+				};
 			}
 		}
+		parameters = Object.keys(parameters).length ? parameters : undefined;
 	}
 
 	return {
-		frontmatter: {
-			name: nameMatch[1].trim(),
-			description: descriptionMatch?.[1]?.trim(),
-			parameters: Object.keys(parameters).length ? parameters : undefined,
-		},
+		frontmatter: { name: name.trim(), description, parameters },
 		body,
 	};
 };

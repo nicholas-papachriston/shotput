@@ -2,6 +2,7 @@ import type { ShotputConfig } from "./config";
 import { handleCustomSource } from "./custom";
 import { handleDirectory } from "./directory";
 import { handleFile } from "./file";
+import { handleFormat } from "./format";
 import { handleFunction } from "./function";
 import { handleGlob } from "./glob";
 import { handleHttp } from "./http";
@@ -127,6 +128,16 @@ function customHandler(
 	);
 }
 
+function formatHandler(
+	config: ShotputConfig,
+	result: string,
+	path: string,
+	match: string,
+	remainingLength: number,
+): Promise<HandlerResult> {
+	return handleFormat(config, result, path, match, remainingLength);
+}
+
 /**
  * Returns the handler for a template type. All handlers accept optional basePath
  * as the last argument (used by Function and Custom).
@@ -150,6 +161,8 @@ export function getHandler(type: TemplateType): TemplateHandler {
 			return skillHandler;
 		case TemplateType.Custom:
 			return customHandler;
+		case TemplateType.Format:
+			return formatHandler;
 		default:
 			throw new Error(`Unsupported template type: ${type}`);
 	}

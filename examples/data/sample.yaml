@@ -1,0 +1,5 @@
+app: shotput
+version: 1.0
+features:
+  s3: true
+  http: true

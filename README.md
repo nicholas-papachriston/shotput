@@ -18,6 +18,9 @@ Shotput is a simple, programmatic templating library to help manage personas, sy
 - **Lifecycle hooks:** preResolve, postResolveSource, postAssembly, preOutput
 - **Output modes:** flat, sectioned, or messages (system/user/assistant)
 - **Commands and subagents:** `{{command:name}}`, `{{subagent:name}}` with custom source plugins
+- **Format utilities:** In-template format references expand parsed objects: `{{yaml:path}}`, `{{json:path}}`, `{{jsonl:path}}`, `{{xml:path}}`, `{{md:path}}` (path relative to template dir; YAML/JSON/JSONL/XML are parsed and expanded as formatted text; md inserts file content). Plus programmatic helpers: Markdown (to HTML or plaintext), JSONL parse (including streaming), XML parse (including S3 list response keys). Command, subagent, and skill frontmatter use Bun's YAML parser.
+
+**Template authoring for LLMs:** [llms.txt](./llms.txt) at the project root links to the [full template guide](./docs/llm-template-guide.txt) (syntax reference, high-fidelity patterns, examples, pitfalls).
 
 ## TODO
 
@@ -429,11 +432,51 @@ const inlineResult = await shotput({
 console.log(inlineResult.content);
 ```
 
+### `shotputStreaming(config?: Partial<ShotputConfig>): Promise<ShotputStreamingOutput>`
+
+Streams resolved segments in document order as each placeholder is resolved. Same pipeline as `shotputStreamingSegments`; returns `{ stream, metadata }` (no literalMap). PostAssembly, preOutput, and sectioning are not run.
+
 ### `shotputStreamingSegments(config?: Partial<ShotputConfig>): Promise<ShotputSegmentStreamOutput>`
 
 Streams segments in document order as each `{{path}}` placeholder is resolved (prefix, replacement, suffix). Uses the same template load and preResolve hooks as `shotput`, then yields segments without running postAssembly, preOutput, or sectioning; consumers can concatenate and run hooks if needed. All interpolation uses the unified parallel flow (ordered drain); `maxConcurrency=1` uses the same flow via semaphore. Concatenation equals `interpolation().processedTemplate`. `literalMap` is set when custom sources emit literal placeholders.
 
-**Returns:** `{ stream: ReadableStream<string>; metadata: Promise<...>; literalMap?: Map<string, string>; error?: Error }`. `literalMap` is set when custom sources emit literal placeholders; use it for client-side `substituteLiterals(concatenated, literalMap)` if required.
+**Returns:** `{ stream: ReadableStream<string>; metadata: Promise<...>; literalMap?: Map<string, string>; literalMapPromise?: Promise<...>; error?: Error }`. Use `literalMap` for client-side substitution when custom sources emit literal placeholders.
+
+### Format utilities
+
+**In-template format references** — Use a format prefix to parse and expand the file as structured content in the template (path is relative to the template directory, validated against `allowedBasePaths`):
+
+| Placeholder | Behavior |
+|-------------|----------|
+| `{{yaml:path/to/file.yaml}}` | Parse YAML and expand as formatted JSON. |
+| `{{json:path/to/file.json}}` | Parse JSON and expand as pretty-printed JSON. |
+| `{{jsonl:path/to/file.jsonl}}` | Parse JSONL and expand as JSON array. |
+| `{{xml:path/to/file.xml}}` | Parse XML and expand as formatted XML string. |
+| `{{md:path/to/file.md}}` | Insert file content as-is (no parse). |
+
+**Programmatic helpers** (re-exported for use on resolved content or external data):
+
+| Export | Description |
+|--------|-------------|
+| `markdownToHtml(text, options?)` | Render Markdown to HTML (GFM supported). See [Bun Markdown](https://bun.com/docs/runtime/markdown). |
+| `markdownToPlaintext(text)` | Strip Markdown to plain text (for prompts or length estimation). |
+| `parseJsonl(input)` | Parse full JSONL string or Uint8Array to array of values. See [Bun JSONL](https://bun.com/docs/runtime/jsonl). |
+| `parseJsonlChunk(input, start?, end?)` | Parse JSONL chunk for streaming; returns `{ values, read, done, error }`. |
+| `parseXml(xmlString)` | Parse XML to an `XmlNode` tree (tag, attributes, children, text). |
+| `xmlNodeToString(node)` | Serialize an `XmlNode` back to an XML string. |
+| `parseS3ListResponse(xmlString)` | Extract `<Key>` values from S3 ListObjects XML response. |
+| `createXmlParser()` | Factory for XML parser (parse, parseS3ListResponse). |
+| `XmlNode` | Type for parsed XML nodes. |
+
+Command, subagent, and skill frontmatter are parsed with Bun's YAML API internally.
+
+### `compileShotputTemplate(template, baseConfig?): (overrides?) => Promise<ShotputOutput>`
+
+Pre-compiles a template string and returns a render function. Use when rendering the same template many times with varying context; the block parse cache is warmed once.
+
+### `resolveSubagent(config): Promise<ResolvedSubagent>`
+
+Load a subagent definition file (path via `subagentFile`), parse YAML frontmatter, resolve the body as a template, and return `{ systemPrompt, agentConfig, metadata }`. Use with agent frameworks that consume system prompts and config.
 
 ## Examples
 
@@ -458,6 +501,10 @@ Comprehensive examples are in [`examples/`](./examples/):
 - **[15-subagents.ts](./examples/basic/15-subagents.ts)** - Subagents
 - **[16-variables.ts](./examples/basic/16-variables.ts)** - Variable substitution (`{{context.x}}`, `{{params.x}}`, `{{env.X}}`)
 - **[17-each.ts](./examples/basic/17-each.ts)** - Loops (`{{#each}}`)
+- **[18-format-markdown.ts](./examples/basic/18-format-markdown.ts)** - Markdown to HTML or plaintext
+- **[19-format-jsonl.ts](./examples/basic/19-format-jsonl.ts)** - JSONL parse and streaming
+- **[20-format-xml.ts](./examples/basic/20-format-xml.ts)** - XML parse and S3 list response
+- **[21-format-references.ts](./examples/basic/21-format-references.ts)** - All format references (yaml, json, jsonl, xml, md)
 
 ### Advanced
 
@@ -497,7 +544,7 @@ See the [examples README](./examples/README.md) for complete documentation.
 
 | Command | Description |
 |---------|-------------|
-| `bun run build` | Build dist and types |
+| `bun run build` | Build dist (Bun bundle + single `index.d.ts` via dts-bundle-generator) |
 | `bun test` | Run all tests |
 | `bun run examples` | Run all examples |
 | `bun run lint` | Run Biome check |

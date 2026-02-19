@@ -53,6 +53,12 @@ These examples demonstrate fundamental features:
 13. **[Output Modes](./basic/13-output-modes.ts)** - Sectioned and messages output with `{{#section:name}}`
 14. **[Commands](./basic/14-commands.ts)** - `{{command:name key=value}}` and `{{$param}}`
 15. **[Subagents](./basic/15-subagents.ts)** - `resolveSubagent()`, `{{subagent:name}}`, `parseSubagentFrontmatter`
+16. **[Variables](./basic/16-variables.ts)** - `{{context.x}}`, `{{params.x}}`, `{{env.X}}`
+17. **[Loops](./basic/17-each.ts)** - `{{#each context.list}}` with `{{context.__loop.item}}`
+18. **[Format: Markdown](./basic/18-format-markdown.ts)** - `{{md:path}}`, then `markdownToHtml()`, `markdownToPlaintext()` on resolved content
+19. **[Format: JSONL](./basic/19-format-jsonl.ts)** - `{{jsonl:path}}` (expanded as JSON array), plus `parseJsonl()`, `parseJsonlChunk()`
+20. **[Format: XML](./basic/20-format-xml.ts)** - `{{xml:path}}` (expanded as formatted XML), plus `parseXml()`, `parseS3ListResponse()`
+21. **[Format references (all)](./basic/21-format-references.ts)** - `{{yaml:path}}`, `{{json:path}}`, `{{jsonl:path}}`, `{{xml:path}}`, `{{md:path}}` in one template
 
 ### Advanced Examples
 
@@ -96,9 +102,26 @@ These examples demonstrate advanced features and patterns:
 | Output modes (sectioned/messages) | 13 | - | `{{#section:name}}...{{/section}}`, outputMode config |
 | Commands | 14 | - | `{{command:name key=val}}`, `{{$param}}` |
 | Subagents | 15 | - | `{{subagent:name}}`, resolveSubagent(), parseSubagentFrontmatter |
+| Variables | 16 | - | `{{context.x}}`, `{{params.x}}`, `{{env.X}}` |
+| Loops (each) | 17 | - | `{{#each context.list}}`, `{{context.__loop.item}}` |
+| Format: Markdown | 18 | - | `{{md:path}}`, markdownToHtml(), markdownToPlaintext() |
+| Format: JSONL | 19 | - | `{{jsonl:path}}`, parseJsonl(), parseJsonlChunk() |
+| Format: XML | 20 | - | `{{xml:path}}`, parseXml(), parseS3ListResponse() |
+| Format references (yaml, json, jsonl, xml, md) | 21 | - | `{{yaml:path}}`, `{{json:path}}`, `{{jsonl:path}}`, `{{xml:path}}`, `{{md:path}}` |
 | Custom source plugin | - | 12 | `customSources: [SourcePlugin]` |
 
 ## Template Syntax Reference
+
+### Format references (parse and expand)
+
+```markdown
+# Parse and expand as formatted content (paths relative to templateDir)
+{{yaml:path/to/file.yaml}}   # YAML -> JSON
+{{json:path/to/file.json}}  # JSON -> pretty-printed
+{{jsonl:path/to/file.jsonl}} # JSONL -> JSON array
+{{xml:path/to/file.xml}}    # XML -> formatted XML string
+{{md:path/to/file.md}}      # Insert content as-is (no parse)
+```
 
 ### File Inclusion
 
@@ -275,8 +298,11 @@ const instance = shotput({
 The `data/` directory contains sample files used by the examples:
 
 - `data/config.json` - Sample JSON configuration
+- `data/sample.yaml` - Sample YAML (for `{{yaml:path}}`)
 - `data/users.csv` - Sample CSV data
 - `data/article.md` - Sample markdown content
+- `data/sample.jsonl` - Sample JSONL (newline-delimited JSON)
+- `data/sample.xml` - Sample XML config
 - `data/logs/` - Sample log files
 - `data/code/` - Sample source code
 

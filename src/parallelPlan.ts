@@ -35,6 +35,7 @@ export function calculatePriority(type: TemplateType, index: number): number {
 		[TemplateType.Function]: 60,
 		[TemplateType.Skill]: 70,
 		[TemplateType.Custom]: 35,
+		[TemplateType.Format]: 12,
 	};
 	return (typePriority[type] ?? 100) + index * 0.01;
 }
@@ -77,9 +78,29 @@ export async function planTemplates(
 
 	const tasks: TemplateTask[] = [];
 
+	const FORMAT_PREFIX = /^(yaml|json|jsonl|xml|md):/;
+
 	for (let i = 0; i < matchesWithIndex.length; i++) {
 		const { match, index: matchIndex } = matchesWithIndex[i];
 		const rawPath = match.slice(2, -2).trim();
+		const formatMatch = rawPath.match(FORMAT_PREFIX);
+
+		if (formatMatch) {
+			const format = formatMatch[1];
+			const pathWithoutPrefix = rawPath.slice(format.length + 1).trim();
+			const path = resolveTemplatePath(basePath, pathWithoutPrefix, config);
+			tasks.push({
+				type: TemplateType.Format,
+				path: `${format}:${path}`,
+				match,
+				matchIndex,
+				basePath,
+				originalIndex: i,
+				priority: calculatePriority(TemplateType.Format, i),
+			});
+			continue;
+		}
+
 		let path = resolveTemplatePath(basePath, rawPath, config);
 
 		if (expandingPaths?.has(path)) {

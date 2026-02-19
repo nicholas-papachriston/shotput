@@ -9,6 +9,8 @@ export enum TemplateType {
 	Http = "http",
 	Skill = "skill",
 	Custom = "custom",
+	/** Parsed format (yaml:, json:, jsonl:, xml:, md:) — expand as object/string in template. */
+	Format = "format",
 }
 
 export interface FileResult {

@@ -386,6 +386,15 @@ export async function shotputStreamingSegments(
 	}
 }
 
+export { markdownToHtml, markdownToPlaintext } from "./markdown";
+export { parseJsonl, parseJsonlChunk } from "./jsonl";
+export {
+	createXmlParser,
+	parseS3ListResponse,
+	parseXml,
+	xmlNodeToString,
+} from "./xml";
+export type { XmlNode } from "./xml";
 export type { SourceContext, SourcePlugin, SourceResolution } from "./plugins";
 export { resolveSubagent } from "./subagent";
 export type { ResolvedSubagent, SubagentConfig } from "./subagent";

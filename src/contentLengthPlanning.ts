@@ -25,6 +25,13 @@ export async function estimateContentLength(
 				return file.size;
 			}
 
+			case TemplateType.Format: {
+				const colon = task.path.indexOf(":");
+				const filePath = colon >= 0 ? task.path.slice(colon + 1) : task.path;
+				const file = Bun.file(filePath);
+				return file.size;
+			}
+
 			case TemplateType.Http: {
 				const response = await fetch(task.path, {
 					method: "HEAD",

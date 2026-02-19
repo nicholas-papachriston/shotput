@@ -8,6 +8,7 @@
 | Construct | Syntax | Notes |
 |-----------|--------|-------|
 | File | {{./path/to/file.md}} | Relative to templateDir |
+| Format (expand) | {{yaml:path}}, {{json:path}}, {{jsonl:path}}, {{xml:path}}, {{md:path}} | Parse and expand as object/text (yaml/json/jsonl/xml as formatted; md as content) |
 | Directory | {{./dir/}} | All files concatenated, order preserved |
 | Glob | {{./data/*.json}} | Order preserved |
 | Regex | {{\regex\/g}} | File paths matching regex |

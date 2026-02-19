@@ -12,7 +12,7 @@
  *   bun run examples/basic/17-each.ts
  */
 
-import { mkdirSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { shotput } from "../../src/index";
 import { getLogger } from "../../src/logger";
@@ -65,6 +65,7 @@ try {
 		debug: false,
 	});
 
+	writeFileSync(join(outputDir, "output.md"), result.content ?? "");
 	console.log("--- {{#each}} output ---");
 	console.log(result.content);
 } catch (error) {

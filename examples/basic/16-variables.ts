@@ -11,7 +11,7 @@
  *   bun run examples/basic/16-variables.ts
  */
 
-import { mkdirSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { shotput } from "../../src/index";
 import { getLogger } from "../../src/logger";
@@ -54,6 +54,7 @@ try {
 		debug: false,
 	} as Parameters<typeof shotput>[0] & { params?: Record<string, unknown> });
 
+	writeFileSync(join(outputDir, "output.md"), result.content ?? "");
 	console.log("--- Output (context + params + env) ---");
 	console.log(result.content?.slice(0, 700));
 
@@ -64,6 +65,7 @@ try {
 		responseDir: outputDir,
 		context: { taskName: "only-this" },
 	});
+	writeFileSync(join(outputDir, "output-minimal.md"), minimal.content ?? "");
 	console.log("\n--- Missing key yields empty string ---");
 	console.log(minimal.content);
 } catch (error) {

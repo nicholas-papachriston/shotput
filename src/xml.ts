@@ -1,9 +1,45 @@
-type XmlNode = {
+/**
+ * Parsed XML node (tag, attributes, children, optional text).
+ */
+export interface XmlNode {
 	tag: string;
 	attributes: Record<string, string>;
 	children: XmlNode[];
 	text?: string;
-};
+}
+
+/**
+ * Serialize an XmlNode tree back to an XML string. Use for expanding
+ * {{xml:path}} references in templates.
+ */
+export function xmlNodeToString(node: XmlNode, indent = 0): string {
+	const pad = "  ".repeat(indent);
+	const attrs = Object.entries(node.attributes)
+		.map(([k, v]) => ` ${k}="${String(v).replace(/"/g, "&quot;")}"`)
+		.join("");
+	if (node.children.length === 0 && node.text == null) {
+		return `${pad}<${node.tag}${attrs}/>`;
+	}
+	const open = `${pad}<${node.tag}${attrs}>`;
+	const inner: string[] = [];
+	if (node.text != null && node.text.length > 0) {
+		inner.push(`${pad}  ${escapeXmlText(node.text)}`);
+	}
+	for (const child of node.children) {
+		inner.push(xmlNodeToString(child, indent + 1));
+	}
+	const close = `${pad}</${node.tag}>`;
+	return [open, ...inner, close].join("\n");
+}
+
+function escapeXmlText(s: string): string {
+	return s
+		.replace(/&/g, "&amp;")
+		.replace(/</g, "&lt;")
+		.replace(/>/g, "&gt;")
+		.replace(/"/g, "&quot;")
+		.replace(/'/g, "&apos;");
+}
 
 type Token = {
 	type: "openTag" | "closeTag" | "text" | "attribute";
@@ -160,3 +196,26 @@ export const createXmlParser = () => {
 		parseS3ListResponse,
 	};
 };
+
+const defaultParser = createXmlParser();
+
+/**
+ * Parse an XML string into a tree of XmlNode. Use for generic XML content.
+ *
+ * @param xmlString - XML source
+ * @returns Root node (first element)
+ */
+export function parseXml(xmlString: string): XmlNode {
+	return defaultParser.parse(xmlString);
+}
+
+/**
+ * Extract &lt;Key&gt; values from an S3 ListObjects XML response. Use when
+ * implementing S3 prefix listing.
+ *
+ * @param xmlString - S3 ListObjects response body
+ * @returns Array of object keys
+ */
+export function parseS3ListResponse(xmlString: string): string[] {
+	return defaultParser.parseS3ListResponse(xmlString);
+}

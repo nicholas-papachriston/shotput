@@ -5,6 +5,7 @@ import { processContent } from "./content";
 import { handlerErrorResult } from "./handlerResult";
 import { getLogger } from "./logger";
 import { SecurityError, validatePath, validateSkillSource } from "./security";
+import { parseYaml } from "./yaml";
 
 const log = getLogger("skill");
 
@@ -22,10 +23,9 @@ interface SkillContent {
 }
 
 /**
- * Parse SKILL.md content to extract frontmatter and instructions
+ * Parse SKILL.md content to extract frontmatter and instructions using Bun.YAML.parse.
  */
 const parseSkillMd = (content: string): SkillContent => {
-	// Parse YAML frontmatter between --- markers
 	const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
 	if (!frontmatterMatch) {
 		throw new Error("Invalid SKILL.md format - missing frontmatter");
@@ -34,23 +34,36 @@ const parseSkillMd = (content: string): SkillContent => {
 	const yamlContent = frontmatterMatch[1];
 	const instructions = frontmatterMatch[2].trim();
 
-	// Simple YAML parsing for frontmatter (name and description)
-	const nameMatch = yamlContent.match(/^name:\s*(.+)$/m);
-	const descriptionMatch = yamlContent.match(/^description:\s*(.+)$/m);
-	const licenseMatch = yamlContent.match(/^license:\s*(.+)$/m);
-
-	if (!nameMatch || !descriptionMatch) {
+	let parsed: unknown;
+	try {
+		parsed = parseYaml(yamlContent);
+	} catch (e) {
+		throw new Error(
+			`Invalid SKILL.md frontmatter - YAML parse error: ${e instanceof Error ? e.message : String(e)}`,
+		);
+	}
+	if (parsed == null || typeof parsed !== "object" || Array.isArray(parsed)) {
+		throw new Error("Invalid SKILL.md frontmatter - not an object");
+	}
+	const obj = parsed as Record<string, unknown>;
+	const name =
+		typeof obj["name"] === "string" ? (obj["name"] as string).trim() : "";
+	const description =
+		typeof obj["description"] === "string"
+			? (obj["description"] as string).trim()
+			: "";
+	if (!name || !description) {
 		throw new Error(
 			"Invalid SKILL.md frontmatter - missing name or description",
 		);
 	}
+	const license =
+		typeof obj["license"] === "string"
+			? (obj["license"] as string).trim()
+			: undefined;
 
 	return {
-		frontmatter: {
-			name: nameMatch[1].trim(),
-			description: descriptionMatch[1].trim(),
-			license: licenseMatch?.[1]?.trim(),
-		},
+		frontmatter: { name, description, license },
 		instructions,
 	};
 };

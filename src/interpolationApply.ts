@@ -54,6 +54,11 @@ export function inclusionBasePathFor(
 	) {
 		return dirname(p);
 	}
+	if (type === TemplateType.Format) {
+		const colon = p.indexOf(":");
+		const filePath = colon >= 0 ? p.slice(colon + 1) : p;
+		return dirname(filePath);
+	}
 	if (type === TemplateType.Directory) return p;
 	return basePath;
 }

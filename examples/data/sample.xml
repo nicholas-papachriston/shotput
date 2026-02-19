@@ -1,0 +1,10 @@
+<config>
+  <app name="shotput">
+    <version>1.0.0</version>
+    <features>
+      <feature id="templating">File and directory inclusion</feature>
+      <feature id="rules">Conditionals and loops</feature>
+      <feature id="sections">Sectioned output</feature>
+    </features>
+  </app>
+</config>
