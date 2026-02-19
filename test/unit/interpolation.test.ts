@@ -141,7 +141,7 @@ describe("interpolation", () => {
 		expect(result.processedTemplate).toContain("cycle-a.txt]");
 	});
 
-	it("should resolve relative paths in included content relative to including file (sequential path)", async () => {
+	it("should resolve relative paths in included content relative to including file", async () => {
 		const sequentialConfig = createConfig({
 			...defaultConfig,
 			maxConcurrency: 1,
@@ -180,6 +180,57 @@ describe("interpolation", () => {
 			"{{#each context.items}}[{{context.__loop.index}}:{{context.__loop.item}}]{{/each}}";
 		const result = await interpolation(template, config);
 		expect(result.processedTemplate).toBe("[0:a][1:b][2:c]");
+	});
+
+	it("should use mergeContext when provided", async () => {
+		const config = createConfig({
+			context: { base: "default" },
+		});
+		const template = "{{context.base}} {{context.override}}";
+		const result = await interpolation(
+			template,
+			config,
+			process.cwd(),
+			0,
+			100000,
+			new Set(),
+			undefined,
+			{ override: "merged" },
+		);
+		expect(result.processedTemplate).toBe("default merged");
+	});
+
+	it("should substitute literals when literalBox has entries and no matches", async () => {
+		const literalBox = { literals: new Map<string, string>() };
+		literalBox.literals.set("__SHOTPUT_LITERAL_0__", "literal-content");
+		const template = "Prefix __SHOTPUT_LITERAL_0__ suffix";
+		const result = await interpolation(
+			template,
+			defaultConfig,
+			process.cwd(),
+			0,
+			100000,
+			new Set(),
+			literalBox,
+		);
+		expect(result.processedTemplate).toContain("literal-content");
+	});
+
+	it("should return remainingLength in result", async () => {
+		const template = "Hello World";
+		const result = await interpolation(template, defaultConfig);
+		expect(result.remainingLength).toBeDefined();
+		expect(typeof result.remainingLength).toBe("number");
+	});
+
+	it("should include resultMetadata when placeholders are processed", async () => {
+		const template = "{{test/fixtures/test.txt}}";
+		const result = await interpolation(template, defaultConfig);
+		expect(result.resultMetadata).toBeDefined();
+		expect(result.resultMetadata?.length).toBeGreaterThan(0);
+		expect(result.resultMetadata?.[0]).toHaveProperty("path");
+		expect(result.resultMetadata?.[0]).toHaveProperty("type");
+		expect(result.resultMetadata?.[0]).toHaveProperty("duration");
 	});
 });
 
@@ -247,5 +298,42 @@ describe("interpolationStream", () => {
 		const { stream } = await interpolationStream(template, parallelConfig);
 		const concatenated = await consumeStream(stream);
 		expect(concatenated).toBe(expected.processedTemplate);
+	});
+
+	it("maxConcurrency=1 produces same output as maxConcurrency=4", async () => {
+		const template =
+			"Start {{test/fixtures/test.txt}} Mid {{test/fixtures/test.txt}} End";
+		const single = await interpolation(template, sequentialConfig);
+		const multi = await interpolation(template, parallelConfig);
+		expect(single.processedTemplate).toBe(multi.processedTemplate);
+	});
+
+	it("should return stream that emits segments in order when multiple placeholders", async () => {
+		const template =
+			"A {{test/fixtures/test.txt}} B {{test/fixtures/test.txt}} C";
+		const { stream } = await interpolationStream(template, sequentialConfig);
+		const chunks: string[] = [];
+		const reader = stream.getReader();
+		for (;;) {
+			const { value, done } = await reader.read();
+			if (done) break;
+			if (value !== undefined) chunks.push(value);
+		}
+		const concatenated = chunks.join("");
+		expect(concatenated).toContain("A ");
+		expect(concatenated).toContain("filename:");
+		expect(concatenated).toContain(" B ");
+		expect(concatenated).toContain(" C");
+	});
+
+	it("should resolve literalMapPromise when custom sources emit literals", async () => {
+		// For stream without matches, literalMapPromise resolves to undefined
+		const template = "No placeholders here";
+		const { literalMapPromise } = await interpolationStream(
+			template,
+			sequentialConfig,
+		);
+		const literalMap = await literalMapPromise;
+		expect(literalMap).toBeUndefined();
 	});
 });

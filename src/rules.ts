@@ -5,7 +5,7 @@ import {
 	evaluateCondition,
 	getArrayFromExpr,
 } from "./ruleConditions";
-import { substituteLoopItemVariables, substituteVariables } from "./variables";
+import { substituteLoopVariables } from "./variables";
 
 export type { RuleContext } from "./ruleConditions";
 
@@ -30,8 +30,13 @@ function getTopLevelBlocks(blocks: ParsedBlock[]): ParsedBlock[] {
  * Evaluate {{#if condition}}...{{else}}...{{/if}} and {{#each expr}}...{{/each}} blocks.
  * For each, exposes context.__loop = { item, index } so rules and variable substitution can read them.
  * Builds output via segments + single join; processes top-level blocks in O(n).
+ * When recursing with identical blockContent, pass preParsedBlocks to avoid repeated parse cache lookups.
  */
-export function evaluateRules(content: string, config: ShotputConfig): string {
+export function evaluateRules(
+	content: string,
+	config: ShotputConfig,
+	preParsedBlocks?: ParsedBlock[] | null,
+): string {
 	if (!content.includes("{{#")) return content;
 
 	const context = config.context ?? {};
@@ -40,8 +45,11 @@ export function evaluateRules(content: string, config: ShotputConfig): string {
 	const engine = config.expressionEngine ?? "js";
 	const ctx: RuleContext = { context, env, params };
 
-	const blocks = parseAllBlocks(content);
-	if (blocks.length === 0) return content;
+	const blocks = preParsedBlocks ?? parseAllBlocks(content);
+	if (blocks.length === 0) {
+		// No blocks; caller handles variable substitution via substituteLoopVariables
+		return content;
+	}
 
 	const topLevelBlocks = getTopLevelBlocks(blocks);
 	const out: string[] = [];
@@ -61,7 +69,7 @@ export function evaluateRules(content: string, config: ShotputConfig): string {
 			const chosen = evaluateCondition(block.expr, ctx, engine)
 				? consequent
 				: alternate;
-			const evaluatedChosen = evaluateRules(chosen, config);
+			const evaluatedChosen = evaluateRules(chosen, config, undefined);
 			out.push(evaluatedChosen);
 		} else {
 			const arr = getArrayFromExpr(block.expr, ctx);
@@ -74,12 +82,21 @@ export function evaluateRules(content: string, config: ShotputConfig): string {
 			loopContext["__loop"] = loopState;
 			const loopConfig = Object.create(config) as ShotputConfig;
 			loopConfig.context = loopContext;
+			const blockContentBlocks = parseAllBlocks(blockContent);
 			for (let i = 0; i < arr.length; i++) {
 				loopState.item = arr[i];
 				loopState.index = i;
-				const evaluated = evaluateRules(blockContent, loopConfig);
-				const withLoop = substituteLoopItemVariables(evaluated, arr[i], i);
-				const substituted = substituteVariables(withLoop, loopConfig);
+				const evaluated = evaluateRules(
+					blockContent,
+					loopConfig,
+					blockContentBlocks,
+				);
+				const substituted = substituteLoopVariables(
+					evaluated,
+					arr[i],
+					i,
+					loopConfig,
+				);
 				chunks.push(substituted);
 			}
 			out.push(chunks.join(""));

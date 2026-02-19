@@ -2,15 +2,16 @@ import type { ShotputConfig } from "./config";
 import { interpolation } from "./interpolation";
 import {
 	getInterpolationMatchesWithIndices,
+	inclusionBasePathFor,
 	interpolationPattern,
 } from "./interpolationApply";
-import { runSequentialInterpolation } from "./interpolationSequential";
 import { getLogger } from "./logger";
 import { ParallelProcessor } from "./parallelProcessor";
 import { evaluateRules } from "./rules";
 import { clearStatCache } from "./template";
 import { getCountFnAsync } from "./tokens";
 import type { ShotputOutput } from "./types";
+import type { TemplateType } from "./types";
 import { substituteVariables } from "./variables";
 
 const log = getLogger("interpolationStream");
@@ -24,9 +25,10 @@ export interface InterpolationStreamResult {
 
 /**
  * Interpolation that yields segments in document order as each placeholder is resolved.
- * Uses parallel path when enableContentLengthPlanning && maxConcurrency > 1, else sequential.
+ * Uses ParallelProcessor (parallel flow with ordered drain). maxConcurrency=1 uses same flow via semaphore.
  * For "more matches" recursion emits the nested result as one segment.
- * Literal substitution is not applied to the stream; literalMap/literalMapPromise exposed for client-side substituteLiterals (sequential path only).
+ * Literal substitution is not applied to the stream; literalMap/literalMapPromise exposed for client-side substituteLiterals.
+ * When rulesAlreadyEvaluated is true and depth is 0, skips evaluateRules (avoids redundant call when content comes from runStreamingInternal).
  */
 export function interpolationStream(
 	content: string,
@@ -37,6 +39,7 @@ export function interpolationStream(
 	expandingPaths: Set<string> = new Set(),
 	literalBox?: { literals: Map<string, string> },
 	mergeContext?: Record<string, unknown>,
+	rulesAlreadyEvaluated = false,
 ): InterpolationStreamResult {
 	if (depth === 0) {
 		clearStatCache();
@@ -47,7 +50,10 @@ export function interpolationStream(
 				context: { ...(config.context ?? {}), ...mergeContext },
 			}
 		: config;
-	const contentAfterRules = evaluateRules(content, effectiveConfig);
+	const contentAfterRules =
+		rulesAlreadyEvaluated && depth === 0
+			? content
+			: evaluateRules(content, effectiveConfig);
 	const contentAfterVariables = substituteVariables(
 		contentAfterRules,
 		effectiveConfig,
@@ -95,8 +101,6 @@ export function interpolationStream(
 	);
 
 	const maxDepth = config.maxNestingDepth;
-	const useParallel =
-		config.enableContentLengthPlanning && config.maxConcurrency > 1;
 
 	async function innerRun(
 		controller: ReadableStreamDefaultController<string>,
@@ -115,151 +119,94 @@ export function interpolationStream(
 		}>;
 		let finalRemainingLength: number;
 
-		if (useParallel) {
-			log.info(
-				`Streaming parallel (depth ${depth}/${maxDepth}) with content length planning`,
-			);
-			const processor = new ParallelProcessor(configToUse);
-			const parallelResult = await processor.processTemplatesWithPlanning(
-				contentAfterVariables,
-				basePath,
-				remainingLength,
-				undefined,
-				expandingPaths,
-				emit,
-			);
-			const processedContent = parallelResult.content;
-			const processedTemplate =
-				parallelResult.replacementsNeedRulesAndVars === false
-					? processedContent
-					: substituteVariables(
-							evaluateRules(processedContent, effectiveConfig),
-							effectiveConfig,
-						);
-			currentMetadata = parallelResult.metadata.map((m) => ({
-				path: m.path,
-				type: m.type,
-				duration: m.processingTime,
-			}));
-			const usedLength = configToUse.tokenizer
-				? await getCountFnAsync(configToUse)(processedTemplate)
-				: processedTemplate.length;
-			finalRemainingLength = Math.max(
-				0,
-				configToUse.maxPromptLength - usedLength,
-			);
-
-			// When parallel had 0 tasks (e.g. all placeholders are String like section markers), it returns without calling emit; emit full content.
-			if (currentMetadata.length === 0) {
-				emit(contentAfterVariables);
-			}
-
-			if (parallelResult.pendingSuffix !== undefined) {
-				const moreMatches = processedTemplate.match(interpolationPattern);
-				if (moreMatches && depth < maxDepth && finalRemainingLength > 0) {
-					log.info(
-						`More matches at depth ${depth}, emitting nested result as one segment`,
+		log.info(`Streaming (depth ${depth}/${maxDepth})`);
+		const processor = new ParallelProcessor(configToUse);
+		const parallelResult = await processor.processTemplatesWithPlanning(
+			contentAfterVariables,
+			basePath,
+			remainingLength,
+			undefined,
+			expandingPaths,
+			emit,
+			resolvedLiteralBox,
+		);
+		const processedContent = parallelResult.content;
+		const processedTemplate =
+			parallelResult.replacementsNeedRulesAndVars === false
+				? processedContent
+				: substituteVariables(
+						evaluateRules(processedContent, effectiveConfig),
+						effectiveConfig,
 					);
-					const pathsAdded = currentMetadata.map((m) => m.path);
-					for (const p of pathsAdded) {
-						expandingPaths.add(p);
-					}
-					try {
-						const nested = await interpolation(
-							processedTemplate,
-							config,
-							basePath,
-							depth + 1,
-							finalRemainingLength,
-							expandingPaths,
-							resolvedLiteralBox,
-						);
-						emit(nested.processedTemplate);
-						currentMetadata = [
-							...currentMetadata,
-							...(nested.resultMetadata ?? []),
-						];
-						finalRemainingLength = nested.remainingLength;
-					} finally {
-						for (const p of pathsAdded) {
-							expandingPaths.delete(p);
-						}
-					}
-				} else {
-					emit(parallelResult.pendingSuffix);
+		currentMetadata = parallelResult.metadata.map((m) => ({
+			path: m.path,
+			type: m.type,
+			duration: m.processingTime,
+		}));
+		const usedLength = configToUse.tokenizer
+			? await getCountFnAsync(configToUse)(processedTemplate)
+			: processedTemplate.length;
+		finalRemainingLength = Math.max(
+			0,
+			configToUse.maxPromptLength - usedLength,
+		);
+
+		if (currentMetadata.length === 0) {
+			emit(contentAfterVariables);
+		}
+
+		if (parallelResult.pendingSuffix !== undefined) {
+			const moreMatches = processedTemplate.match(interpolationPattern);
+			if (moreMatches && depth < maxDepth && finalRemainingLength > 0) {
+				log.info(
+					`More matches at depth ${depth}, emitting nested result as one segment`,
+				);
+				const pathsAdded = currentMetadata.map((m) => m.path);
+				for (const p of pathsAdded) {
+					expandingPaths.add(p);
 				}
-			}
-		} else {
-			log.info(`Streaming sequential (depth ${depth}/${maxDepth})`);
-			// Buffer segments so we can emit either buffer+suffix or single nested result when there are more matches
-			const sequentialBuffer: string[] = [];
-			const sequentialEmit = (segment: string) =>
-				sequentialBuffer.push(segment);
-			const sequentialResult = await runSequentialInterpolation(
-				contentAfterVariables,
-				config,
-				basePath,
-				depth,
-				remainingLength,
-				expandingPaths,
-				resolvedLiteralBox,
-				configToUse,
-				matchEntries,
-				(cont, inclusionBase, d, remLen, expPaths, litBox, mergeCtx) =>
-					interpolation(
-						cont,
-						configToUse,
+				const firstFull = moreMatches[0];
+				const innerPath =
+					typeof firstFull === "string" ? firstFull.slice(2, -2).trim() : "";
+				const pathIsFileRelative =
+					innerPath.startsWith("./") ||
+					innerPath.startsWith("../") ||
+					!innerPath.includes("/");
+				const inclusionBase =
+					currentMetadata.length === 1 && pathIsFileRelative
+						? inclusionBasePathFor(
+								currentMetadata[0].type as TemplateType,
+								currentMetadata[0].path,
+								basePath,
+							)
+						: basePath;
+				try {
+					const nested = await interpolation(
+						processedTemplate,
+						config,
 						inclusionBase,
-						d,
-						remLen,
-						expPaths,
-						litBox,
-						mergeCtx,
-					),
-				sequentialEmit,
-			);
-
-			currentMetadata = sequentialResult.resultMetadata;
-			finalRemainingLength = sequentialResult.finalRemainingLength;
-
-			if (sequentialResult.pendingSuffix !== undefined) {
-				const result = sequentialResult.result;
-				const moreMatches = result.match(interpolationPattern);
-				if (moreMatches && depth < maxDepth && finalRemainingLength > 0) {
-					log.info(
-						`More matches at depth ${depth}, emitting nested result as one segment`,
+						depth + 1,
+						finalRemainingLength,
+						expandingPaths,
+						resolvedLiteralBox,
 					);
-					const pathsAdded = currentMetadata.map((m) => m.path);
+					// Processor already emitted prefix + replacement; emit only the suffix part (transformed by nested interpolation)
+					const suffixStart =
+						parallelResult.content.length -
+						(parallelResult.pendingSuffix?.length ?? 0);
+					emit(nested.processedTemplate.slice(suffixStart));
+					currentMetadata = [
+						...currentMetadata,
+						...(nested.resultMetadata ?? []),
+					];
+					finalRemainingLength = nested.remainingLength;
+				} finally {
 					for (const p of pathsAdded) {
-						expandingPaths.add(p);
+						expandingPaths.delete(p);
 					}
-					try {
-						const nested = await interpolation(
-							result,
-							config,
-							basePath,
-							depth + 1,
-							finalRemainingLength,
-							expandingPaths,
-							resolvedLiteralBox,
-						);
-						emit(nested.processedTemplate);
-						currentMetadata = [
-							...currentMetadata,
-							...(nested.resultMetadata ?? []),
-						];
-						finalRemainingLength = nested.remainingLength;
-					} finally {
-						for (const p of pathsAdded) {
-							expandingPaths.delete(p);
-						}
-					}
-				} else {
-					for (const seg of sequentialBuffer) emit(seg);
-					emit(sequentialResult.pendingSuffix);
 				}
 			} else {
-				for (const seg of sequentialBuffer) emit(seg);
+				emit(parallelResult.pendingSuffix);
 			}
 		}
 
@@ -279,9 +226,7 @@ export function interpolationStream(
 								duration: m.duration,
 							})),
 						});
-						resolveLiteralMap(
-							useParallel ? undefined : resolvedLiteralBox?.literals,
-						);
+						resolveLiteralMap(resolvedLiteralBox?.literals);
 						controller.close();
 					})
 					.catch((err) => {

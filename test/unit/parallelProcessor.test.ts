@@ -138,8 +138,12 @@ describe("ParallelProcessor", () => {
 			const tempDir = fs.mkdtempSync(join("/tmp", "shotput-test-"));
 			const f1 = join(tempDir, "a.txt");
 			const f2 = join(tempDir, "b.txt");
-			fs.writeFileSync(f1, "A");
-			fs.writeFileSync(f2, "B");
+			// Use unique markers that cannot appear in mkdtemp random paths
+			// (A/B can appear in suffix e.g. aBc123, causing indexOf to hit the path)
+			const marker1 = "===FIRST_TEMPLATE===";
+			const marker2 = "===SECOND_TEMPLATE===";
+			fs.writeFileSync(f1, marker1);
+			fs.writeFileSync(f2, marker2);
 
 			const content = `{{${f1}}} {{${f2}}}`;
 			// Use maxConcurrency: 1 so completion order matches document order and the test is deterministic
@@ -152,10 +156,10 @@ describe("ParallelProcessor", () => {
 				1000,
 			);
 
-			expect(result.content).toContain("A");
-			expect(result.content).toContain("B");
-			expect(result.content.indexOf("A")).toBeLessThan(
-				result.content.indexOf("B"),
+			expect(result.content).toContain(marker1);
+			expect(result.content).toContain(marker2);
+			expect(result.content.indexOf(marker1)).toBeLessThan(
+				result.content.indexOf(marker2),
 			);
 
 			fs.rmSync(tempDir, { recursive: true, force: true });

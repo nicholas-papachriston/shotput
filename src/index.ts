@@ -93,6 +93,12 @@ async function runStreamingInternal(
 		templateContent,
 		config,
 		config.templateDir,
+		0,
+		config.maxPromptLength,
+		new Set(),
+		undefined,
+		undefined,
+		true, // rules already evaluated above
 	);
 
 	return {

@@ -7,9 +7,13 @@ import { getHandler } from "./handlers";
 import { getPostResolveSourceHooks, runPostResolveSourceHooks } from "./hooks";
 import { getLogger } from "./logger";
 import { type TemplateTask, planTemplates } from "./parallelPlan";
+import { getMatchingPlugin } from "./plugins";
 import { Semaphore } from "./semaphore";
 import { getCountFnAsync } from "./tokens";
 import type { ProcessingProgress, TemplateResult } from "./types";
+import { TemplateType } from "./types";
+
+const LITERAL_PLACEHOLDER_PREFIX = "__SHOTPUT_LITERAL_";
 
 const log = getLogger("parallelProcessor");
 
@@ -165,6 +169,7 @@ export class ParallelProcessor {
 		onProgress?: (progress: ProcessingProgress) => void,
 		expandingPaths?: Set<string>,
 		emit?: SegmentSink,
+		literalBox?: { literals: Map<string, string> },
 	): Promise<{
 		content: string;
 		metadata: TemplateResult[];
@@ -203,6 +208,38 @@ export class ParallelProcessor {
 			`Step 4: Processing ${selectedTasks.length} templates in parallel...`,
 		);
 
+		const orderedParts = selectedTasks.map((t) => ({
+			start: t.matchIndex,
+			end: t.matchIndex + t.match.length,
+		}));
+		const completed = new Map<number, { end: number; replacement: string }>();
+		const hookedReplacements = new Map<number, string>();
+		let lastEmittedEnd = 0;
+		let hasError = false;
+
+		const tryDrain = (): void => {
+			for (const part of orderedParts) {
+				if (part.start < lastEmittedEnd) continue;
+				const done = completed.get(part.start);
+				if (!done) break;
+				if (emit && !hasError) {
+					emit(content.slice(lastEmittedEnd, part.start));
+					emit(done.replacement);
+				}
+				lastEmittedEnd = part.end;
+				completed.delete(part.start);
+			}
+		};
+
+		const RULE_VAR_MARKERS = [
+			"{{#",
+			"{{/",
+			"{{else",
+			"{{context.",
+			"{{params.",
+			"{{env.",
+		];
+
 		const processingPromises = selectedTasks.map(async (task, index) => {
 			await this.semaphore.acquire();
 
@@ -215,8 +252,54 @@ export class ParallelProcessor {
 				});
 
 				const result = await this.processSingleTemplate(task, maxLength);
+				const processed = result.processed;
 
+				if (!hasError) {
+					const templateResult = result.result;
+					let replacement: string;
+					if (!templateResult.error && processed) {
+						replacement = processed.replacement;
+						if (task.type === TemplateType.Custom && literalBox) {
+							const plugin = getMatchingPlugin(this.config, task.path);
+							if (plugin && !plugin.canContainTemplates && replacement) {
+								const key = `${LITERAL_PLACEHOLDER_PREFIX}${literalBox.literals.size}__`;
+								literalBox.literals.set(key, replacement);
+								replacement = key;
+							}
+						}
+						const postSourceHooks = getPostResolveSourceHooks(this.config);
+						if (postSourceHooks.length > 0) {
+							const sourceResult = {
+								type: templateResult.type,
+								path: templateResult.path,
+								content: replacement,
+								remainingLength: maxLength - processed.length,
+								metadata: templateResult,
+							};
+							const afterHook = await runPostResolveSourceHooks(
+								sourceResult,
+								postSourceHooks,
+							);
+							replacement = afterHook.content;
+						}
+						hookedReplacements.set(task.matchIndex, replacement);
+					} else if (templateResult.error) {
+						replacement = templateResult.error.startsWith("[")
+							? templateResult.error
+							: `[Error reading ${task.path}]`;
+						hookedReplacements.set(task.matchIndex, replacement);
+					} else {
+						replacement = "";
+					}
+
+					const end = task.matchIndex + task.match.length;
+					completed.set(task.matchIndex, { end, replacement });
+					tryDrain();
+				}
 				return result;
+			} catch (err) {
+				hasError = true;
+				throw err;
 			} finally {
 				this.semaphore.release();
 			}
@@ -224,43 +307,30 @@ export class ParallelProcessor {
 
 		const results = await Promise.all(processingPromises);
 
+		if (emit && !hasError) {
+			tryDrain();
+		}
+
 		results.sort((a, b) => a.task.matchIndex - b.task.matchIndex);
 
 		const parts: { start: number; end: number; replacement: string }[] = [];
 		let remainingLength = maxLength;
 		let replacementsNeedRulesAndVars = false;
-		const RULE_VAR_MARKERS = [
-			"{{#",
-			"{{/",
-			"{{else",
-			"{{context.",
-			"{{params.",
-			"{{env.",
-		];
 
 		for (const { task, processed, result } of results) {
 			this.processedTemplates.push(result);
 
 			const start = task.matchIndex;
 			const end = task.matchIndex + task.match.length;
+			const replacement =
+				hookedReplacements.get(task.matchIndex) ??
+				(result.error
+					? result.error.startsWith("[")
+						? result.error
+						: `[Error reading ${task.path}]`
+					: (processed?.replacement ?? ""));
 
 			if (!result.error && processed) {
-				let replacement = processed.replacement;
-				const postSourceHooks = getPostResolveSourceHooks(this.config);
-				if (postSourceHooks.length > 0) {
-					const sourceResult = {
-						type: result.type,
-						path: result.path,
-						content: replacement,
-						remainingLength: remainingLength - processed.length,
-						metadata: result,
-					};
-					const afterHook = await runPostResolveSourceHooks(
-						sourceResult,
-						postSourceHooks,
-					);
-					replacement = afterHook.content;
-				}
 				parts.push({ start, end, replacement });
 				if (replacement.includes("{{")) {
 					for (const m of RULE_VAR_MARKERS) {
@@ -272,13 +342,10 @@ export class ParallelProcessor {
 				}
 				remainingLength -= processed.length;
 			} else if (result.error) {
-				const errorMsg = result.error.startsWith("[")
-					? result.error
-					: `[Error reading ${task.path}]`;
-				parts.push({ start, end, replacement: errorMsg });
-				if (errorMsg.includes("{{")) {
+				parts.push({ start, end, replacement });
+				if (replacement.includes("{{")) {
 					for (const m of RULE_VAR_MARKERS) {
-						if (errorMsg.includes(m)) {
+						if (replacement.includes(m)) {
 							replacementsNeedRulesAndVars = true;
 							break;
 						}
@@ -297,16 +364,7 @@ export class ParallelProcessor {
 		segments.push(content.slice(lastEnd));
 		const resultContent = segments.join("");
 
-		let pendingSuffix: string | undefined;
-		if (emit) {
-			let lastEnd = 0;
-			for (const part of parts) {
-				emit(content.slice(lastEnd, part.start));
-				emit(part.replacement);
-				lastEnd = part.end;
-			}
-			pendingSuffix = content.slice(lastEnd);
-		}
+		const pendingSuffix = emit ? content.slice(lastEmittedEnd) : undefined;
 
 		onProgress?.({
 			current: selectedTasks.length,

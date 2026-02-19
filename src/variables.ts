@@ -1,14 +1,24 @@
 import type { ShotputConfig } from "./config";
 
+const CACHE_CAP = 20_000;
+
 const pathKeysCache = new Map<string, string[]>();
 const variableResolverCache = new Map<
 	string,
 	{ type: "context" | "params" | "env"; keyPath: string }
 >();
 
+function evictOldestIfNeeded<K, V>(cache: Map<K, V>, cap: number): void {
+	if (cache.size >= cap) {
+		const firstKey = cache.keys().next().value;
+		if (firstKey !== undefined) cache.delete(firstKey);
+	}
+}
+
 function getPathKeys(path: string): string[] {
 	let keys = pathKeysCache.get(path);
 	if (!keys) {
+		evictOldestIfNeeded(pathKeysCache, CACHE_CAP);
 		keys = path.split(".");
 		pathKeysCache.set(path, keys);
 	}
@@ -46,6 +56,7 @@ export function getVariableValue(path: string, config: ShotputConfig): string {
 		} else {
 			return "";
 		}
+		evictOldestIfNeeded(variableResolverCache, CACHE_CAP);
 		variableResolverCache.set(trimmed, resolved);
 	}
 
@@ -93,6 +104,50 @@ export function substituteLoopItemVariables(
 		if (kind === "index") return indexVal;
 		return itemVal;
 	});
+}
+
+/**
+ * Single-pass substitution for both loop placeholders ({{context.__loop.*}})
+ * and variable placeholders ({{context.x}}, {{params.x}}, {{env.x}}).
+ * Reduces two replace passes to one for each each-block iteration.
+ */
+const COMBINED_LOOP_VAR_PLACEHOLDER =
+	/\{\{\s*(context\.__loop\.(item\.name|item\.value|index|item)|context\.[^}]*|params\.[^}]*|env\.[^}]*)\s*\}\}/g;
+
+export function substituteLoopVariables(
+	content: string,
+	item: unknown,
+	index: number,
+	config: ShotputConfig,
+): string {
+	const hasLoop = content.includes("context.__loop");
+	const hasVar =
+		content.includes("context.") ||
+		content.includes("params.") ||
+		content.includes("env.");
+	if (!hasLoop && !hasVar) return content;
+
+	const itemObj =
+		item != null && typeof item === "object"
+			? (item as Record<string, unknown>)
+			: {};
+	const nameVal = itemObj["name"] != null ? String(itemObj["name"]) : "";
+	const valueVal = itemObj["value"] != null ? String(itemObj["value"]) : "";
+	const itemVal = item != null ? String(item) : "";
+	const indexVal = String(index);
+
+	return content.replace(
+		COMBINED_LOOP_VAR_PLACEHOLDER,
+		(_match: string, inner: string, loopKind?: string) => {
+			if (loopKind !== undefined) {
+				if (loopKind === "item.name") return nameVal;
+				if (loopKind === "item.value") return valueVal;
+				if (loopKind === "index") return indexVal;
+				if (loopKind === "item") return itemVal;
+			}
+			return getVariableValue(inner, config);
+		},
+	);
 }
 
 /**

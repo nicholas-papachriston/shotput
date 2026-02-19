@@ -32,7 +32,6 @@ function runOne(): Promise<string> {
 		allowedBasePaths: [join(import.meta.dir, "../..")],
 		context: benchmarkContext,
 		enableContentLengthPlanning: false,
-		maxConcurrency: 1,
 		debug: false,
 	}).then((r) => r.content ?? "");
 }

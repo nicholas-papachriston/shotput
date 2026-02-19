@@ -91,6 +91,29 @@ describe("sections", () => {
 		expect(sections[0].content).toBe("hello");
 	});
 
+	it("should include nested section markup in outer section content", () => {
+		const content =
+			"{{#section:outer}}before{{#section:inner}}nested{{/section}}after{{/section}}";
+		const { sections } = parseOutputSections(content);
+		// Only top-level sections are extracted; inner is part of outer's content
+		expect(sections).toHaveLength(1);
+		expect(sections[0].name).toBe("outer");
+		expect(sections[0].content).toContain("before");
+		expect(sections[0].content).toContain("{{#section:inner}}");
+		expect(sections[0].content).toContain("nested");
+		expect(sections[0].content).toContain("{{/section}}");
+		expect(sections[0].content).toContain("after");
+	});
+
+	it("parseOutputSections returns remainingContent for text outside sections", () => {
+		const content = "prefix{{#section:a}}A{{/section}}suffix";
+		const { sections, remainingContent } = parseOutputSections(content);
+		expect(sections).toHaveLength(1);
+		expect(sections[0].content).toBe("A");
+		expect(remainingContent).toContain("prefix");
+		expect(remainingContent).toContain("suffix");
+	});
+
 	it("should parse sections after rules, interpolation, and hooks in full pipeline", async () => {
 		const preResolveSuffix = "[preResolve]";
 		const hooks: HookSet = {

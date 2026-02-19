@@ -632,10 +632,11 @@ describe("Shotput Edge Cases", () => {
 			responseDir: `${tempDir}/responses`,
 			maxPromptLength: 10,
 			maxConcurrency: 1,
+			enableContentLengthPlanning: false, // Process then truncate (planning would skip and leave template)
 			allowedBasePaths: [process.cwd(), tempDir],
 		});
 
-		// Result should be truncated (sequential path resolves and truncates; parallel would skip and leave template)
+		// Result should be truncated when we process and apply length limit
 		expect(result.content?.length).toBeLessThanOrEqual(10);
 	});
 

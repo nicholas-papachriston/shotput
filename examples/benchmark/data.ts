@@ -75,7 +75,9 @@ export function getShotputTemplate(): string {
 	lines.push(
 		"{{context.__loop.index}}: {{context.__loop.item.name}} = {{context.__loop.item.value}}",
 	);
-	lines.push(" {{#if context.__loop.item.value >= 50}}[HIGH]{{else}}[low]{{/if}}");
+	lines.push(
+		" {{#if context.__loop.item.value >= 50}}[HIGH]{{else}}[low]{{/if}}",
+	);
 	lines.push(" tags: ");
 	lines.push("{{#each context.__loop.item.tags}}\n");
 	lines.push("{{context.__loop.index}}-{{context.__loop.item}} ");
@@ -105,7 +107,9 @@ export function getJinja2Template(): string {
 	lines.push(
 		"{{ loop.index0 }}: {{ item.name }} = {{ item.value }}{% if item.value >= 50 %} [HIGH]{% else %} [low]{% endif %} tags: ",
 	);
-	lines.push("{% for tag in item.tags %}{{ loop.index0 }}-{{ tag | default('n/a') }} {% endfor %}\n");
+	lines.push(
+		"{% for tag in item.tags %}{{ loop.index0 }}-{{ tag | default('n/a') }} {% endfor %}\n",
+	);
 	lines.push("{% endfor %}\n");
 	lines.push("\n## Extra keys\n");
 	for (let i = 0; i < EXTRA_KEYS; i++) {

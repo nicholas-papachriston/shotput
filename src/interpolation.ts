@@ -5,14 +5,15 @@
 import type { ShotputConfig } from "./config";
 import {
 	getInterpolationMatchesWithIndices,
+	inclusionBasePathFor,
 	interpolationPattern,
 } from "./interpolationApply";
-import { runSequentialInterpolation } from "./interpolationSequential";
 import { getLogger } from "./logger";
 import { ParallelProcessor } from "./parallelProcessor";
 import { evaluateRules } from "./rules";
 import { clearStatCache } from "./template";
 import { getCountFnAsync } from "./tokens";
+import type { TemplateType } from "./types";
 import { substituteVariables } from "./variables";
 
 const log = getLogger("interpolation");
@@ -75,8 +76,6 @@ export const interpolation = async (
 		literalBox ??
 		(depth === 0 ? { literals: new Map<string, string>() } : undefined);
 
-	const configToUse = effectiveConfig;
-
 	if (matchEntries.length === 0) {
 		const out = { processedTemplate: contentAfterVariables, remainingLength };
 		if (depth === 0 && resolvedLiteralBox?.literals.size) {
@@ -95,68 +94,39 @@ export const interpolation = async (
 		[];
 	let finalRemainingLength = remainingLength;
 
-	if (config.enableContentLengthPlanning && config.maxConcurrency > 1) {
-		log.info(
-			`Using parallel processing (depth ${depth}/${maxDepth}) with content length planning`,
-		);
-		const processor = new ParallelProcessor(config);
-		const {
-			content: processedContent,
-			metadata,
-			replacementsNeedRulesAndVars,
-		} = await processor.processTemplatesWithPlanning(
-			contentAfterVariables,
-			basePath,
-			remainingLength,
-			undefined,
-			expandingPaths,
-		);
+	log.info(`Processing (depth ${depth}/${maxDepth})`);
+	const processor = new ParallelProcessor(config);
+	const {
+		content: processedContent,
+		metadata,
+		replacementsNeedRulesAndVars,
+	} = await processor.processTemplatesWithPlanning(
+		contentAfterVariables,
+		basePath,
+		remainingLength,
+		undefined,
+		expandingPaths,
+		undefined,
+		resolvedLiteralBox,
+	);
 
-		processedTemplate =
-			replacementsNeedRulesAndVars === false
-				? processedContent
-				: substituteVariables(
-						evaluateRules(processedContent, effectiveConfig),
-						effectiveConfig,
-					);
-		currentMetadata = metadata.map((m) => ({
-			path: m.path,
-			type: m.type,
-			duration: m.processingTime,
-		}));
+	processedTemplate =
+		replacementsNeedRulesAndVars === false
+			? processedContent
+			: substituteVariables(
+					evaluateRules(processedContent, effectiveConfig),
+					effectiveConfig,
+				);
+	currentMetadata = metadata.map((m) => ({
+		path: m.path,
+		type: m.type,
+		duration: m.processingTime,
+	}));
 
-		const usedLength = config.tokenizer
-			? await getCountFnAsync(config)(processedTemplate)
-			: processedTemplate.length;
-		finalRemainingLength = Math.max(0, config.maxPromptLength - usedLength);
-	} else {
-		log.info(`Using sequential processing (depth ${depth}/${maxDepth})`);
-		const sequentialResult = await runSequentialInterpolation(
-			contentAfterVariables,
-			config,
-			basePath,
-			depth,
-			remainingLength,
-			expandingPaths,
-			resolvedLiteralBox,
-			configToUse,
-			matchEntries,
-			(cont, inclusionBase, d, remLen, expPaths, litBox, mergeCtx) =>
-				interpolation(
-					cont,
-					configToUse,
-					inclusionBase,
-					d,
-					remLen,
-					expPaths,
-					litBox,
-					mergeCtx,
-				),
-		);
-		processedTemplate = sequentialResult.result;
-		currentMetadata = sequentialResult.resultMetadata;
-		finalRemainingLength = sequentialResult.finalRemainingLength;
-	}
+	const usedLength = config.tokenizer
+		? await getCountFnAsync(config)(processedTemplate)
+		: processedTemplate.length;
+	finalRemainingLength = Math.max(0, config.maxPromptLength - usedLength);
 
 	if (processedTemplate === contentAfterVariables) {
 		let out = processedTemplate.trim();
@@ -178,11 +148,28 @@ export const interpolation = async (
 		for (const m of currentMetadata) {
 			expandingPaths.add(m.path);
 		}
+		// Use inclusion base only when nested paths are file-relative (./x, ../x, bare).
+		// Project-relative paths (e.g. test/fixtures/x) use basePath (cwd).
+		const firstFull = moreMatches[0];
+		const innerPath =
+			typeof firstFull === "string" ? firstFull.slice(2, -2).trim() : "";
+		const pathIsFileRelative =
+			innerPath.startsWith("./") ||
+			innerPath.startsWith("../") ||
+			!innerPath.includes("/");
+		const inclusionBase =
+			currentMetadata.length === 1 && pathIsFileRelative
+				? inclusionBasePathFor(
+						currentMetadata[0].type as TemplateType,
+						currentMetadata[0].path,
+						basePath,
+					)
+				: basePath;
 		try {
 			const nestedResults = await interpolation(
 				processedTemplate,
 				config,
-				basePath,
+				inclusionBase,
 				depth + 1,
 				finalRemainingLength,
 				expandingPaths,
