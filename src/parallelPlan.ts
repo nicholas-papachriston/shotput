@@ -17,6 +17,8 @@ export interface TemplateTask {
 	estimatedLength?: number;
 	priority: number;
 	isCycle?: boolean;
+	needsCompression?: boolean;
+	compressionBudget?: number;
 }
 
 /**

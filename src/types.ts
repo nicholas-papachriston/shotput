@@ -64,6 +64,11 @@ export type TemplateFunction = (
 	combinedRemainingCount: number;
 }>;
 
+export type SemanticCompressor = (
+	content: string,
+	options: { maxBudget: number; unit: "chars" | "tokens" },
+) => Promise<string> | string;
+
 export interface S3Credentials {
 	accessKeyId?: string;
 	secretAccessKey?: string;

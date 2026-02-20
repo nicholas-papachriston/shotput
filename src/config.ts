@@ -94,6 +94,8 @@ export interface ShotputConfig {
 	redis?: string | import("./db/options").DbPluginOptions;
 	/** Enable {{sqlite://path/query:SQL}} placeholder support. Default: false */
 	sqlite?: boolean;
+	/** Optional semantic compressor for actively shrinking low-priority blocks. */
+	compressor?: import("./types").SemanticCompressor;
 }
 
 export const DEFAULT_CONFIG: ShotputConfig = {
@@ -140,6 +142,7 @@ export const DEFAULT_CONFIG: ShotputConfig = {
 	subagentsDir: "./.agents",
 	redis: undefined,
 	sqlite: false,
+	compressor: undefined,
 };
 
 /**

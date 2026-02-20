@@ -129,6 +129,7 @@ export async function detectContentLengths(
  * Trim tasks based on content length and priority.
  */
 export function trimTasksByLength(
+	config: ShotputConfig,
 	tasks: TemplateTask[],
 	maxLength: number,
 ): TemplateTask[] {
@@ -146,6 +147,15 @@ export function trimTasksByLength(
 		) {
 			selectedTasks.push(task);
 			accumulatedLength += estimatedLength;
+		} else if (config.compressor) {
+			const budget = Math.max(0, maxLength - accumulatedLength);
+			task.needsCompression = true;
+			task.compressionBudget = budget;
+			selectedTasks.push(task);
+			accumulatedLength = maxLength;
+			log.info(
+				`Marked ${task.path} for semantic compression (budget: ${budget})`,
+			);
 		} else {
 			log.warn(
 				`Skipping ${task.path} due to length constraints (accumulated: ${accumulatedLength}, estimated: ${estimatedLength}, max: ${maxLength})`,

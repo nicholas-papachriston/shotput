@@ -79,6 +79,10 @@ These examples demonstrate advanced features and patterns:
 13. **[Token Budgeting](./advanced/13-token-budgeting.ts)** - Token-aware planning and trimming
 14. **[DB Plugin (SQLite)](./advanced/14-db-sqlite.ts)** - `createDbPlugin()`, `{{sqlite://path/query:SQL}}`
 15. **[DB Plugin (Redis)](./advanced/15-db-redis.ts)** - `createDbPlugin({ redisUrl })`, `{{redis:///get:key}}`, `{{redis:///keys:pattern}}`
+16. **[Semantic Compression](./advanced/16-semantic-compression.ts)** - Actively shrinking low-priority templates
+17. **[Playbooks (Evolving Memory)](./advanced/17-playbooks.ts)** - `playbook://` and `updatePlaybook()` for Agentic Context Engineering
+16. **[Semantic Compression](./advanced/16-semantic-compression.ts)** - Actively shrinking low-priority templates
+17. **[Playbooks (Evolving Memory)](./advanced/17-playbooks.ts)** - `playbook://` and `updatePlaybook()` for Agentic Context Engineering
 
 ## Feature Matrix
 
@@ -113,6 +117,8 @@ These examples demonstrate advanced features and patterns:
 | Format references (yaml, json, jsonl, xml, md) | 21 | - | `{{yaml:path}}`, `{{json:path}}`, `{{jsonl:path}}`, `{{xml:path}}`, `{{md:path}}` |
 | Custom source plugin | - | 12 | `customSources: [SourcePlugin]` |
 | DB plugin (SQLite/Redis) | - | 14, 15 | `createDbPlugin(options)`, `{{sqlite://path/query:SQL}}`, `{{redis:///get:key}}` |
+| Semantic compression | - | 16 | `.compressor()` config |
+| Playbooks (evolving memory)| - | 17 | `{{playbook://id}}`, `updatePlaybook()` |
 
 ## Template Syntax Reference
 

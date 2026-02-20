@@ -14,7 +14,7 @@ Shotput is a simple, programmatic templating library to help manage personas, sy
 - **Templating sources:** file paths, directory paths, functions (cjs/esm), HTTP URLs, glob patterns, regex patterns, S3 paths (including [S3 directory buckets](./docs/s3-advanced-features.md)), [Anthropic Skills](https://github.com/anthropics/skills), SQLite (`.sqlite()` builder method, `{{sqlite://path/query:SQL}}`), Redis (`.redis(url)` builder method, `{{redis:///get:key}}`), custom source plugins
 - **Conditionals and loops:** `{{#if}}...{{else}}...{{/if}}` with `context`, `env`, and `params`; `{{#each context.list}}...{{/each}}` with `context.__loop.item` and `context.__loop.index`
 - **Variable substitution:** `{{context.x}}`, `{{params.x}}`, `{{env.X}}` in template body (nested paths supported)
-- **Token-aware budgeting:** optional `tokenizer` config so `maxPromptLength` is in tokens; heuristic or custom `(text) => number`
+- **Token-aware budgeting & Semantic Compression:** optional `tokenizer` config so `maxPromptLength` is in tokens; heuristic or custom `(text) => number`. Provide a `compressor` to semantically compress low-priority sources before they hit length limits.
 - **Lifecycle hooks:** preResolve, postResolveSource, postAssembly, preOutput
 - **Output modes:** flat, sectioned, or messages (system/user/assistant)
 - **Commands and subagents:** `{{command:name}}`, `{{subagent:name}}` with custom source plugins
@@ -299,6 +299,10 @@ await shotput()
   .maxRetries(3)
   .retryDelay(1000)
   .retryBackoffMultiplier(2)
+  .compressor(async (content, { maxBudget }) => {
+    // shrink low priority content if needed
+    return content.slice(0, maxBudget);
+  })
   .run();
 ```
 
@@ -307,7 +311,7 @@ await shotput()
 1. **Planning**: Parses template to identify all interpolation patterns
 2. **Estimation**: Attempts to detect content length for each template (HEAD requests for HTTP, file stats for files)
 3. **Prioritization**: Assigns priority based on template type (files > HTTP > directories > globs)
-4. **Trimming**: Removes low-priority templates if total size exceeds `maxPromptLength`
+4. **Trimming**: Removes low-priority templates if total size exceeds `maxPromptLength` (or semantically compresses them if a `compressor` is configured)
 5. **Parallel Processing**: Fetches selected templates concurrently with semaphore-based rate limiting
 6. **Retry**: Automatically retries failed operations with exponential backoff
 
@@ -328,7 +332,7 @@ Parallel processing can significantly improve performance when working with mult
 - Network-bound operations (HTTP, S3): greatest improvement
 - Local files: modest improvement due to I/O parallelization
 
-**Token-aware budgeting:** Set `tokenizer` so planning and truncation use token counts instead of characters (e.g. `tokenizer: "cl100k_base"` or a custom `(text) => number`). Then `maxPromptLength` is in tokens.
+**Token-aware budgeting & Semantic Compression:** Set `tokenizer` so planning and truncation use token counts instead of characters (e.g. `tokenizer: "cl100k_base"` or a custom `(text) => number`). Set `compressor` to semantically compress files before hitting budget limits.
 
 **Disabling parallel processing:**
 
@@ -389,6 +393,7 @@ Returns an empty builder. Chain config setters, then execute:
 | `.context(v)` | `Record<string, unknown>` | `undefined` | Context for rules and variable substitution |
 | `.expressionEngine(v)` | `"js"` \| `"safe"` | `"js"` | Condition evaluation: full JS or safe subset |
 | `.tokenizer(v)` | `"openai"` \| `"cl100k_base"` \| `(text: string) => number` | `undefined` | When set, `maxPromptLength` is in tokens |
+| `.compressor(v)` | `SemanticCompressor` | `undefined` | Function to semantically compress content for low-priority sources |
 | `.hooks(v)` | `HookSet` | `undefined` | Lifecycle hooks (preResolve, postResolveSource, postAssembly, preOutput) |
 | `.outputMode(v)` | `"flat"` \| `"sectioned"` \| `"messages"` | `"flat"` | Output shape |
 | `.sectionBudgets(v)` | `Record<string, number>` | `undefined` | Per-section length limits (sectioned mode) |

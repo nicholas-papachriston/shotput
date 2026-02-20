@@ -90,6 +90,8 @@ export type { XmlNode } from "./xml";
 export type { SourceContext, SourcePlugin, SourceResolution } from "./plugins";
 export { resolveSubagent } from "./subagent";
 export { createDbPlugin } from "./db";
+export { createPlaybookPlugin, updatePlaybook } from "./playbook";
+export type { PlaybookPluginOptions } from "./playbook";
 export type { DbPluginOptions, SqliteParsed, RedisParsed, RedisOp } from "./db";
 export {
 	parseSqliteUrl,

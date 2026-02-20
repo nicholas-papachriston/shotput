@@ -1,25 +1,15 @@
-import type { ShotputConfig } from "./config";
-import type { DbPluginOptions } from "./db/options";
-import {
-	type ConfigWithCompiled,
-	runShotput,
-	runShotputStreaming,
-	runShotputStreamingSegments,
-} from "./engine";
-import type { HookSet } from "./hooks";
-import type { SourcePlugin } from "./plugins";
-import type {
-	OutputMode,
-	ShotputOutput,
-	ShotputSegmentStreamOutput,
-	ShotputStreamingOutput,
-} from "./types";
+import type { ShotputConfig } from "../config";
+import type { DbPluginOptions } from "../db/options";
+import type { ConfigWithCompiled } from "../engine";
+import type { HookSet } from "../hooks";
+import type { SourcePlugin } from "../plugins";
+import type { OutputMode } from "../types";
 
 export type ShotputOverrides =
 	| Partial<ShotputConfig>
 	| Partial<ConfigWithCompiled>;
 
-function mergeOverrides(
+export function mergeOverrides(
 	base: ShotputOverrides | undefined,
 	overrides: ShotputOverrides | undefined,
 ): ShotputOverrides {
@@ -33,7 +23,7 @@ function mergeOverrides(
  * Shared chainable config setters for ShotputBuilder and ShotputProgram.
  * Subclasses implement _merge() which creates a new instance with merged overrides.
  */
-abstract class ShotputBase<T> {
+export abstract class ShotputBase<T> {
 	protected abstract _merge(overrides: ShotputOverrides): T;
 
 	// --- Template ---
@@ -339,6 +329,14 @@ abstract class ShotputBase<T> {
 		return this._merge({ tokenizerWorker: value });
 	}
 
+	/**
+	 * Optional semantic compressor for actively shrinking low-priority blocks
+	 * to fit within the maxPromptLength budget.
+	 */
+	compressor(value: import("../types").SemanticCompressor): T {
+		return this._merge({ compressor: value });
+	}
+
 	// --- Lifecycle hooks ---
 
 	/**
@@ -455,97 +453,5 @@ abstract class ShotputBase<T> {
 	 */
 	sqlite(enabled = true): T {
 		return this._merge({ sqlite: enabled });
-	}
-}
-
-/**
- * Immutable executable program. Create via shotput().build() or compileShotputTemplate().
- * Chain config setters, then call .run(), .stream(), or .streamSegments() to execute.
- */
-export class ShotputProgram extends ShotputBase<ShotputProgram> {
-	constructor(private readonly baseOverrides: ShotputOverrides = {}) {
-		super();
-	}
-
-	protected _merge(overrides: ShotputOverrides): ShotputProgram {
-		return new ShotputProgram(mergeOverrides(this.baseOverrides, overrides));
-	}
-
-	/**
-	 * Return a new program with overrides merged (later overrides win).
-	 * Accepts an overrides object for merging multiple keys at once.
-	 */
-	with(overrides: ShotputOverrides): ShotputProgram {
-		return this._merge(overrides);
-	}
-
-	/**
-	 * Run the full pipeline (postAssembly, preOutput, sectioning). Returns resolved content/sections/messages.
-	 */
-	run(): Promise<ShotputOutput> {
-		return runShotput(this.baseOverrides);
-	}
-
-	/**
-	 * Stream resolved segments in document order. PostAssembly, preOutput, and sectioning are not run.
-	 */
-	stream(): Promise<ShotputStreamingOutput> {
-		return runShotputStreaming(this.baseOverrides);
-	}
-
-	/**
-	 * Stream segments with literalMap/literalMapPromise for client-side substitution.
-	 */
-	streamSegments(): Promise<ShotputSegmentStreamOutput> {
-		return runShotputStreamingSegments(this.baseOverrides);
-	}
-}
-
-/**
- * Fluent config builder. Chain config setters, call .build() to get a reusable ShotputProgram,
- * or call .run() / .stream() / .streamSegments() directly to execute.
- */
-export class ShotputBuilder extends ShotputBase<ShotputBuilder> {
-	constructor(private readonly overrides: ShotputOverrides = {}) {
-		super();
-	}
-
-	protected _merge(overrides: ShotputOverrides): ShotputBuilder {
-		return new ShotputBuilder(mergeOverrides(this.overrides, overrides));
-	}
-
-	/**
-	 * Return a new builder with overrides merged. Accepts an overrides object for merging multiple keys at once.
-	 */
-	with(overrides: ShotputOverrides): ShotputBuilder {
-		return this._merge(overrides);
-	}
-
-	/**
-	 * Produce an immutable ShotputProgram that can be passed around and executed.
-	 */
-	build(): ShotputProgram {
-		return new ShotputProgram(this.overrides);
-	}
-
-	/**
-	 * Run the full pipeline (same as this.build().run()).
-	 */
-	run(): Promise<ShotputOutput> {
-		return this.build().run();
-	}
-
-	/**
-	 * Stream resolved segments (same as this.build().stream()).
-	 */
-	stream(): Promise<ShotputStreamingOutput> {
-		return this.build().stream();
-	}
-
-	/**
-	 * Stream segments with literalMap (same as this.build().streamSegments()).
-	 */
-	streamSegments(): Promise<ShotputSegmentStreamOutput> {
-		return this.build().streamSegments();
 	}
 }

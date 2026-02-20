@@ -117,7 +117,15 @@ export class ParallelProcessor {
 			const operationResults = result.operationResults;
 			const combinedRemainingCount = result.combinedRemainingCount;
 
-			const replacement = operationResults;
+			let replacement = operationResults;
+
+			if (task.needsCompression && this.config.compressor) {
+				const budget = task.compressionBudget ?? 0;
+				const unit = this.config.tokenizer ? "tokens" : "chars";
+				replacement = await Promise.resolve(
+					this.config.compressor(replacement, { maxBudget: budget, unit }),
+				);
+			}
 
 			const isError =
 				replacement.startsWith("[Error") ||
@@ -201,7 +209,7 @@ export class ParallelProcessor {
 
 		log.info("Step 3: Trimming by content length...");
 		const selectedTasks = this.config.enableContentLengthPlanning
-			? trimTasksByLength(tasksWithLengths, maxLength)
+			? trimTasksByLength(this.config, tasksWithLengths, maxLength)
 			: tasksWithLengths;
 
 		log.info(
