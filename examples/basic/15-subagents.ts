@@ -28,7 +28,7 @@ try {
 		allowedBasePaths: [examplesDir],
 		templateDir: examplesDir,
 		allowHttp: false,
-	});
+	}).run();
 	log.info(`resolveSubagent metadata: ${JSON.stringify(resolved.metadata)}`);
 	console.log("Agent config:", resolved.agentConfig);
 	console.log("System prompt length:", resolved.systemPrompt.length);
@@ -41,16 +41,16 @@ For code review, delegate to:
 
 End.`;
 
-	const result = await shotput({
-		template: templateWithSubagent,
-		templateDir: examplesDir,
-		responseDir: outputDir,
-		allowedBasePaths: [examplesDir],
-		subagentsDir: "data/agents",
-		maxConcurrency: 1,
-		debug: true,
-		debugFile: join(outputDir, "subagents-debug.txt"),
-	});
+	const result = await shotput()
+		.template(templateWithSubagent)
+		.templateDir(examplesDir)
+		.responseDir(outputDir)
+		.allowedBasePaths([examplesDir])
+		.subagentsDir("data/agents")
+		.maxConcurrency(1)
+		.debug(true)
+		.debugFile(join(outputDir, "subagents-debug.txt"))
+		.run();
 	log.info(result.metadata);
 	console.log(
 		"Output contains subagent body:",
@@ -63,12 +63,12 @@ temperature: 0.5
 ---
 # Inline subagent body
 This was parsed as frontmatter + body.`;
-	const withFrontmatter = await shotput({
-		template: subagentTemplate,
-		templateDir: outputDir,
-		parseSubagentFrontmatter: true,
-		debug: false,
-	});
+	const withFrontmatter = await shotput()
+		.template(subagentTemplate)
+		.templateDir(outputDir)
+		.parseSubagentFrontmatter(true)
+		.debug(false)
+		.run();
 	console.log("Frontmatter from inline:", withFrontmatter.frontmatter);
 	console.log("Content:", withFrontmatter.content?.slice(0, 80));
 } catch (error) {

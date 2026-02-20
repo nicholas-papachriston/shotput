@@ -1,8 +1,18 @@
 # Shotput
 
 > Shotput template syntax reference: source placeholders, rules (conditionals/loops),
-> sections, commands, subagents. Use for building high-fidelity AI agent prompts.
+> sections, commands, subagents, database sources. Use for building high-fidelity AI agent prompts.
 
 ## Template Authoring
 
 - [Shotput Template Guide for LLMs](docs/llm-template-guide.txt): Full syntax reference, high-fidelity patterns, examples, pitfalls
+
+## Key Source Types
+
+- Files, directories, globs, regex — resolved relative to `templateDir`
+- HTTP — `{{https://...}}`, domain-restricted
+- S3/R2 — `{{s3://bucket/path}}`, credentials via env or builder
+- SQLite — `{{sqlite://path/db.sqlite/query:SQL}}`, requires `.sqlite()` on builder
+- Redis — `{{redis:///get:key}}`, `{{redis:///keys:pattern}}`, requires `.redis(url)` on builder
+- Skills — `{{skill:name}}`, local or remote (GitHub)
+- Functions — `{{TemplateType.Function:/path}}`, disabled by default

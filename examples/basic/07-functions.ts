@@ -52,16 +52,19 @@ const templatePath = join(templateDir, "template.md");
 writeFileSync(templatePath, templateContent);
 
 try {
-	const result = await shotput({
-		templateDir,
-		templateFile: "template.md",
-		responseDir: templateDir,
-		allowedBasePaths: [join(import.meta.dir, "..")],
-		allowFunctions: true, // IMPORTANT: Must enable function execution
-		allowedFunctionPaths: [join(import.meta.dir, "../functions")], // Restrict function paths
-		debug: true,
-		debugFile: join(templateDir, "template-debug.md"),
-	});
+	const base = shotput()
+		.templateDir(templateDir)
+		.responseDir(templateDir)
+		.allowedBasePaths([join(import.meta.dir, "..")])
+		.allowFunctions(true) // IMPORTANT: Must enable function execution
+		.allowedFunctionPaths([join(import.meta.dir, "../functions")]) // Restrict function paths
+		.debug(true)
+		.build();
+
+	const result = await base
+		.templateFile("template.md")
+		.debugFile(join(templateDir, "template-debug.md"))
+		.run();
 
 	log.info(result.metadata);
 
@@ -98,16 +101,11 @@ Complete!
 	const inlineTemplatePath = join(templateDir, "inline-template.md");
 	writeFileSync(inlineTemplatePath, inlineTemplate);
 
-	const inlineResult = await shotput({
-		templateDir,
-		templateFile: "inline-template.md",
-		responseDir: templateDir,
-		allowedBasePaths: [join(import.meta.dir, "..")],
-		allowFunctions: true,
-		allowedFunctionPaths: [templateDir, join(import.meta.dir, "../functions")],
-		debug: true,
-		debugFile: join(templateDir, "inline-template-debug.md"),
-	});
+	const inlineResult = await base
+		.allowedFunctionPaths([templateDir, join(import.meta.dir, "../functions")])
+		.templateFile("inline-template.md")
+		.debugFile(join(templateDir, "inline-template-debug.md"))
+		.run();
 
 	log.info(inlineResult.metadata);
 } catch (error) {

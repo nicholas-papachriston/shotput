@@ -1,3 +1,4 @@
+import { compileLoopBody, renderSegments } from "./compiledLoop";
 import type { ShotputConfig } from "./config";
 import { ELSE_MARKER, type ParsedBlock, parseAllBlocks } from "./ruleBlocks";
 import {
@@ -5,7 +6,6 @@ import {
 	evaluateCondition,
 	getArrayFromExpr,
 } from "./ruleConditions";
-import { substituteLoopVariables } from "./variables";
 
 export type { RuleContext } from "./ruleConditions";
 
@@ -42,7 +42,9 @@ export function evaluateRules(
 	config: ShotputConfig,
 	preParsedBlocks?: ParsedBlock[] | null,
 ): string {
-	if (!content.includes("{{#")) return content;
+	if (preParsedBlocks === undefined || preParsedBlocks === null) {
+		if (!content.includes("{{#")) return content;
+	}
 
 	const context = config.context ?? {};
 	const env = typeof process !== "undefined" ? process.env : {};
@@ -90,28 +92,23 @@ export function evaluateRules(
 				first: false,
 				last: false,
 			};
-			const loopContext = Object.create(context) as Record<string, unknown>;
-			loopContext["__loop"] = loopState;
-			const loopConfig = Object.create(config) as ShotputConfig;
-			loopConfig.context = loopContext;
+			const prevLoop = context["__loop"];
+			context["__loop"] = loopState;
 			const blockContentBlocks = parseAllBlocks(blockContent);
-			for (let i = 0; i < arr.length; i++) {
-				loopState.item = arr[i];
-				loopState.index = i;
-				loopState.first = i === 0;
-				loopState.last = i === arr.length - 1;
-				const evaluated = evaluateRules(
-					blockContent,
-					loopConfig,
-					blockContentBlocks,
-				);
-				const substituted = substituteLoopVariables(
-					evaluated,
-					arr[i],
-					i,
-					loopConfig,
-				);
-				chunks.push(substituted);
+			const compiledBody = compileLoopBody(blockContent, {
+				engine,
+				preParsedBlocks: blockContentBlocks,
+			});
+			try {
+				for (let i = 0; i < arr.length; i++) {
+					loopState.item = arr[i];
+					loopState.index = i;
+					loopState.first = i === 0;
+					loopState.last = i === arr.length - 1;
+					chunks.push(renderSegments(compiledBody, config, ctx, loopState));
+				}
+			} finally {
+				context["__loop"] = prevLoop;
 			}
 			segments.push(chunks.join(""));
 		}

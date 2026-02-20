@@ -36,40 +36,33 @@ const template = `# Token Budget Demo
 `;
 
 try {
+	const base = shotput()
+		.templateDir(templateDir)
+		.template(template)
+		.responseDir(templateDir)
+		.allowedBasePaths([templateDir, join(import.meta.dir, "..")])
+		.build();
+
 	// Character-based (default): maxPromptLength in characters
-	const charResult = await shotput({
-		templateDir,
-		template,
-		responseDir: templateDir,
-		allowedBasePaths: [templateDir, join(import.meta.dir, "..")],
-		maxPromptLength: 500,
-	});
+	const charResult = await base.maxPromptLength(500).run();
 	log.info(
 		`Character-based: output length (chars) = ${charResult.content?.length}`,
 	);
 
 	// Token-based with heuristic: maxPromptLength in tokens (~4 chars/token)
-	const tokenResult = await shotput({
-		templateDir,
-		template,
-		responseDir: templateDir,
-		allowedBasePaths: [templateDir, join(import.meta.dir, "..")],
-		maxPromptLength: 100, // 100 tokens
-		tokenizer: "cl100k_base",
-	});
+	const tokenResult = await base
+		.maxPromptLength(100) // 100 tokens
+		.tokenizer("cl100k_base")
+		.run();
 	log.info(
 		`Token-based (heuristic): output length (chars) = ${tokenResult.content?.length}`,
 	);
 
 	// Custom tokenizer: 1 word = 1 token for demo
-	const customResult = await shotput({
-		templateDir,
-		template,
-		responseDir: templateDir,
-		allowedBasePaths: [templateDir, join(import.meta.dir, "..")],
-		maxPromptLength: 20, // 20 "tokens" (words)
-		tokenizer: (text: string) => text.split(/\s+/).filter(Boolean).length,
-	});
+	const customResult = await base
+		.maxPromptLength(20) // 20 "tokens" (words)
+		.tokenizer((text: string) => text.split(/\s+/).filter(Boolean).length)
+		.run();
 	const wordCount =
 		customResult.content?.split(/\s+/).filter(Boolean).length ?? 0;
 	log.info(`Custom tokenizer (words): output word count = ${wordCount}`);

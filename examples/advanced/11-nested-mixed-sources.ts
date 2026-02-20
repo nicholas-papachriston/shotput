@@ -107,21 +107,21 @@ This template chains: file -> skill + file -> function + HTTP.
 
 {{./level1.md}}`;
 
-	const result = await shotput({
-		template,
-		templateDir: DATA_DIR,
-		allowedBasePaths: [EXAMPLE_DIR, DATA_DIR, SHARED_DATA_DIR],
-		skillsDir: SKILLS_DIR, // local skills under data/nested-mixed/skills
-		allowHttp: true,
-		allowedDomains: ["api.github.com"],
-		httpTimeout: 10000,
-		allowFunctions: true,
-		allowedFunctionPaths: [SHARED_DATA_DIR],
-		maxNestingDepth: 3,
-		maxConcurrency: 1, // Sequential so inclusion base path is used for nested markers (e.g. function path)
-		debug: true,
-		debugFile: join(OUTPUT_DIR, "nested-mixed-debug.txt"),
-	});
+	const result = await shotput()
+		.template(template)
+		.templateDir(DATA_DIR)
+		.allowedBasePaths([EXAMPLE_DIR, DATA_DIR, SHARED_DATA_DIR])
+		.skillsDir(SKILLS_DIR) // local skills under data/nested-mixed/skills
+		.allowHttp(true)
+		.allowedDomains(["api.github.com"])
+		.httpTimeout(10000)
+		.allowFunctions(true)
+		.allowedFunctionPaths([SHARED_DATA_DIR])
+		.maxNestingDepth(3)
+		.maxConcurrency(1) // Sequential so inclusion base path is used for nested markers
+		.debug(true)
+		.debugFile(join(OUTPUT_DIR, "nested-mixed-debug.txt"))
+		.run();
 
 	log.info(result.metadata);
 }

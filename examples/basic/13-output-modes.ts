@@ -39,15 +39,18 @@ Recent turns go here.
 `;
 
 try {
-	const sectioned = await shotput({
-		template: templateWithSections,
-		templateDir: outputDir,
-		responseDir: outputDir,
-		allowedBasePaths: [join(import.meta.dir, "..")],
-		outputMode: "sectioned",
-		debug: true,
-		debugFile: join(outputDir, "sectioned-debug.txt"),
-	});
+	const base = shotput()
+		.template(templateWithSections)
+		.templateDir(outputDir)
+		.responseDir(outputDir)
+		.allowedBasePaths([join(import.meta.dir, "..")])
+		.build();
+
+	const sectioned = await base
+		.outputMode("sectioned")
+		.debug(true)
+		.debugFile(join(outputDir, "sectioned-debug.txt"))
+		.run();
 	log.info(`Sectioned metadata: ${JSON.stringify(sectioned.metadata)}`);
 	if (sectioned.sections) {
 		for (const s of sectioned.sections) {
@@ -57,15 +60,11 @@ try {
 		}
 	}
 
-	const messages = await shotput({
-		template: templateWithSections,
-		templateDir: outputDir,
-		responseDir: outputDir,
-		allowedBasePaths: [join(import.meta.dir, "..")],
-		outputMode: "messages",
-		sectionRoles: { system: "system", context: "user", history: "user" },
-		debug: false,
-	});
+	const messages = await base
+		.outputMode("messages")
+		.sectionRoles({ system: "system", context: "user", history: "user" })
+		.debug(false)
+		.run();
 	log.info(`Messages metadata: ${JSON.stringify(messages.metadata)}`);
 	if (messages.messages) {
 		for (const m of messages.messages) {

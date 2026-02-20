@@ -42,15 +42,15 @@ const templatePath = join(templateDir, "template.md");
 writeFileSync(templatePath, streamingTemplate);
 
 try {
-	const result = await shotput({
-		templateDir,
-		templateFile: "template.md",
-		responseDir: templateDir,
-		maxPromptLength: 500000, // 500KB limit
-		allowedBasePaths: [join(import.meta.dir, "..")],
-		debug: true,
-		debugFile: join(templateDir, "streaming-debug.md"),
-	});
+	const result = await shotput()
+		.templateDir(templateDir)
+		.templateFile("template.md")
+		.responseDir(templateDir)
+		.maxPromptLength(500000) // 500KB limit
+		.allowedBasePaths([join(import.meta.dir, "..")])
+		.debug(true)
+		.debugFile(join(templateDir, "streaming-debug.md"))
+		.run();
 
 	log.info(result.metadata);
 } catch (error) {
@@ -72,17 +72,17 @@ if (process.env["S3_ACCESS_KEY_ID"] && process.env["S3_SECRET_ACCESS_KEY"]) {
 	writeFileSync(s3TemplatePath, s3StreamingTemplate);
 
 	try {
-		const result = await shotput({
-			templateDir,
-			templateFile: "s3-streaming-template.md",
-			responseDir: templateDir,
-			s3AccessKeyId: process.env["S3_ACCESS_KEY_ID"],
-			s3SecretAccessKey: process.env["S3_SECRET_ACCESS_KEY"],
-			s3Region: process.env["S3_REGION"] || "us-east-1",
-			maxPromptLength: 1000000, // 1MB limit
-			debug: true,
-			debugFile: join(templateDir, "s3-streaming-debug.md"),
-		});
+		const result = await shotput()
+			.templateDir(templateDir)
+			.templateFile("s3-streaming-template.md")
+			.responseDir(templateDir)
+			.s3AccessKeyId(process.env["S3_ACCESS_KEY_ID"] ?? "")
+			.s3SecretAccessKey(process.env["S3_SECRET_ACCESS_KEY"] ?? "")
+			.s3Region(process.env["S3_REGION"] ?? "us-east-1")
+			.maxPromptLength(1000000) // 1MB limit
+			.debug(true)
+			.debugFile(join(templateDir, "s3-streaming-debug.md"))
+			.run();
 		log.info(result.metadata);
 	} catch (error) {
 		log.error(error);
@@ -101,15 +101,15 @@ const truncationPath = join(templateDir, "truncation-template.md");
 writeFileSync(truncationPath, truncationTemplate);
 
 try {
-	const result = await shotput({
-		templateDir,
-		templateFile: "truncation-template.md",
-		responseDir: templateDir,
-		maxPromptLength: 10000, // Very small limit to demonstrate truncation
-		allowedBasePaths: [join(import.meta.dir, "..")],
-		debug: true,
-		debugFile: join(templateDir, "truncation-debug.md"),
-	});
+	const result = await shotput()
+		.templateDir(templateDir)
+		.templateFile("truncation-template.md")
+		.responseDir(templateDir)
+		.maxPromptLength(10000) // Very small limit to demonstrate truncation
+		.allowedBasePaths([join(import.meta.dir, "..")])
+		.debug(true)
+		.debugFile(join(templateDir, "truncation-debug.md"))
+		.run();
 
 	log.info(result.metadata);
 } catch (error) {
@@ -125,6 +125,6 @@ try {
  * 4. Truncation happens on a per-template basis
  * 5. Later templates may be omitted if length limit is reached
  * 6. Streaming works with local files, S3, HTTP, and R2
- * 7. Check metadata.truncated to detect if content was cut off
- * 8. metadata.processedTemplates shows details for each file
+ * 7. Check result.error and result.metadata for processing status
+ * 8. result.metadata.resultMetadata shows details for each source
  */

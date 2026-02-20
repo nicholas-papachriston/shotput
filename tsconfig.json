@@ -1,6 +1,7 @@
 {
 	"compilerOptions": {
 		"lib": ["ESNext"],
+		"types": ["bun", "node"],
 		"target": "ESNext",
 		"module": "ESNext",
 		"moduleDetection": "force",
@@ -19,5 +20,5 @@
 		"declarationDir": "./dist",
 		"emitDeclarationOnly": true
 	},
-	"include": ["src/**/*.ts"]
+	"include": ["src/**/*.ts", "src/**/*.d.ts"]
 }

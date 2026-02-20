@@ -50,16 +50,16 @@ const templatePath = join(templateDir, "template.md");
 writeFileSync(templatePath, directoryBucketTemplate);
 
 try {
-	const result = await shotput({
-		templateDir,
-		templateFile: "template.md",
-		responseDir: templateDir,
-		s3AccessKeyId: process.env["S3_ACCESS_KEY_ID"],
-		s3SecretAccessKey: process.env["S3_SECRET_ACCESS_KEY"],
-		s3Region: process.env["S3_REGION"] || "us-east-1",
-		debug: true,
-		debugFile: join(templateDir, "template-debug.md"),
-	});
+	const result = await shotput()
+		.templateDir(templateDir)
+		.templateFile("template.md")
+		.responseDir(templateDir)
+		.s3AccessKeyId(process.env["S3_ACCESS_KEY_ID"] ?? "")
+		.s3SecretAccessKey(process.env["S3_SECRET_ACCESS_KEY"] ?? "")
+		.s3Region(process.env["S3_REGION"] ?? "us-east-1")
+		.debug(true)
+		.debugFile(join(templateDir, "template-debug.md"))
+		.run();
 
 	log.info(result.metadata);
 } catch (error) {

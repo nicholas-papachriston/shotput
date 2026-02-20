@@ -50,20 +50,20 @@ Done.
 `;
 
 try {
-	const result = await shotput({
-		template,
-		templateDir: outputDir,
-		responseDir: outputDir,
-		allowedBasePaths: [join(import.meta.dir, "..")],
-		context: {
+	const result = await shotput()
+		.template(template)
+		.templateDir(outputDir)
+		.responseDir(outputDir)
+		.allowedBasePaths([join(import.meta.dir, "..")])
+		.context({
 			items: ["alpha", "beta", "gamma"],
 			names: ["Alice", "Bob", "Carol"],
 			scores: [45, 72, 58, 90],
 			passing: 60,
 			empty: [],
-		},
-		debug: false,
-	});
+		})
+		.debug(false)
+		.run();
 
 	writeFileSync(join(outputDir, "output.md"), result.content ?? "");
 	console.log("--- {{#each}} output ---");

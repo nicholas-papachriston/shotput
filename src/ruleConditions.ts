@@ -25,7 +25,7 @@ export function evaluateConditionJs(expr: string, ctx: RuleContext): boolean {
 	let flagsKey = flagsKeyCache.get(trimmed);
 	if (flagsKey === undefined) {
 		const flagsMatch = FLAGS_PATH_REGEX.exec(trimmed);
-		flagsKey = flagsMatch ? flagsMatch[1] ?? null : null;
+		flagsKey = flagsMatch ? (flagsMatch[1] ?? null) : null;
 		flagsKeyCache.set(trimmed, flagsKey);
 	}
 	if (flagsKey !== null) {

@@ -61,18 +61,21 @@ const comparisonPath = join(templateDir, "comparison-template.md");
 writeFileSync(comparisonPath, comparisonTemplate);
 
 try {
-	const result = await shotput({
-		templateDir,
-		templateFile: "comparison-template.md",
-		responseDir: templateDir,
-		skillsDir,
-		allowRemoteSkills: true,
-		allowedSkillSources: ["anthropics/skills"],
-		allowHttp: true, // Required for fetching remote skills
-		allowedBasePaths: [skillsDir, templateDir, join(import.meta.dir, "..")],
-		debug: true,
-		debugFile: join(templateDir, "comparison-debug.md"),
-	});
+	const base = shotput()
+		.templateDir(templateDir)
+		.responseDir(templateDir)
+		.skillsDir(skillsDir)
+		.allowRemoteSkills(true)
+		.allowedSkillSources(["anthropics/skills"])
+		.allowHttp(true) // Required for fetching remote skills
+		.allowedBasePaths([skillsDir, templateDir, join(import.meta.dir, "..")])
+		.debug(true)
+		.build();
+
+	const result = await base
+		.templateFile("comparison-template.md")
+		.debugFile(join(templateDir, "comparison-debug.md"))
+		.run();
 
 	log.info(result.metadata);
 } catch (error) {
@@ -92,19 +95,11 @@ const referencesPath = join(templateDir, "references-template.md");
 writeFileSync(referencesPath, referencesTemplate);
 
 try {
-	const result = await shotput({
-		templateDir,
-		templateFile: "references-template.md",
-		responseDir: templateDir,
-		skillsDir,
-		allowRemoteSkills: true,
-		allowedSkillSources: ["anthropics/skills"],
-		allowHttp: true,
-		maxPromptLength: 200000, // Larger limit for full skill content
-		allowedBasePaths: [skillsDir, templateDir, join(import.meta.dir, "..")],
-		debug: true,
-		debugFile: join(templateDir, "references-debug.md"),
-	});
+	const result = await base
+		.templateFile("references-template.md")
+		.maxPromptLength(200000) // Larger limit for full skill content
+		.debugFile(join(templateDir, "references-debug.md"))
+		.run();
 
 	log.info(result.metadata);
 } catch (error) {
@@ -127,23 +122,15 @@ const secureReferencesPath = join(templateDir, "secure-template.md");
 writeFileSync(secureReferencesPath, secureTemplate);
 
 try {
-	const result = await shotput({
-		templateDir,
-		templateFile: "secure-template.md",
-		responseDir: templateDir,
-		skillsDir,
-		allowRemoteSkills: true,
-		// Only allow specific trusted organizations
-		allowedSkillSources: [
+	const result = await base
+		.templateFile("secure-template.md")
+		.allowedSkillSources([
 			"anthropics/skills",
 			"myorg/skills",
 			"trusted-partner/skills",
-		],
-		allowHttp: true,
-		allowedBasePaths: [skillsDir, templateDir, join(import.meta.dir, "..")],
-		debug: true,
-		debugFile: join(templateDir, "secure-debug.md"),
-	});
+		])
+		.debugFile(join(templateDir, "secure-debug.md"))
+		.run();
 
 	log.info(result.metadata);
 } catch (error) {

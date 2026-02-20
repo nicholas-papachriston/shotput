@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { shotput, shotputStreaming } from "../../src";
+import { shotput } from "../../src";
 import { createConfig } from "../../src/config";
 import { handleFileStream } from "../../src/fileStream";
 
@@ -47,32 +47,38 @@ describe("Shotput Integration Tests", () => {
 	});
 
 	it("should process a complete template workflow", async () => {
-		const result = await shotput({
-			debug: true,
-			debugFile: `${tempDir}/debug.txt`,
-			templateDir: `${tempDir}/`,
-			templateFile: "template.md",
-			responseDir: `${tempDir}/responses`,
-			allowFunctions: true,
-			allowedBasePaths: [process.cwd(), tempDir],
-		});
+		const result = await shotput()
+			.with({
+				debug: true,
+				debugFile: `${tempDir}/debug.txt`,
+				templateDir: `${tempDir}/`,
+				templateFile: "template.md",
+				responseDir: `${tempDir}/responses`,
+				allowFunctions: true,
+				allowedBasePaths: [process.cwd(), tempDir],
+			})
+			.run();
 		expect(result.content).toContain("Hello filename:");
 		expect(result.content).toContain("World!");
 	});
 
 	it("shotputStreaming produces same content as shotput when consumed to string", async () => {
-		const normal = await shotput({
-			templateDir: `${tempDir}/`,
-			templateFile: "template.md",
-			responseDir: `${tempDir}/responses`,
-			allowedBasePaths: [process.cwd(), tempDir],
-		});
-		const streaming = await shotputStreaming({
-			templateDir: `${tempDir}/`,
-			templateFile: "template.md",
-			responseDir: `${tempDir}/responses`,
-			allowedBasePaths: [process.cwd(), tempDir],
-		});
+		const normal = await shotput()
+			.with({
+				templateDir: `${tempDir}/`,
+				templateFile: "template.md",
+				responseDir: `${tempDir}/responses`,
+				allowedBasePaths: [process.cwd(), tempDir],
+			})
+			.run();
+		const streaming = await shotput()
+			.with({
+				templateDir: `${tempDir}/`,
+				templateFile: "template.md",
+				responseDir: `${tempDir}/responses`,
+				allowedBasePaths: [process.cwd(), tempDir],
+			})
+			.stream();
 		expect(streaming.error).toBeUndefined();
 		let streamedContent = "";
 		const reader = streaming.stream.getReader();
@@ -92,12 +98,14 @@ describe("Shotput Integration Tests", () => {
 		// Create a fresh template for this test
 		await Bun.write(`${tempDir}/explicit.md`, `Test: {{${tempDir}/test.txt}}`);
 
-		const result = await shotput({
-			templateDir: `${tempDir}/`,
-			templateFile: "explicit.md",
-			responseDir: `${tempDir}/responses`,
-			allowedBasePaths: [process.cwd(), tempDir],
-		});
+		const result = await shotput()
+			.with({
+				templateDir: `${tempDir}/`,
+				templateFile: "explicit.md",
+				responseDir: `${tempDir}/responses`,
+				allowedBasePaths: [process.cwd(), tempDir],
+			})
+			.run();
 
 		expect(result.content).toContain("Test: filename:");
 		expect(result.content).toContain("World!");
@@ -108,12 +116,14 @@ describe("Shotput Integration Tests", () => {
 		const maliciousTemplate = "Hello {{/etc/hosts}}!";
 		await Bun.write(`${tempDir}/malicious.md`, maliciousTemplate);
 
-		const result = await shotput({
-			templateDir: `${tempDir}/`,
-			templateFile: "malicious.md",
-			responseDir: `${tempDir}/responses`,
-			allowedBasePaths: [tempDir],
-		});
+		const result = await shotput()
+			.with({
+				templateDir: `${tempDir}/`,
+				templateFile: "malicious.md",
+				responseDir: `${tempDir}/responses`,
+				allowedBasePaths: [tempDir],
+			})
+			.run();
 
 		// Should contain security error or error reading message
 		expect(
@@ -127,12 +137,14 @@ describe("Shotput Integration Tests", () => {
 		const maliciousTemplate = "Hello {{/etc/passwd}}!";
 		await Bun.write(`${tempDir}/absolute-path.md`, maliciousTemplate);
 
-		const result = await shotput({
-			templateDir: `${tempDir}/`,
-			templateFile: "absolute-path.md",
-			responseDir: `${tempDir}/responses`,
-			allowedBasePaths: [tempDir],
-		});
+		const result = await shotput()
+			.with({
+				templateDir: `${tempDir}/`,
+				templateFile: "absolute-path.md",
+				responseDir: `${tempDir}/responses`,
+				allowedBasePaths: [tempDir],
+			})
+			.run();
 
 		expect(
 			result.content?.includes("Security Error") ||
@@ -148,13 +160,15 @@ describe("Shotput Integration Tests", () => {
 		const template = `{{${tempDir}/large.txt}}`;
 		await Bun.write(`${tempDir}/length-test.md`, template);
 
-		const result = await shotput({
-			templateDir: `${tempDir}/`,
-			templateFile: "length-test.md",
-			responseDir: `${tempDir}/responses`,
-			maxPromptLength: 100,
-			allowedBasePaths: [process.cwd(), tempDir],
-		});
+		const result = await shotput()
+			.with({
+				templateDir: `${tempDir}/`,
+				templateFile: "length-test.md",
+				responseDir: `${tempDir}/responses`,
+				maxPromptLength: 100,
+				allowedBasePaths: [process.cwd(), tempDir],
+			})
+			.run();
 
 		expect(result.content?.length).toBeLessThan(150);
 	});
@@ -168,12 +182,14 @@ describe("Shotput Integration Tests", () => {
 		const template = `{{${tempDir}/globfile*.txt}}`;
 		await Bun.write(`${tempDir}/glob-test.md`, template);
 
-		const result = await shotput({
-			templateDir: `${tempDir}/`,
-			templateFile: "glob-test.md",
-			responseDir: `${tempDir}/responses`,
-			allowedBasePaths: [process.cwd(), tempDir],
-		});
+		const result = await shotput()
+			.with({
+				templateDir: `${tempDir}/`,
+				templateFile: "glob-test.md",
+				responseDir: `${tempDir}/responses`,
+				allowedBasePaths: [process.cwd(), tempDir],
+			})
+			.run();
 
 		// Should contain content from glob-matched files or handle the glob
 		expect(result.content?.length).toBeGreaterThan(0);
@@ -186,12 +202,14 @@ describe("Shotput Integration Tests", () => {
 		const template = `Start {{${tempDir}/file1.txt}} Middle {{${tempDir}/file2.txt}} End`;
 		await Bun.write(`${tempDir}/multi.md`, template);
 
-		const result = await shotput({
-			templateDir: `${tempDir}/`,
-			templateFile: "multi.md",
-			responseDir: `${tempDir}/responses`,
-			allowedBasePaths: [process.cwd(), tempDir],
-		});
+		const result = await shotput()
+			.with({
+				templateDir: `${tempDir}/`,
+				templateFile: "multi.md",
+				responseDir: `${tempDir}/responses`,
+				allowedBasePaths: [process.cwd(), tempDir],
+			})
+			.run();
 
 		expect(result.content).toContain("Start filename:");
 		expect(result.content).toContain("First");
@@ -206,12 +224,14 @@ describe("Shotput Integration Tests", () => {
 		const template = `Hello {{${tempDir}/nonexistent.txt}}!`;
 		await Bun.write(`${tempDir}/missing.md`, template);
 
-		const result = await shotput({
-			templateDir: `${tempDir}/`,
-			templateFile: "missing.md",
-			responseDir: `${tempDir}/responses`,
-			allowedBasePaths: [process.cwd(), tempDir],
-		});
+		const result = await shotput()
+			.with({
+				templateDir: `${tempDir}/`,
+				templateFile: "missing.md",
+				responseDir: `${tempDir}/responses`,
+				allowedBasePaths: [process.cwd(), tempDir],
+			})
+			.run();
 
 		// The template returns String type for non-existent paths, leaving marker or empty
 		expect(result.content).toContain("Hello");
@@ -222,12 +242,14 @@ describe("Shotput Integration Tests", () => {
 	it("should handle empty template file", async () => {
 		await Bun.write(`${tempDir}/empty.md`, "");
 
-		const result = await shotput({
-			templateDir: `${tempDir}/`,
-			templateFile: "empty.md",
-			responseDir: `${tempDir}/responses`,
-			allowedBasePaths: [process.cwd(), tempDir],
-		});
+		const result = await shotput()
+			.with({
+				templateDir: `${tempDir}/`,
+				templateFile: "empty.md",
+				responseDir: `${tempDir}/responses`,
+				allowedBasePaths: [process.cwd(), tempDir],
+			})
+			.run();
 
 		expect(result.content).toBe("");
 	});
@@ -235,12 +257,14 @@ describe("Shotput Integration Tests", () => {
 	it("should handle template with no interpolation markers", async () => {
 		await Bun.write(`${tempDir}/plain.md`, "Just plain text");
 
-		const result = await shotput({
-			templateDir: `${tempDir}/`,
-			templateFile: "plain.md",
-			responseDir: `${tempDir}/responses`,
-			allowedBasePaths: [process.cwd(), tempDir],
-		});
+		const result = await shotput()
+			.with({
+				templateDir: `${tempDir}/`,
+				templateFile: "plain.md",
+				responseDir: `${tempDir}/responses`,
+				allowedBasePaths: [process.cwd(), tempDir],
+			})
+			.run();
 
 		expect(result.content).toBe("Just plain text");
 	});
@@ -248,14 +272,16 @@ describe("Shotput Integration Tests", () => {
 	it("should write debug output when debug is enabled", async () => {
 		const debugFile = `${tempDir}/debug-output.txt`;
 
-		await shotput({
-			debug: true,
-			debugFile: debugFile,
-			templateDir: `${tempDir}/`,
-			templateFile: "template.md",
-			responseDir: `${tempDir}/responses`,
-			allowedBasePaths: [process.cwd(), tempDir],
-		});
+		await shotput()
+			.with({
+				debug: true,
+				debugFile: debugFile,
+				templateDir: `${tempDir}/`,
+				templateFile: "template.md",
+				responseDir: `${tempDir}/responses`,
+				allowedBasePaths: [process.cwd(), tempDir],
+			})
+			.run();
 
 		const debugExists = await Bun.file(debugFile).exists();
 		expect(debugExists).toBe(true);
@@ -573,12 +599,14 @@ describe("Shotput Edge Cases", () => {
 		const template = `Outer: {{${tempDir}/nested.txt}}`;
 		await Bun.write(`${tempDir}/nested-template.md`, template);
 
-		const result = await shotput({
-			templateDir: `${tempDir}/`,
-			templateFile: "nested-template.md",
-			responseDir: `${tempDir}/responses`,
-			allowedBasePaths: [process.cwd(), tempDir],
-		});
+		const result = await shotput()
+			.with({
+				templateDir: `${tempDir}/`,
+				templateFile: "nested-template.md",
+				responseDir: `${tempDir}/responses`,
+				allowedBasePaths: [process.cwd(), tempDir],
+			})
+			.run();
 
 		// Should contain the literal {{markers}} from the file content
 		expect(result.content).toContain("{{markers}}");
@@ -591,12 +619,14 @@ describe("Shotput Edge Cases", () => {
 		const template = `Test: {{  ${tempDir}/whitespace.txt  }}`;
 		await Bun.write(`${tempDir}/whitespace-template.md`, template);
 
-		const result = await shotput({
-			templateDir: `${tempDir}/`,
-			templateFile: "whitespace-template.md",
-			responseDir: `${tempDir}/responses`,
-			allowedBasePaths: [process.cwd(), tempDir],
-		});
+		const result = await shotput()
+			.with({
+				templateDir: `${tempDir}/`,
+				templateFile: "whitespace-template.md",
+				responseDir: `${tempDir}/responses`,
+				allowedBasePaths: [process.cwd(), tempDir],
+			})
+			.run();
 
 		// Should trim whitespace and process the file
 		expect(result.content).toContain("Content");
@@ -609,12 +639,14 @@ describe("Shotput Edge Cases", () => {
 		const template = `{{${tempDir}/a.txt}}{{${tempDir}/b.txt}}`;
 		await Bun.write(`${tempDir}/consecutive.md`, template);
 
-		const result = await shotput({
-			templateDir: `${tempDir}/`,
-			templateFile: "consecutive.md",
-			responseDir: `${tempDir}/responses`,
-			allowedBasePaths: [process.cwd(), tempDir],
-		});
+		const result = await shotput()
+			.with({
+				templateDir: `${tempDir}/`,
+				templateFile: "consecutive.md",
+				responseDir: `${tempDir}/responses`,
+				allowedBasePaths: [process.cwd(), tempDir],
+			})
+			.run();
 
 		expect(result.content).toContain("A");
 		expect(result.content).toContain("B");
@@ -626,15 +658,17 @@ describe("Shotput Edge Cases", () => {
 		const template = `{{${tempDir}/content.txt}}`;
 		await Bun.write(`${tempDir}/small-limit.md`, template);
 
-		const result = await shotput({
-			templateDir: `${tempDir}/`,
-			templateFile: "small-limit.md",
-			responseDir: `${tempDir}/responses`,
-			maxPromptLength: 10,
-			maxConcurrency: 1,
-			enableContentLengthPlanning: false, // Process then truncate (planning would skip and leave template)
-			allowedBasePaths: [process.cwd(), tempDir],
-		});
+		const result = await shotput()
+			.with({
+				templateDir: `${tempDir}/`,
+				templateFile: "small-limit.md",
+				responseDir: `${tempDir}/responses`,
+				maxPromptLength: 10,
+				maxConcurrency: 1,
+				enableContentLengthPlanning: false, // Process then truncate (planning would skip and leave template)
+				allowedBasePaths: [process.cwd(), tempDir],
+			})
+			.run();
 
 		// Result should be truncated when we process and apply length limit
 		expect(result.content?.length).toBeLessThanOrEqual(10);
@@ -643,12 +677,14 @@ describe("Shotput Edge Cases", () => {
 	it("should handle template with only whitespace", async () => {
 		await Bun.write(`${tempDir}/whitespace-only.md`, "   \n\t\n   ");
 
-		const result = await shotput({
-			templateDir: `${tempDir}/`,
-			templateFile: "whitespace-only.md",
-			responseDir: `${tempDir}/responses`,
-			allowedBasePaths: [process.cwd(), tempDir],
-		});
+		const result = await shotput()
+			.with({
+				templateDir: `${tempDir}/`,
+				templateFile: "whitespace-only.md",
+				responseDir: `${tempDir}/responses`,
+				allowedBasePaths: [process.cwd(), tempDir],
+			})
+			.run();
 
 		// Result is trimmed, whitespace-only content becomes empty or minimal
 		expect(result.content?.trim()).toBe("");
@@ -659,12 +695,14 @@ describe("Shotput Edge Cases", () => {
 		await Bun.write(`${tempDir}/malformed.md`, template);
 		await Bun.write(`${tempDir}/valid`, "valid content");
 
-		const result = await shotput({
-			templateDir: `${tempDir}/`,
-			templateFile: "malformed.md",
-			responseDir: `${tempDir}/responses`,
-			allowedBasePaths: [process.cwd(), tempDir],
-		});
+		const result = await shotput()
+			.with({
+				templateDir: `${tempDir}/`,
+				templateFile: "malformed.md",
+				responseDir: `${tempDir}/responses`,
+				allowedBasePaths: [process.cwd(), tempDir],
+			})
+			.run();
 
 		// Should handle gracefully without crashing
 		expect(result.content).toContain("Start");
@@ -678,13 +716,15 @@ describe("Shotput Edge Cases", () => {
 		const template = `Content:\n{{${tempDir}/multiline.txt}}`;
 		await Bun.write(`${tempDir}/multiline-template.md`, template);
 
-		const result = await shotput({
-			templateDir: `${tempDir}/`,
-			templateFile: "multiline-template.md",
-			responseDir: `${tempDir}/responses`,
-			allowedBasePaths: [process.cwd(), tempDir],
-			maxPromptLength: 1000,
-		});
+		const result = await shotput()
+			.with({
+				templateDir: `${tempDir}/`,
+				templateFile: "multiline-template.md",
+				responseDir: `${tempDir}/responses`,
+				allowedBasePaths: [process.cwd(), tempDir],
+				maxPromptLength: 1000,
+			})
+			.run();
 
 		expect(result.content).toContain("Line 1");
 		expect(result.content).toContain("Line 2");
@@ -733,13 +773,15 @@ This skill is used for integration testing.
 			"# My Template\n\n{{skill:integration-test-skill}}\n\n## End";
 		await Bun.write(`${tempDir}/skill-template.md`, template);
 
-		const result = await shotput({
-			templateDir: `${tempDir}/`,
-			templateFile: "skill-template.md",
-			responseDir: `${tempDir}/responses`,
-			allowedBasePaths: [process.cwd(), tempDir],
-			skillsDir: `${tempDir}/skills`,
-		});
+		const result = await shotput()
+			.with({
+				templateDir: `${tempDir}/`,
+				templateFile: "skill-template.md",
+				responseDir: `${tempDir}/responses`,
+				allowedBasePaths: [process.cwd(), tempDir],
+				skillsDir: `${tempDir}/skills`,
+			})
+			.run();
 
 		expect(result.content).toContain("# My Template");
 		expect(result.content).toContain("## Skill: integration-test-skill");
@@ -757,13 +799,15 @@ This skill is used for integration testing.
 `;
 		await Bun.write(`${tempDir}/combined-template.md`, template);
 
-		const result = await shotput({
-			templateDir: `${tempDir}/`,
-			templateFile: "combined-template.md",
-			responseDir: `${tempDir}/responses`,
-			allowedBasePaths: [process.cwd(), tempDir],
-			skillsDir: `${tempDir}/skills`,
-		});
+		const result = await shotput()
+			.with({
+				templateDir: `${tempDir}/`,
+				templateFile: "combined-template.md",
+				responseDir: `${tempDir}/responses`,
+				allowedBasePaths: [process.cwd(), tempDir],
+				skillsDir: `${tempDir}/skills`,
+			})
+			.run();
 
 		expect(result.content).toContain("## Skill: integration-test-skill");
 		expect(result.content).toContain("## Data File");
@@ -774,13 +818,15 @@ This skill is used for integration testing.
 		const template = "Start {{skill:nonexistent-skill}} End";
 		await Bun.write(`${tempDir}/missing-skill-template.md`, template);
 
-		const result = await shotput({
-			templateDir: `${tempDir}/`,
-			templateFile: "missing-skill-template.md",
-			responseDir: `${tempDir}/responses`,
-			allowedBasePaths: [process.cwd(), tempDir],
-			skillsDir: `${tempDir}/skills`,
-		});
+		const result = await shotput()
+			.with({
+				templateDir: `${tempDir}/`,
+				templateFile: "missing-skill-template.md",
+				responseDir: `${tempDir}/responses`,
+				allowedBasePaths: [process.cwd(), tempDir],
+				skillsDir: `${tempDir}/skills`,
+			})
+			.run();
 
 		expect(result.content).toContain("Start");
 		expect(result.content).toContain("[Error loading skill:");
@@ -791,13 +837,15 @@ This skill is used for integration testing.
 		const template = "{{skill:example-skill}}";
 		await Bun.write(`${tempDir}/fixture-skill-template.md`, template);
 
-		const result = await shotput({
-			templateDir: `${tempDir}/`,
-			templateFile: "fixture-skill-template.md",
-			responseDir: `${tempDir}/responses`,
-			allowedBasePaths: [process.cwd(), tempDir],
-			skillsDir: "./test/fixtures/skills",
-		});
+		const result = await shotput()
+			.with({
+				templateDir: `${tempDir}/`,
+				templateFile: "fixture-skill-template.md",
+				responseDir: `${tempDir}/responses`,
+				allowedBasePaths: [process.cwd(), tempDir],
+				skillsDir: "./test/fixtures/skills",
+			})
+			.run();
 
 		expect(result.content).toContain("## Skill: example-skill");
 		expect(result.content).toContain("An example skill for testing");
@@ -826,14 +874,16 @@ Different content here.
 `;
 		await Bun.write(`${tempDir}/multi-skill-template.md`, template);
 
-		const result = await shotput({
-			templateDir: `${tempDir}/`,
-			templateFile: "multi-skill-template.md",
-			responseDir: `${tempDir}/responses`,
-			allowedBasePaths: [process.cwd(), tempDir],
-			skillsDir: `${tempDir}/skills`,
-			maxPromptLength: 10000,
-		});
+		const result = await shotput()
+			.with({
+				templateDir: `${tempDir}/`,
+				templateFile: "multi-skill-template.md",
+				responseDir: `${tempDir}/responses`,
+				allowedBasePaths: [process.cwd(), tempDir],
+				skillsDir: `${tempDir}/skills`,
+				maxPromptLength: 10000,
+			})
+			.run();
 
 		expect(result.content).toContain("## Skill: integration-test-skill");
 		expect(result.content).toContain("## Skill: second-skill");
@@ -844,14 +894,16 @@ Different content here.
 		const template = "{{skill:integration-test-skill}}";
 		await Bun.write(`${tempDir}/limited-skill-template.md`, template);
 
-		const result = await shotput({
-			templateDir: `${tempDir}/`,
-			templateFile: "limited-skill-template.md",
-			responseDir: `${tempDir}/responses`,
-			allowedBasePaths: [process.cwd(), tempDir],
-			maxPromptLength: 100,
-			skillsDir: `${tempDir}/skills`,
-		});
+		const result = await shotput()
+			.with({
+				templateDir: `${tempDir}/`,
+				templateFile: "limited-skill-template.md",
+				responseDir: `${tempDir}/responses`,
+				allowedBasePaths: [process.cwd(), tempDir],
+				maxPromptLength: 100,
+				skillsDir: `${tempDir}/skills`,
+			})
+			.run();
 
 		// Result should be truncated to at most maxPromptLength
 		expect(result.content?.length).toBeLessThanOrEqual(100);
@@ -879,13 +931,15 @@ describe("Inline Template Tests", () => {
 	it("should process inline template with file reference", async () => {
 		const template = `# Inline Template\n\n{{${tempDir}/data.txt}}\n\nEnd`;
 
-		const result = await shotput({
-			template,
-			templateDir: tempDir,
-			responseDir: tempDir,
-			allowedBasePaths: [process.cwd(), tempDir],
-			maxPromptLength: 1000,
-		});
+		const result = await shotput()
+			.with({
+				template,
+				templateDir: tempDir,
+				responseDir: tempDir,
+				allowedBasePaths: [process.cwd(), tempDir],
+				maxPromptLength: 1000,
+			})
+			.run();
 
 		expect(result.content).toContain("# Inline Template");
 		expect(result.content).toContain("Test Data Content");
@@ -895,13 +949,15 @@ describe("Inline Template Tests", () => {
 	it("should process inline template with multiple file references", async () => {
 		const template = `Start\n{{${tempDir}/data.txt}}\nMiddle\n{{${tempDir}/other.txt}}\nEnd`;
 
-		const result = await shotput({
-			template,
-			templateDir: tempDir,
-			responseDir: tempDir,
-			allowedBasePaths: [process.cwd(), tempDir],
-			maxPromptLength: 1000,
-		});
+		const result = await shotput()
+			.with({
+				template,
+				templateDir: tempDir,
+				responseDir: tempDir,
+				allowedBasePaths: [process.cwd(), tempDir],
+				maxPromptLength: 1000,
+			})
+			.run();
 
 		expect(result.content).toContain("Start");
 		expect(result.content).toContain("Test Data Content");
@@ -913,12 +969,14 @@ describe("Inline Template Tests", () => {
 	it("should process inline template with no interpolation markers", async () => {
 		const template = "Just plain text in inline template";
 
-		const result = await shotput({
-			template,
-			templateDir: tempDir,
-			responseDir: tempDir,
-			allowedBasePaths: [process.cwd(), tempDir],
-		});
+		const result = await shotput()
+			.with({
+				template,
+				templateDir: tempDir,
+				responseDir: tempDir,
+				allowedBasePaths: [process.cwd(), tempDir],
+			})
+			.run();
 
 		expect(result.content).toBe("Just plain text in inline template");
 	});
@@ -929,13 +987,15 @@ describe("Inline Template Tests", () => {
 
 		const inlineTemplate = "Inline Template Content";
 
-		const result = await shotput({
-			template: inlineTemplate,
-			templateDir: tempDir,
-			templateFile: "file-template.md",
-			responseDir: tempDir,
-			allowedBasePaths: [process.cwd(), tempDir],
-		});
+		const result = await shotput()
+			.with({
+				template: inlineTemplate,
+				templateDir: tempDir,
+				templateFile: "file-template.md",
+				responseDir: tempDir,
+				allowedBasePaths: [process.cwd(), tempDir],
+			})
+			.run();
 
 		// Should use inline template, not file template
 		expect(result.content).toBe("Inline Template Content");
@@ -945,12 +1005,14 @@ describe("Inline Template Tests", () => {
 	it("should handle empty inline template", async () => {
 		const template = "";
 
-		const result = await shotput({
-			template,
-			templateDir: tempDir,
-			responseDir: tempDir,
-			allowedBasePaths: [process.cwd(), tempDir],
-		});
+		const result = await shotput()
+			.with({
+				template,
+				templateDir: tempDir,
+				responseDir: tempDir,
+				allowedBasePaths: [process.cwd(), tempDir],
+			})
+			.run();
 
 		expect(result.content).toBe("");
 	});
@@ -960,13 +1022,15 @@ describe("Inline Template Tests", () => {
 
 		const template = "{{./subdir/nested.txt}}";
 
-		const result = await shotput({
-			template,
-			templateDir: tempDir,
-			responseDir: tempDir,
-			allowedBasePaths: [process.cwd(), tempDir],
-			maxPromptLength: 1000,
-		});
+		const result = await shotput()
+			.with({
+				template,
+				templateDir: tempDir,
+				responseDir: tempDir,
+				allowedBasePaths: [process.cwd(), tempDir],
+				maxPromptLength: 1000,
+			})
+			.run();
 
 		expect(result.content).toContain("Nested Content");
 	});
@@ -978,13 +1042,15 @@ describe("Inline Template Tests", () => {
 
 		const template = `Files:\n{{${tempDir}/glob*.txt}}`;
 
-		const result = await shotput({
-			template,
-			templateDir: tempDir,
-			responseDir: tempDir,
-			allowedBasePaths: [process.cwd(), tempDir],
-			maxPromptLength: 1000,
-		});
+		const result = await shotput()
+			.with({
+				template,
+				templateDir: tempDir,
+				responseDir: tempDir,
+				allowedBasePaths: [process.cwd(), tempDir],
+				maxPromptLength: 1000,
+			})
+			.run();
 
 		expect(result.content).toContain("Files:");
 		// Check for actual file content that was matched by glob
@@ -995,12 +1061,14 @@ describe("Inline Template Tests", () => {
 	it("should respect security restrictions in inline template", async () => {
 		const template = "{{/etc/passwd}}";
 
-		const result = await shotput({
-			template,
-			templateDir: tempDir,
-			responseDir: tempDir,
-			allowedBasePaths: [tempDir],
-		});
+		const result = await shotput()
+			.with({
+				template,
+				templateDir: tempDir,
+				responseDir: tempDir,
+				allowedBasePaths: [tempDir],
+			})
+			.run();
 
 		expect(
 			result.content?.includes("[Security Error:") ||
@@ -1013,13 +1081,15 @@ describe("Inline Template Tests", () => {
 
 		const template = `{{${tempDir}/long.txt}}`;
 
-		const result = await shotput({
-			template,
-			templateDir: tempDir,
-			responseDir: tempDir,
-			allowedBasePaths: [process.cwd(), tempDir],
-			maxPromptLength: 100,
-		});
+		const result = await shotput()
+			.with({
+				template,
+				templateDir: tempDir,
+				responseDir: tempDir,
+				allowedBasePaths: [process.cwd(), tempDir],
+				maxPromptLength: 100,
+			})
+			.run();
 
 		expect(result.content?.length).toBeLessThan(150);
 	});
@@ -1028,13 +1098,15 @@ describe("Inline Template Tests", () => {
 		const timestamp = Date.now();
 		const template = `Generated at ${timestamp}\n{{${tempDir}/data.txt}}`;
 
-		const result = await shotput({
-			template,
-			templateDir: tempDir,
-			responseDir: tempDir,
-			allowedBasePaths: [process.cwd(), tempDir],
-			maxPromptLength: 1000,
-		});
+		const result = await shotput()
+			.with({
+				template,
+				templateDir: tempDir,
+				responseDir: tempDir,
+				allowedBasePaths: [process.cwd(), tempDir],
+				maxPromptLength: 1000,
+			})
+			.run();
 
 		expect(result.content).toContain(`Generated at ${timestamp}`);
 		expect(result.content).toContain("Test Data Content");

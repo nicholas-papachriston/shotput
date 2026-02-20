@@ -18,7 +18,7 @@ describe("hooks", () => {
 			allowedBasePaths: [process.cwd()],
 			hooks,
 		});
-		const result = await shotput(config);
+		const result = await shotput().with(config).run();
 		expect(preResolveCalls.length).toBe(1);
 		expect(preResolveCalls[0]).toContain("PLACEHOLDER");
 		expect(result.content).toContain("replaced");
@@ -65,7 +65,7 @@ describe("hooks", () => {
 			hooks,
 			maxConcurrency: 1,
 		});
-		const result = await shotput(config);
+		const result = await shotput().with(config).run();
 		expect(result.error).toBeUndefined();
 		expect(resolved.length).toBe(3);
 		const paths = resolved.map((r) => r.path);
@@ -82,7 +82,7 @@ describe("hooks", () => {
 			template: "hello",
 			hooks,
 		});
-		const result = await shotput(config);
+		const result = await shotput().with(config).run();
 		expect(result.error).toBeDefined();
 		expect(result.error?.name).toBe("HookAbortError");
 	});
@@ -95,7 +95,7 @@ describe("hooks", () => {
 			template: "body",
 			hooks,
 		});
-		const result = await shotput(config);
+		const result = await shotput().with(config).run();
 		expect(result.error).toBeDefined();
 		expect(result.error?.name).toBe("HookAbortError");
 	});
@@ -111,7 +111,7 @@ describe("hooks", () => {
 			template: "body",
 			hooks,
 		});
-		const result = await shotput(config);
+		const result = await shotput().with(config).run();
 		expect(result.content).toContain("body");
 		expect(result.content).toContain("[footer]");
 	});
@@ -134,7 +134,7 @@ describe("hooks", () => {
 			template: "x",
 			hooks,
 		});
-		await shotput(config);
+		await shotput().with(config).run();
 		expect(order).toEqual(["a", "b"]);
 	});
 
@@ -149,7 +149,7 @@ describe("hooks", () => {
 			template: "sync",
 			hooks,
 		});
-		const result = await shotput(config);
+		const result = await shotput().with(config).run();
 		expect(result.content).toContain("sync async");
 	});
 });

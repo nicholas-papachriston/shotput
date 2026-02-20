@@ -57,17 +57,17 @@ const templatePath = join(templateDir, "template.md");
 writeFileSync(templatePath, r2Template);
 
 try {
-	const result = await shotput({
-		templateDir,
-		templateFile: "template.md",
-		responseDir: templateDir,
-		cloudflareR2Url: process.env["CLOUDFLARE_R2_URL"],
-		s3AccessKeyId: process.env["S3_ACCESS_KEY_ID"],
-		s3SecretAccessKey: process.env["S3_SECRET_ACCESS_KEY"],
-		maxBucketFiles: 100,
-		debug: true,
-		debugFile: join(templateDir, "template-debug.md"),
-	});
+	const result = await shotput()
+		.templateDir(templateDir)
+		.templateFile("template.md")
+		.responseDir(templateDir)
+		.cloudflareR2Url(process.env["CLOUDFLARE_R2_URL"] ?? "")
+		.s3AccessKeyId(process.env["S3_ACCESS_KEY_ID"] ?? "")
+		.s3SecretAccessKey(process.env["S3_SECRET_ACCESS_KEY"] ?? "")
+		.maxBucketFiles(100)
+		.debug(true)
+		.debugFile(join(templateDir, "template-debug.md"))
+		.run();
 
 	log.info(result.metadata);
 } catch (error) {

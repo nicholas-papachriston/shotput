@@ -61,6 +61,14 @@ export const findTemplateType = async (
 			return TemplateType.Function;
 		}
 
+		// Custom source plugins (before Glob/Http so schemes like sqlite://.../query:SELECT * are not treated as glob)
+		if (config?.customSources?.length) {
+			const pathForMatch = rawPath ?? path;
+			if (getMatchingPlugin(config, pathForMatch)) {
+				return TemplateType.Custom;
+			}
+		}
+
 		if (GLOB_CHARS.test(path)) {
 			return TemplateType.Glob;
 		}
@@ -75,14 +83,6 @@ export const findTemplateType = async (
 
 		if (regexIndicators.some((pattern) => pattern.test(path))) {
 			return TemplateType.Regex;
-		}
-
-		// Custom source plugins (check before file fallback so custom URLs are not treated as paths)
-		if (config?.customSources?.length) {
-			const pathForMatch = rawPath ?? path;
-			if (getMatchingPlugin(config, pathForMatch)) {
-				return TemplateType.Custom;
-			}
 		}
 
 		// Fallback for paths that don't exist yet but look like paths

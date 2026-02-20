@@ -40,6 +40,8 @@
  * @prop commandsDir - Directory for {{command:name}} templates. Default: "./commands"
  * @prop parseSubagentFrontmatter - Strip YAML frontmatter and set output.frontmatter. Default: false
  * @prop subagentsDir - Directory for {{subagent:name}} definitions. Default: "./.agents"
+ * @prop redis - Redis connection: URL string (e.g. "redis://localhost:6379") or options object with url/username/password. Automatically enables {{redis://...}} placeholder support.
+ * @prop sqlite - Enable {{sqlite://path/query:SQL}} placeholder support. Default: false
  */
 export interface ShotputConfig {
 	debug: boolean;
@@ -88,6 +90,10 @@ export interface ShotputConfig {
 	commandsDir?: string;
 	parseSubagentFrontmatter?: boolean;
 	subagentsDir?: string;
+	/** Redis connection: URL string or options object (url, username, password, passwordHash). Enables {{redis://...}} placeholder support. */
+	redis?: string | import("./db/options").DbPluginOptions;
+	/** Enable {{sqlite://path/query:SQL}} placeholder support. Default: false */
+	sqlite?: boolean;
 }
 
 export const DEFAULT_CONFIG: ShotputConfig = {
@@ -132,6 +138,8 @@ export const DEFAULT_CONFIG: ShotputConfig = {
 	commandsDir: "./commands",
 	parseSubagentFrontmatter: false,
 	subagentsDir: "./.agents",
+	redis: undefined,
+	sqlite: false,
 };
 
 /**
@@ -240,6 +248,11 @@ export const getEnvConfig = (): ShotputConfig => ({
 	parseSubagentFrontmatter:
 		process.env["PARSE_SUBAGENT_FRONTMATTER"] === "true",
 	subagentsDir: process.env["SUBAGENTS_DIR"] ?? DEFAULT_CONFIG.subagentsDir,
+	redis:
+		process.env["REDIS_URL"] ??
+		process.env["VALKEY_URL"] ??
+		DEFAULT_CONFIG.redis,
+	sqlite: process.env["SQLITE_ENABLED"] === "true" || DEFAULT_CONFIG.sqlite,
 });
 
 /**

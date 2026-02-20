@@ -76,6 +76,9 @@ These examples demonstrate advanced features and patterns:
 10. **[Nested Templates](./advanced/10-nested-templates.ts)** - Recursive template interpolation
 11. **[Nested Mixed Sources](./advanced/11-nested-mixed-sources.ts)** - File, skill, function, HTTP chain
 12. **[Custom Source Plugin](./advanced/12-custom-source.ts)** - `customSources` and `SourcePlugin`
+13. **[Token Budgeting](./advanced/13-token-budgeting.ts)** - Token-aware planning and trimming
+14. **[DB Plugin (SQLite)](./advanced/14-db-sqlite.ts)** - `createDbPlugin()`, `{{sqlite://path/query:SQL}}`
+15. **[DB Plugin (Redis)](./advanced/15-db-redis.ts)** - `createDbPlugin({ redisUrl })`, `{{redis:///get:key}}`, `{{redis:///keys:pattern}}`
 
 ## Feature Matrix
 
@@ -109,6 +112,7 @@ These examples demonstrate advanced features and patterns:
 | Format: XML | 20 | - | `{{xml:path}}`, parseXml(), parseS3ListResponse() |
 | Format references (yaml, json, jsonl, xml, md) | 21 | - | `{{yaml:path}}`, `{{json:path}}`, `{{jsonl:path}}`, `{{xml:path}}`, `{{md:path}}` |
 | Custom source plugin | - | 12 | `customSources: [SourcePlugin]` |
+| DB plugin (SQLite/Redis) | - | 14, 15 | `createDbPlugin(options)`, `{{sqlite://path/query:SQL}}`, `{{redis:///get:key}}` |
 
 ## Template Syntax Reference
 
@@ -230,67 +234,79 @@ export default async function(result, path, match, remainingLength) {
 
 ## Configuration Examples
 
+`shotput()` returns a builder. Chain config setters to configure, then call `.run()`, `.stream()`, `.streamSegments()`, or `.build()` to get a reusable `ShotputProgram`.
+
 ### Basic Configuration
 
 ```typescript
 import { shotput } from "shotput";
 
-const instance = shotput({
-  templateDir: "./templates",
-  templateFile: "template.md",
-  responseDir: "./output",
-});
-
-const result = await instance.run();
+const result = await shotput()
+  .templateDir("./templates")
+  .templateFile("template.md")
+  .responseDir("./output")
+  .run();
 console.log(result.content);
+```
+
+### Reusable program (build once, run many)
+
+```typescript
+const base = shotput()
+  .templateDir("./templates")
+  .allowedBasePaths(["./templates", "/app/data"])
+  .build();
+
+const out1 = await base.templateFile("prompt.md").context({ user: "a" }).run();
+const out2 = await base.templateFile("other.md").run();
 ```
 
 ### With Security
 
 ```typescript
-const instance = shotput({
-  templateDir: "./templates",
-  templateFile: "template.md",
-  allowedBasePaths: ["/app/data", "/app/templates"],
-  allowHttp: true,
-  allowFunctions: true,
-  allowedFunctionPaths: ["/app/functions"],
-});
+const result = await shotput()
+  .templateDir("./templates")
+  .templateFile("template.md")
+  .allowedBasePaths(["/app/data", "/app/templates"])
+  .allowHttp(true)
+  .allowFunctions(true)
+  .allowedFunctionPaths(["/app/functions"])
+  .run();
 ```
 
 ### With S3
 
 ```typescript
-const instance = shotput({
-  templateDir: "./templates",
-  templateFile: "template.md",
-  s3AccessKeyId: process.env["S3_ACCESS_KEY_ID"],
-  s3SecretAccessKey: process.env["S3_SECRET_ACCESS_KEY"],
-  s3Region: "us-east-1",
-});
+const result = await shotput()
+  .templateDir("./templates")
+  .templateFile("template.md")
+  .s3AccessKeyId(process.env["S3_ACCESS_KEY_ID"] ?? "")
+  .s3SecretAccessKey(process.env["S3_SECRET_ACCESS_KEY"] ?? "")
+  .s3Region("us-east-1")
+  .run();
 ```
 
 ### With Length Limits
 
 ```typescript
-const instance = shotput({
-  templateDir: "./templates",
-  templateFile: "template.md",
-  maxPromptLength: 50000,  // 50KB max output
-  maxBucketFiles: 100,     // Max files from S3 prefix
-});
+const result = await shotput()
+  .templateDir("./templates")
+  .templateFile("template.md")
+  .maxPromptLength(50000)  // 50KB max output
+  .maxBucketFiles(100)     // Max files from S3 prefix
+  .run();
 ```
 
 ### With Skills
 
 ```typescript
-const instance = shotput({
-  templateDir: "./templates",
-  templateFile: "template.md",
-  skillsDir: "./skills",
-  allowRemoteSkills: true,
-  allowedSkillSources: ["anthropics/skills", "myorg/skills"],
-});
+const result = await shotput()
+  .templateDir("./templates")
+  .templateFile("template.md")
+  .skillsDir("./skills")
+  .allowRemoteSkills(true)
+  .allowedSkillSources(["anthropics/skills", "myorg/skills"])
+  .run();
 ```
 
 ## Sample Data

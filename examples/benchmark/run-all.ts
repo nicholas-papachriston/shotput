@@ -41,25 +41,24 @@ interface Result {
 }
 
 async function benchShotput(): Promise<Result> {
-	const template = getShotputTemplate();
-	const config = {
-		template,
-		templateDir: join(import.meta.dir, ".."),
-		responseDir: join(import.meta.dir, ".."),
-		allowedBasePaths: [join(import.meta.dir, "../..")],
-		context: benchmarkContext,
-		enableContentLengthPlanning: false,
-		maxConcurrency: 1,
-		debug: false,
-	};
-	await shotput(config as Parameters<typeof shotput>[0]);
+	const base = shotput()
+		.template(getShotputTemplate())
+		.templateDir(join(import.meta.dir, ".."))
+		.responseDir(join(import.meta.dir, ".."))
+		.allowedBasePaths([join(import.meta.dir, "../..")])
+		.context(benchmarkContext)
+		.enableContentLengthPlanning(false)
+		.maxConcurrency(1)
+		.debug(false)
+		.build();
+	await base.run();
 
 	const times: number[] = [];
 	const heapUsed: number[] = [];
 	let outLen = 0;
 	for (let i = 0; i < RUNS; i++) {
 		const start = performance.now();
-		const r = await shotput(config as Parameters<typeof shotput>[0]);
+		const r = await base.run();
 		times.push(performance.now() - start);
 		heapUsed.push(process.memoryUsage().heapUsed);
 		if (i === 0) outLen = (r.content ?? "").length;
@@ -80,27 +79,22 @@ async function benchShotput(): Promise<Result> {
 }
 
 async function benchShotputCompiled(): Promise<Result> {
-	const template = getShotputTemplate();
-	const baseConfig = {
+	const program = compileShotputTemplate(getShotputTemplate(), {
 		templateDir: join(import.meta.dir, ".."),
 		responseDir: join(import.meta.dir, ".."),
 		allowedBasePaths: [join(import.meta.dir, "../..")],
 		enableContentLengthPlanning: false,
 		maxConcurrency: 1,
 		debug: false,
-	};
-	const render = compileShotputTemplate(
-		template,
-		baseConfig as Parameters<typeof compileShotputTemplate>[1],
-	);
-	await render({ context: benchmarkContext });
+	});
+	await program.context(benchmarkContext).run();
 
 	const times: number[] = [];
 	const heapUsed: number[] = [];
 	let outLen = 0;
 	for (let i = 0; i < RUNS; i++) {
 		const start = performance.now();
-		const r = await render({ context: benchmarkContext });
+		const r = await program.context(benchmarkContext).run();
 		times.push(performance.now() - start);
 		heapUsed.push(process.memoryUsage().heapUsed);
 		if (i === 0) outLen = (r.content ?? "").length;

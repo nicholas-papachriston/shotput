@@ -34,14 +34,17 @@ This template is defined as a string in the code, not read from a file.
 `;
 
 try {
-	const result = await shotput({
-		template: simpleTemplate,
-		templateDir: outputDir,
-		responseDir: outputDir,
-		allowedBasePaths: [join(import.meta.dir, "..")],
-		debug: true,
-		debugFile: join(outputDir, "simple-template-debug.md"),
-	});
+	const base = shotput()
+		.templateDir(outputDir)
+		.responseDir(outputDir)
+		.allowedBasePaths([join(import.meta.dir, "..")])
+		.debug(true)
+		.build();
+
+	const result = await base
+		.template(simpleTemplate)
+		.debugFile(join(outputDir, "simple-template-debug.md"))
+		.run();
 
 	log.info(result.metadata);
 
@@ -56,14 +59,10 @@ try {
 ---
 Generated from inline template
 `;
-	const multiResult = await shotput({
-		template: multiTemplate,
-		templateDir: outputDir,
-		responseDir: outputDir,
-		allowedBasePaths: [join(import.meta.dir, "..")],
-		debug: true,
-		debugFile: join(outputDir, "multi-template-debug.md"),
-	});
+	const multiResult = await base
+		.template(multiTemplate)
+		.debugFile(join(outputDir, "multi-template-debug.md"))
+		.run();
 
 	log.info(multiResult.metadata);
 
@@ -79,14 +78,10 @@ Generated at: ${timestamp}
 ## Summary
 This template was dynamically generated at runtime with embedded timestamp and computed file paths.
 `;
-	const dynamicResult = await shotput({
-		template: dynamicTemplate,
-		templateDir: outputDir,
-		responseDir: outputDir,
-		allowedBasePaths: [join(import.meta.dir, "..")],
-		debug: true,
-		debugFile: join(outputDir, "dynamic-template-debug.md"),
-	});
+	const dynamicResult = await base
+		.template(dynamicTemplate)
+		.debugFile(join(outputDir, "dynamic-template-debug.md"))
+		.run();
 
 	log.info(dynamicResult.metadata);
 
@@ -105,14 +100,10 @@ ${sections.join("\n")}
 Total sections: ${filesToInclude.length}
 `;
 
-	const programmaticResult = await shotput({
-		template: programmaticTemplate,
-		templateDir: join(import.meta.dir, "../output/09-inline-template"),
-		responseDir: outputDir,
-		allowedBasePaths: [join(import.meta.dir, "..")],
-		debug: true,
-		debugFile: join(outputDir, "programmatic-template-debug.md"),
-	});
+	const programmaticResult = await base
+		.template(programmaticTemplate)
+		.debugFile(join(outputDir, "programmatic-template-debug.md"))
+		.run();
 
 	log.info(programmaticResult.metadata);
 } catch (error) {

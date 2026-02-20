@@ -45,15 +45,18 @@ const templatePath = join(templateDir, "template.md");
 writeFileSync(templatePath, templateContent);
 
 try {
-	const result = await shotput({
-		templateDir,
-		templateFile: "template.md",
-		responseDir: templateDir,
-		allowedBasePaths: [join(import.meta.dir, "..")],
-		allowHttp: true, // IMPORTANT: Must enable HTTP fetching
-		debug: true,
-		debugFile: join(templateDir, "template-debug.md"),
-	});
+	const base = shotput()
+		.templateDir(templateDir)
+		.responseDir(templateDir)
+		.allowedBasePaths([join(import.meta.dir, "..")])
+		.allowHttp(true) // IMPORTANT: Must enable HTTP fetching
+		.debug(true)
+		.build();
+
+	const result = await base
+		.templateFile("template.md")
+		.debugFile(join(templateDir, "template-debug.md"))
+		.run();
 
 	log.info(result.metadata);
 
@@ -79,15 +82,10 @@ API responses are included directly in the template.
 	const apiTemplatePath = join(templateDir, "api-template.md");
 	writeFileSync(apiTemplatePath, apiTemplate);
 
-	const apiResult = await shotput({
-		templateDir,
-		templateFile: "api-template.md",
-		responseDir: templateDir,
-		allowedBasePaths: [join(import.meta.dir, "..")],
-		allowHttp: true,
-		debug: true,
-		debugFile: join(templateDir, "api-template-debug.md"),
-	});
+	const apiResult = await base
+		.templateFile("api-template.md")
+		.debugFile(join(templateDir, "api-template-debug.md"))
+		.run();
 
 	log.info(apiResult.metadata);
 } catch (error) {
@@ -130,7 +128,7 @@ API responses are included directly in the template.
  * 6. Error Handling:
  *    - Network errors are logged in metadata
  *    - Failed fetches don't stop other processing
- *    - Check metadata.errors for fetch failures
+ *    - Check result.error for fetch failures
  *
  * 7. Security:
  *    - Only fetch from trusted URLs

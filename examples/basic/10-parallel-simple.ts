@@ -59,30 +59,29 @@ async function main() {
 
 ## Conclusion
 {{${join(DATA_DIR, "conclusion.txt")}}}`;
-	const parallelResult = await shotput({
-		template,
-		templateDir: DATA_DIR,
-		allowedBasePaths: [DATA_DIR],
-		maxConcurrency: 4, // Process 4 files at once
-		enableContentLengthPlanning: true, // Enable smart planning
-		maxRetries: 3, // Retry up to 3 times on failure
-		retryDelay: 1000, // Wait 1s before first retry
-		retryBackoffMultiplier: 2, // Double delay each retry
-		debug: true,
-		debugFile: join(OUTPUT_DIR, "parallel-simple-output-debug.txt"),
-	});
+	const base = shotput()
+		.template(template)
+		.templateDir(DATA_DIR)
+		.allowedBasePaths([DATA_DIR])
+		.debug(true)
+		.build();
+
+	const parallelResult = await base
+		.maxConcurrency(4) // Process 4 files at once
+		.enableContentLengthPlanning(true) // Enable smart planning
+		.maxRetries(3) // Retry up to 3 times on failure
+		.retryDelay(1000) // Wait 1s before first retry
+		.retryBackoffMultiplier(2) // Double delay each retry
+		.debugFile(join(OUTPUT_DIR, "parallel-simple-output-debug.txt"))
+		.run();
 
 	log.info(parallelResult.metadata);
 
-	const sequentialResult = await shotput({
-		template,
-		templateDir: DATA_DIR,
-		allowedBasePaths: [DATA_DIR],
-		maxConcurrency: 1, // Process 1 file at a time
-		enableContentLengthPlanning: false, // Disable parallel features
-		debug: true,
-		debugFile: join(OUTPUT_DIR, "sequential-output-debug.txt"),
-	});
+	const sequentialResult = await base
+		.maxConcurrency(1) // Process 1 file at a time
+		.enableContentLengthPlanning(false) // Disable parallel features
+		.debugFile(join(OUTPUT_DIR, "sequential-output-debug.txt"))
+		.run();
 
 	log.info(sequentialResult.metadata);
 }

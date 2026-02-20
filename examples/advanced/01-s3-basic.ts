@@ -49,16 +49,19 @@ const singleFilePath = join(templateDir, "single-file-template.md");
 writeFileSync(singleFilePath, singleFileTemplate);
 
 try {
-	const result = await shotput({
-		templateDir,
-		templateFile: "single-file-template.md",
-		responseDir: templateDir,
-		s3AccessKeyId: process.env["S3_ACCESS_KEY_ID"],
-		s3SecretAccessKey: process.env["S3_SECRET_ACCESS_KEY"],
-		s3Region: process.env["S3_REGION"] || "us-east-1",
-		debug: true,
-		debugFile: join(templateDir, "single-file-debug.md"),
-	});
+	const s3Base = shotput()
+		.templateDir(templateDir)
+		.responseDir(templateDir)
+		.s3AccessKeyId(process.env["S3_ACCESS_KEY_ID"] ?? "")
+		.s3SecretAccessKey(process.env["S3_SECRET_ACCESS_KEY"] ?? "")
+		.s3Region(process.env["S3_REGION"] ?? "us-east-1")
+		.debug(true)
+		.build();
+
+	const result = await s3Base
+		.templateFile("single-file-template.md")
+		.debugFile(join(templateDir, "single-file-debug.md"))
+		.run();
 
 	log.info(result.metadata);
 } catch (error) {
@@ -77,17 +80,11 @@ const prefixPath = join(templateDir, "prefix-template.md");
 writeFileSync(prefixPath, prefixTemplate);
 
 try {
-	const result = await shotput({
-		templateDir,
-		templateFile: "prefix-template.md",
-		responseDir: templateDir,
-		s3AccessKeyId: process.env["S3_ACCESS_KEY_ID"],
-		s3SecretAccessKey: process.env["S3_SECRET_ACCESS_KEY"],
-		s3Region: process.env["S3_REGION"] || "us-east-1",
-		maxBucketFiles: 50, // Limit number of files from prefix
-		debug: true,
-		debugFile: join(templateDir, "prefix-debug.md"),
-	});
+	const result = await s3Base
+		.templateFile("prefix-template.md")
+		.maxBucketFiles(50) // Limit number of files from prefix
+		.debugFile(join(templateDir, "prefix-debug.md"))
+		.run();
 
 	log.info(result.metadata);
 } catch (error) {
@@ -102,6 +99,6 @@ try {
  * 3. Credentials can be set via environment variables or config
  * 4. Use maxBucketFiles to limit how many files are fetched from a prefix
  * 5. The metadata includes detailed information about each processed template
- * 6. Errors are collected and reported in metadata.errors
+ * 6. Errors are reported on result.error
  * 7. Processing is done efficiently with parallel operations where possible
  */

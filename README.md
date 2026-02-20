@@ -11,7 +11,7 @@ Shotput is a simple, programmatic templating library to help manage personas, sy
 - Arbitrary source retrieval and output destination
 - Streaming for large files (>1MB)
 - Security validation for all paths
-- **Templating sources:** file paths, directory paths, functions (cjs/esm), HTTP URLs, glob patterns, regex patterns, S3 paths (including [S3 directory buckets](./docs/s3-advanced-features.md)), [Anthropic Skills](https://github.com/anthropics/skills), custom source plugins
+- **Templating sources:** file paths, directory paths, functions (cjs/esm), HTTP URLs, glob patterns, regex patterns, S3 paths (including [S3 directory buckets](./docs/s3-advanced-features.md)), [Anthropic Skills](https://github.com/anthropics/skills), SQLite (`.sqlite()` builder method, `{{sqlite://path/query:SQL}}`), Redis (`.redis(url)` builder method, `{{redis:///get:key}}`), custom source plugins
 - **Conditionals and loops:** `{{#if}}...{{else}}...{{/if}}` with `context`, `env`, and `params`; `{{#each context.list}}...{{/each}}` with `context.__loop.item` and `context.__loop.index`
 - **Variable substitution:** `{{context.x}}`, `{{params.x}}`, `{{env.X}}` in template body (nested paths supported)
 - **Token-aware budgeting:** optional `tokenizer` config so `maxPromptLength` is in tokens; heuristic or custom `(text) => number`
@@ -22,11 +22,7 @@ Shotput is a simple, programmatic templating library to help manage personas, sy
 
 **Template authoring for LLMs:** [llms.txt](./llms.txt) at the project root links to the [full template guide](./docs/llm-template-guide.txt) (syntax reference, high-fidelity patterns, examples, pitfalls).
 
-## TODO
-
-- npm package
-- blob search s3/rs support
-- regex search s3/rs support
+**API:** `shotput()` returns a builder. Chain config methods like `.templateDir()`, `.context()`, `.allowedBasePaths()` to configure, then call `.run()`, `.stream()`, `.streamSegments()`, or `.build()` to get a reusable `ShotputProgram`.
 
 ## Environment Variables
 
@@ -69,6 +65,13 @@ Shotput can be configured via environment variables. All configuration options c
 | `SKILLS_DIR` | `string` | `"./skills"` | Local skills directory |
 | `ALLOW_REMOTE_SKILLS` | `boolean` | `false` | Allow loading skills from GitHub |
 | `ALLOWED_SKILL_SOURCES` | `string` | `"anthropics/skills"` | Comma-separated allowed remote sources |
+
+### Database Configuration
+
+| Variable | Type | Default | Description |
+|----------|------|---------|-------------|
+| `REDIS_URL` or `VALKEY_URL` | `string` | - | Redis connection URL (enables `{{redis://...}}` placeholders) |
+| `SQLITE_ENABLED` | `boolean` | `false` | Enable `{{sqlite://...}}` placeholder support |
 
 ### S3/R2 Configuration
 
@@ -122,6 +125,10 @@ S3_REGION=us-east-1
 
 # Or use Cloudflare R2
 CLOUDFLARE_R2_URL=account-id.r2.cloudflarestorage.com
+
+# Database (optional)
+REDIS_URL=redis://localhost:6379
+SQLITE_ENABLED=false
 
 # Skills
 SKILLS_DIR=./skills
@@ -194,20 +201,20 @@ Pass template content directly as a string instead of reading from a file:
 ```ts
 import { shotput } from "shotput";
 
-const result = await shotput({
-  template: "Hello {{./data.txt}}!",
-  templateDir: "/path/to/base",
-  allowedBasePaths: ["/path/to/base"],
-});
+const result = await shotput()
+  .template("Hello {{./data.txt}}!")
+  .templateDir("/path/to/base")
+  .allowedBasePaths(["/path/to/base"])
+  .run();
 console.log(result.content);
 
 // Dynamically generated template
 const dynamicTemplate = `# Report\nGenerated: ${new Date().toISOString()}\n{{./config.json}}`;
-const dynamicResult = await shotput({
-  template: dynamicTemplate,
-  templateDir: "./data",
-  allowedBasePaths: ["./data"],
-});
+const dynamicResult = await shotput()
+  .template(dynamicTemplate)
+  .templateDir("./data")
+  .allowedBasePaths(["./data"])
+  .run();
 ```
 
 **Use Cases:**
@@ -221,11 +228,11 @@ const dynamicResult = await shotput({
 ### Skill Configuration
 
 ```ts
-await shotput({
-  skillsDir: "./skills",
-  allowRemoteSkills: false,
-  allowedSkillSources: ["anthropics/skills"],
-});
+await shotput()
+  .skillsDir("./skills")
+  .allowRemoteSkills(false)
+  .allowedSkillSources(["anthropics/skills"])
+  .run();
 ```
 
 ### S3/R2 Configuration
@@ -247,14 +254,14 @@ CLOUDFLARE_R2_URL=account-id.r2.cloudflarestorage.com
 **Programmatic Configuration:**
 
 ```ts
-await shotput({
-  s3AccessKeyId: "your-access-key",
-  s3SecretAccessKey: "your-secret-key",
-  s3Region: "us-east-1",
-  s3SessionToken: "session-token",  // optional, temporary credentials
-  s3Bucket: "default-bucket",
-  s3VirtualHostedStyle: false,
-});
+await shotput()
+  .s3AccessKeyId("your-access-key")
+  .s3SecretAccessKey("your-secret-key")
+  .s3Region("us-east-1")
+  .s3SessionToken("session-token")  // optional, temporary credentials
+  .s3Bucket("default-bucket")
+  .s3VirtualHostedStyle(false)
+  .run();
 ```
 
 **S3 Directory Buckets (AWS S3 Express One Zone):**
@@ -286,13 +293,13 @@ Shotput includes advanced parallel processing capabilities with intelligent plan
 **Configuration:**
 
 ```ts
-await shotput({
-  maxConcurrency: 4,
-  enableContentLengthPlanning: true,
-  maxRetries: 3,
-  retryDelay: 1000,
-  retryBackoffMultiplier: 2,
-});
+await shotput()
+  .maxConcurrency(4)
+  .enableContentLengthPlanning(true)
+  .maxRetries(3)
+  .retryDelay(1000)
+  .retryBackoffMultiplier(2)
+  .run();
 ```
 
 **How It Works:**
@@ -326,68 +333,74 @@ Parallel processing can significantly improve performance when working with mult
 **Disabling parallel processing:**
 
 ```ts
-await shotput({
-  enableContentLengthPlanning: false,
-  maxConcurrency: 1,
-});
+await shotput()
+  .enableContentLengthPlanning(false)
+  .maxConcurrency(1)
+  .run();
 ```
 
 ## API
 
-### `shotput(config?: Partial<ShotputConfig>): Promise<ShotputOutput>`
+### `shotput(): ShotputBuilder`
 
-Processes the template with optional configuration overrides and returns the result. No separate `.run()` call; invoke as `await shotput({ ... })`.
+Returns an empty builder. Chain config setters, then execute:
 
-**Parameters:**
+- `.run()` — full pipeline, returns `Promise<ShotputOutput>`
+- `.stream()` — streaming, returns `Promise<ShotputStreamingOutput>`
+- `.streamSegments()` — streaming with literal map, returns `Promise<ShotputSegmentStreamOutput>`
+- `.build()` — returns an immutable `ShotputProgram` to store and reuse
+- `.with(overrides)` — merge a config object and return a new builder (bulk overrides)
 
-- `config` (optional): Configuration object with the following properties:
+**Chainable config setters** (each returns a new instance):
 
-| Property | Type | Default | Description |
-|----------|------|---------|-------------|
-| `template` | `string` | `undefined` | Template content as string (overrides `templateFile`) |
-| `templateDir` | `string` | `"./templates"` | Base directory for template files and relative path resolution |
-| `templateFile` | `string` | `"template.md"` | Template file name (ignored if `template` is provided) |
-| `responseDir` | `string` | `"./responses"` | Output directory for response files |
-| `debug` | `boolean` | `false` | Enable debug output |
-| `debugFile` | `string` | `"./templates/template_debug.txt"` | Debug output file path |
-| `maxPromptLength` | `number` | `100000` | Maximum output length in characters |
-| `allowedBasePaths` | `string[]` | `[process.cwd()]` | Allowed base paths for file access |
-| `allowHttp` | `boolean` | `true` | Allow HTTP/HTTPS requests |
-| `allowedDomains` | `string[]` | `[]` | Allowed HTTP domains (empty = all allowed) |
-| `httpTimeout` | `number` | `30000` | HTTP request timeout in milliseconds |
-| `allowFunctions` | `boolean` | `false` | Allow custom function execution |
-| `allowedFunctionPaths` | `string[]` | `[]` | Allowed paths for function execution |
-| `skillsDir` | `string` | `"./skills"` | Local skills directory |
-| `allowRemoteSkills` | `boolean` | `false` | Allow loading skills from GitHub |
-| `allowedSkillSources` | `string[]` | `["anthropics/skills"]` | Allowed remote skill sources |
-| `s3AccessKeyId` | `string` | `undefined` | AWS S3 access key ID |
-| `s3SecretAccessKey` | `string` | `undefined` | AWS S3 secret access key |
-| `s3SessionToken` | `string` | `undefined` | AWS S3 session token (for temporary credentials) |
-| `s3Region` | `string` | `undefined` | AWS S3 region |
-| `s3Bucket` | `string` | `undefined` | Default S3 bucket name |
-| `awsS3Url` | `string` | `"s3.amazonaws.com"` | AWS S3 endpoint URL |
-| `cloudflareR2Url` | `string` | `undefined` | Cloudflare R2 endpoint URL |
-| `s3VirtualHostedStyle` | `boolean` | `false` | Use virtual-hosted-style URLs for S3 |
-| `maxConcurrency` | `number` | `4` | Maximum concurrent operations |
-| `maxBucketFiles` | `number` | `100000` | Maximum files to fetch from S3 prefix |
-| `maxRetries` | `number` | `3` | Maximum retry attempts for failed operations |
-| `retryDelay` | `number` | `1000` | Initial retry delay in milliseconds |
-| `retryBackoffMultiplier` | `number` | `2` | Exponential backoff multiplier for retries |
-| `enableContentLengthPlanning` | `boolean` | `true` | Enable planning phase with content length detection and trimming (does not gate path; all interpolation uses unified parallel flow) |
-| `maxNestingDepth` | `number` | `3` | Maximum depth for nested template interpolation |
-| `context` | `Record<string, unknown>` | `undefined` | Context for rules and variable substitution |
-| `expressionEngine` | `"js"` \| `"safe"` | `"js"` | Condition evaluation: full JS or safe subset |
-| `tokenizer` | `"openai"` \| `"cl100k_base"` \| `(text: string) => number` | `undefined` | When set, `maxPromptLength` is in tokens |
-| `hooks` | `HookSet` | `undefined` | Lifecycle hooks (preResolve, postResolveSource, postAssembly, preOutput) |
-| `outputMode` | `"flat"` \| `"sectioned"` \| `"messages"` | `"flat"` | Output shape |
-| `sectionBudgets` | `Record<string, number>` | `undefined` | Per-section length limits (sectioned mode) |
-| `sectionRoles` | `Record<string, "system" \| "user" \| "assistant">` | `undefined` | Section to role mapping (messages mode) |
-| `commandsDir` | `string` | `undefined` | Directory for command templates |
-| `subagentsDir` | `string` | `undefined` | Directory for subagent definitions |
-| `parseSubagentFrontmatter` | `boolean` | `false` | Strip YAML frontmatter and set `output.frontmatter` |
-| `customSources` | `SourcePlugin[]` | `undefined` | Custom source plugins |
+| Setter | Type | Default | Description |
+|--------|------|---------|-------------|
+| `.template(v)` | `string` | `undefined` | Template content as string (overrides `templateFile`) |
+| `.templateDir(v)` | `string` | `"./templates"` | Base directory for template files and relative path resolution |
+| `.templateFile(v)` | `string` | `"template.md"` | Template file name (ignored if `template` is set) |
+| `.responseDir(v)` | `string` | `"./responses"` | Output directory for response files |
+| `.debug(v)` | `boolean` | `false` | Enable debug output |
+| `.debugFile(v)` | `string` | `"./templates/template_debug.txt"` | Debug output file path |
+| `.maxPromptLength(v)` | `number` | `100000` | Maximum output length in characters (or tokens when `tokenizer` is set) |
+| `.allowedBasePaths(v)` | `string[]` | `[process.cwd()]` | Allowed base paths for file access |
+| `.allowHttp(v)` | `boolean` | `true` | Allow HTTP/HTTPS requests |
+| `.allowedDomains(v)` | `string[]` | `[]` | Allowed HTTP domains (empty = all allowed) |
+| `.httpTimeout(v)` | `number` | `30000` | HTTP request timeout in milliseconds |
+| `.allowFunctions(v)` | `boolean` | `false` | Allow custom function execution |
+| `.allowedFunctionPaths(v)` | `string[]` | `[]` | Allowed paths for function execution |
+| `.skillsDir(v)` | `string` | `"./skills"` | Local skills directory |
+| `.allowRemoteSkills(v)` | `boolean` | `false` | Allow loading skills from GitHub |
+| `.allowedSkillSources(v)` | `string[]` | `["anthropics/skills"]` | Allowed remote skill sources |
+| `.s3AccessKeyId(v)` | `string` | `undefined` | AWS S3 access key ID |
+| `.s3SecretAccessKey(v)` | `string` | `undefined` | AWS S3 secret access key |
+| `.s3SessionToken(v)` | `string` | `undefined` | AWS S3 session token (temporary credentials) |
+| `.s3Region(v)` | `string` | `undefined` | AWS S3 region |
+| `.s3Bucket(v)` | `string` | `undefined` | Default S3 bucket name |
+| `.awsS3Url(v)` | `string` | `"s3.amazonaws.com"` | AWS S3 endpoint URL |
+| `.cloudflareR2Url(v)` | `string` | `undefined` | Cloudflare R2 endpoint URL |
+| `.s3VirtualHostedStyle(v)` | `boolean` | `false` | Use virtual-hosted-style URLs for S3 |
+| `.maxConcurrency(v)` | `number` | `4` | Maximum concurrent operations |
+| `.maxBucketFiles(v)` | `number` | `100000` | Maximum files to fetch from S3 prefix |
+| `.maxRetries(v)` | `number` | `3` | Maximum retry attempts for failed operations |
+| `.retryDelay(v)` | `number` | `1000` | Initial retry delay in milliseconds |
+| `.retryBackoffMultiplier(v)` | `number` | `2` | Exponential backoff multiplier for retries |
+| `.enableContentLengthPlanning(v)` | `boolean` | `true` | Enable planning phase with content length detection and trimming |
+| `.maxNestingDepth(v)` | `number` | `3` | Maximum depth for nested template interpolation |
+| `.context(v)` | `Record<string, unknown>` | `undefined` | Context for rules and variable substitution |
+| `.expressionEngine(v)` | `"js"` \| `"safe"` | `"js"` | Condition evaluation: full JS or safe subset |
+| `.tokenizer(v)` | `"openai"` \| `"cl100k_base"` \| `(text: string) => number` | `undefined` | When set, `maxPromptLength` is in tokens |
+| `.hooks(v)` | `HookSet` | `undefined` | Lifecycle hooks (preResolve, postResolveSource, postAssembly, preOutput) |
+| `.outputMode(v)` | `"flat"` \| `"sectioned"` \| `"messages"` | `"flat"` | Output shape |
+| `.sectionBudgets(v)` | `Record<string, number>` | `undefined` | Per-section length limits (sectioned mode) |
+| `.sectionRoles(v)` | `Record<string, "system" \| "user" \| "assistant">` | `undefined` | Section to role mapping (messages mode) |
+| `.commandsDir(v)` | `string` | `undefined` | Directory for command templates |
+| `.subagentsDir(v)` | `string` | `undefined` | Directory for subagent definitions |
+| `.parseSubagentFrontmatter(v)` | `boolean` | `false` | Strip YAML frontmatter and set `output.frontmatter` |
+| `.customSources(v)` | `SourcePlugin[]` | `undefined` | Custom source plugins |
+| `.sqlite(v?)` | `boolean` | `false` | Enable `{{sqlite://path/query:SQL}}` placeholder support |
+| `.redis(v)` | `string \| DbPluginOptions` | `undefined` | Configure Redis connection and enable `{{redis://...}}` placeholders |
 
-**Returns:**
+**Returns (from `.run()`):**
 
 `Promise<ShotputOutput>`:
 
@@ -411,36 +424,33 @@ interface ShotputOutput {
 ```ts
 import { shotput } from "shotput";
 
-// File-based template (shotput returns a Promise)
-const result = await shotput({
-  templateDir: "./templates",
-  templateFile: "prompt.md",
-  allowedBasePaths: ["./data"],
-  allowHttp: true,
-});
-
+// One-off: chain config setters and call .run()
+const result = await shotput()
+  .templateDir("./templates")
+  .templateFile("prompt.md")
+  .allowedBasePaths(["./data"])
+  .allowHttp(true)
+  .run();
 console.log(result.content);
 console.log(`Duration: ${result.metadata.duration}ms`);
 
-// Inline template with context and variables
-const inlineResult = await shotput({
-  template: "Task: {{context.taskName}}\n{{./data.txt}}",
-  templateDir: "./data",
-  allowedBasePaths: ["./data"],
-  context: { taskName: "review" },
-});
+// Reusable program: .build() once, chain overrides per call
+const base = shotput()
+  .templateDir("./templates")
+  .allowedBasePaths(["./data"])
+  .build();
+const out = await base.templateFile("prompt.md").context({ user: "n" }).run();
+const { stream } = await base.templateFile("prompt.md").stream();
+
+// Inline template with context
+const inlineResult = await shotput()
+  .template("Task: {{context.taskName}}\n{{./data.txt}}")
+  .templateDir("./data")
+  .allowedBasePaths(["./data"])
+  .context({ taskName: "review" })
+  .run();
 console.log(inlineResult.content);
 ```
-
-### `shotputStreaming(config?: Partial<ShotputConfig>): Promise<ShotputStreamingOutput>`
-
-Streams resolved segments in document order as each placeholder is resolved. Same pipeline as `shotputStreamingSegments`; returns `{ stream, metadata }` (no literalMap). PostAssembly, preOutput, and sectioning are not run.
-
-### `shotputStreamingSegments(config?: Partial<ShotputConfig>): Promise<ShotputSegmentStreamOutput>`
-
-Streams segments in document order as each `{{path}}` placeholder is resolved (prefix, replacement, suffix). Uses the same template load and preResolve hooks as `shotput`, then yields segments without running postAssembly, preOutput, or sectioning; consumers can concatenate and run hooks if needed. All interpolation uses the unified parallel flow (ordered drain); `maxConcurrency=1` uses the same flow via semaphore. Concatenation equals `interpolation().processedTemplate`. `literalMap` is set when custom sources emit literal placeholders.
-
-**Returns:** `{ stream: ReadableStream<string>; metadata: Promise<...>; literalMap?: Map<string, string>; literalMapPromise?: Promise<...>; error?: Error }`. Use `literalMap` for client-side substitution when custom sources emit literal placeholders.
 
 ### Format utilities
 
@@ -470,9 +480,15 @@ Streams segments in document order as each `{{path}}` placeholder is resolved (p
 
 Command, subagent, and skill frontmatter are parsed with Bun's YAML API internally.
 
-### `compileShotputTemplate(template, baseConfig?): (overrides?) => Promise<ShotputOutput>`
+### `compileShotputTemplate(template, baseConfig?): ShotputProgram`
 
-Pre-compiles a template string and returns a render function. Use when rendering the same template many times with varying context; the block parse cache is warmed once.
+Pre-compiles a template string and returns a `ShotputProgram`. Use when rendering the same template many times with varying context; the block parse cache is warmed once. Chain config setters (e.g. `.context(...)`) then call `.run()` or `.stream()` to execute.
+
+```ts
+const program = compileShotputTemplate(template, { templateDir, allowedBasePaths });
+const out1 = await program.context({ user: "alice" }).run();
+const out2 = await program.context({ user: "bob" }).run();
+```
 
 ### `resolveSubagent(config): Promise<ResolvedSubagent>`
 
@@ -520,6 +536,8 @@ Comprehensive examples are in [`examples/`](./examples/):
 - **[10-nested-templates.ts](./examples/advanced/10-nested-templates.ts)** - Nested templates
 - **[11-nested-mixed-sources.ts](./examples/advanced/11-nested-mixed-sources.ts)** - Nested mixed sources
 - **[12-custom-source.ts](./examples/advanced/12-custom-source.ts)** - Custom source plugins
+- **[14-db-sqlite.ts](./examples/advanced/14-db-sqlite.ts)** - SQLite database source (`.sqlite()`)
+- **[15-db-redis.ts](./examples/advanced/15-db-redis.ts)** - Redis database source (`.redis(url)`)
 - **[13-token-budgeting.ts](./examples/advanced/13-token-budgeting.ts)** - Token-aware budgeting
 
 ### Running examples

@@ -44,7 +44,7 @@
 		"@types/mustache": "latest",
 		"@types/node": "latest",
 		"@types/nunjucks": "latest",
-		"dts-bundle-generator": "^9.5.1",
+		"dts-bundle-generator": "latest",
 		"ejs": "latest",
 		"fast-check": "latest",
 		"handlebars": "latest",

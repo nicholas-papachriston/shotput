@@ -29,6 +29,7 @@ export interface InterpolationStreamResult {
  * For "more matches" recursion emits the nested result as one segment.
  * Literal substitution is not applied to the stream; literalMap/literalMapPromise exposed for client-side substituteLiterals.
  * When rulesAlreadyEvaluated is true and depth is 0, skips evaluateRules (avoids redundant call when content comes from runStreamingInternal).
+ * When contentFullyEvaluated is true and depth is 0, skips both evaluateRules and substituteVariables (e.g. compiled template path).
  */
 export function interpolationStream(
 	content: string,
@@ -40,6 +41,7 @@ export function interpolationStream(
 	literalBox?: { literals: Map<string, string> },
 	mergeContext?: Record<string, unknown>,
 	rulesAlreadyEvaluated = false,
+	contentFullyEvaluated = false,
 ): InterpolationStreamResult {
 	if (depth === 0) {
 		clearStatCache();
@@ -51,13 +53,15 @@ export function interpolationStream(
 			}
 		: config;
 	const contentAfterRules =
-		rulesAlreadyEvaluated && depth === 0
+		contentFullyEvaluated && depth === 0
 			? content
-			: evaluateRules(content, effectiveConfig);
-	const contentAfterVariables = substituteVariables(
-		contentAfterRules,
-		effectiveConfig,
-	);
+			: rulesAlreadyEvaluated && depth === 0
+				? content
+				: evaluateRules(content, effectiveConfig);
+	const contentAfterVariables =
+		contentFullyEvaluated && depth === 0
+			? content
+			: substituteVariables(contentAfterRules, effectiveConfig);
 	const matchEntries = getInterpolationMatchesWithIndices(
 		contentAfterVariables,
 	);

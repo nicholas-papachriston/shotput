@@ -34,16 +34,16 @@ const templateWithParams = `# Commands Demo
 `;
 
 try {
-	const result = await shotput({
-		template: templateWithParams,
-		templateDir: outputDir,
-		responseDir: outputDir,
-		allowedBasePaths: [examplesDir],
-		commandsDir: "data/commands",
-		maxConcurrency: 1,
-		debug: true,
-		debugFile: join(outputDir, "commands-debug.txt"),
-	});
+	const result = await shotput()
+		.template(templateWithParams)
+		.templateDir(outputDir)
+		.responseDir(outputDir)
+		.allowedBasePaths([examplesDir])
+		.commandsDir("data/commands")
+		.maxConcurrency(1)
+		.debug(true)
+		.debugFile(join(outputDir, "commands-debug.txt"))
+		.run();
 	log.info(result.metadata);
 	console.log("Output length:", result.content?.length ?? 0);
 	console.log("Excerpt:", result.content?.slice(0, 500));

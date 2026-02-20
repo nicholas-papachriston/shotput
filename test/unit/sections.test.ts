@@ -10,7 +10,7 @@ describe("sections", () => {
 			template: "hello",
 			outputMode: "flat",
 		});
-		const result = await shotput(config);
+		const result = await shotput().with(config).run();
 		expect(result.content).toBe("hello");
 		expect(result.sections).toBeUndefined();
 		expect(result.metadata.outputMode).toBe("flat");
@@ -22,7 +22,7 @@ describe("sections", () => {
 				"{{#section:system stable=true}}system content{{/section}}\n{{#section:context}}context content{{/section}}",
 			outputMode: "sectioned",
 		});
-		const result = await shotput(config);
+		const result = await shotput().with(config).run();
 		expect(result.sections).toBeDefined();
 		expect(result.sections?.length).toBe(2);
 		expect(result.sections?.[0].name).toBe("system");
@@ -51,7 +51,7 @@ describe("sections", () => {
 			outputMode: "messages",
 			sectionRoles: { sys: "system", ctx: "user" },
 		});
-		const result = await shotput(config);
+		const result = await shotput().with(config).run();
 		expect(result.messages).toBeDefined();
 		expect(result.messages?.length).toBe(2);
 		expect(result.messages?.[0].role).toBe("system");
@@ -132,7 +132,7 @@ describe("sections", () => {
 			hooks,
 			maxConcurrency: 1,
 		});
-		const result = await shotput(config);
+		const result = await shotput().with(config).run();
 		expect(result.error).toBeUndefined();
 		expect(result.sections).toBeDefined();
 		expect(result.sections?.length).toBe(1);

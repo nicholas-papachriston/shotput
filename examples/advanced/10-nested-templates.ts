@@ -56,13 +56,13 @@ function setupTestData() {
 async function runNestedExample() {
 	const template = "# Nested Templates Demo\n\n{{./level1.md}}";
 
-	const result = await shotput({
-		template,
-		templateDir: DATA_DIR,
-		allowedBasePaths: [DATA_DIR],
-		debug: true,
-		debugFile: join(OUTPUT_DIR, "nested-full-debug.txt"),
-	});
+	const result = await shotput()
+		.template(template)
+		.templateDir(DATA_DIR)
+		.allowedBasePaths([DATA_DIR])
+		.debug(true)
+		.debugFile(join(OUTPUT_DIR, "nested-full-debug.txt"))
+		.run();
 
 	log.info(result.metadata);
 }
@@ -72,14 +72,14 @@ async function runDepthLimitExample() {
 
 	const template = "# Depth Limit Demo\n\n{{./level1.md}}";
 
-	const result = await shotput({
-		template,
-		templateDir: DATA_DIR,
-		allowedBasePaths: [DATA_DIR],
-		maxNestingDepth: 1, // Only resolve the first level of nesting
-		debug: true,
-		debugFile: join(OUTPUT_DIR, "nested-limited-debug.txt"),
-	});
+	const result = await shotput()
+		.template(template)
+		.templateDir(DATA_DIR)
+		.allowedBasePaths([DATA_DIR])
+		.maxNestingDepth(1) // Only resolve the first level of nesting
+		.debug(true)
+		.debugFile(join(OUTPUT_DIR, "nested-limited-debug.txt"))
+		.run();
 
 	log.info(result.metadata);
 }
@@ -87,15 +87,15 @@ async function runDepthLimitExample() {
 async function runParallelNestedExample() {
 	const template = "# Parallel Nested Demo\n\n{{./level1.md}}\n{{./level1.md}}";
 
-	const result = await shotput({
-		template,
-		templateDir: DATA_DIR,
-		allowedBasePaths: [DATA_DIR],
-		maxConcurrency: 4,
-		enableContentLengthPlanning: true, // Use parallel mode
-		debug: true,
-		debugFile: join(OUTPUT_DIR, "nested-parallel-debug.txt"),
-	});
+	const result = await shotput()
+		.template(template)
+		.templateDir(DATA_DIR)
+		.allowedBasePaths([DATA_DIR])
+		.maxConcurrency(4)
+		.enableContentLengthPlanning(true) // Use parallel mode
+		.debug(true)
+		.debugFile(join(OUTPUT_DIR, "nested-parallel-debug.txt"))
+		.run();
 
 	log.info(result.metadata);
 }

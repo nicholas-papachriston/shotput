@@ -32,14 +32,14 @@ const templatePath = join(templateDir, "template.md");
 writeFileSync(templatePath, templateContent);
 
 try {
-	const result = await shotput({
-		templateDir,
-		templateFile: "template.md",
-		responseDir: templateDir,
-		allowedBasePaths: [join(import.meta.dir, "..")],
-		debug: true,
-		debugFile: join(templateDir, "template-debug.md"),
-	});
+	const result = await shotput()
+		.templateDir(templateDir)
+		.templateFile("template.md")
+		.responseDir(templateDir)
+		.allowedBasePaths([join(import.meta.dir, "..")])
+		.debug(true)
+		.debugFile(join(templateDir, "template-debug.md"))
+		.run();
 
 	log.info(result.metadata);
 } catch (error) {

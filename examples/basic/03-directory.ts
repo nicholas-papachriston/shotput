@@ -38,14 +38,14 @@ const templatePath = join(templateDir, "template.md");
 writeFileSync(templatePath, templateContent);
 
 try {
-	const instance = await shotput({
-		templateDir,
-		templateFile: "template.md",
-		responseDir: templateDir,
-		allowedBasePaths: [join(import.meta.dir, "..")],
-		debug: true,
-		debugFile: join(templateDir, "template-debug.md"),
-	});
+	const instance = await shotput()
+		.templateDir(templateDir)
+		.templateFile("template.md")
+		.responseDir(templateDir)
+		.allowedBasePaths([join(import.meta.dir, "..")])
+		.debug(true)
+		.debugFile(join(templateDir, "template-debug.md"))
+		.run();
 
 	log.info(instance.metadata);
 
@@ -59,14 +59,14 @@ End of logs.
 	const logsTemplatePath = join(templateDir, "logs-template.md");
 	writeFileSync(logsTemplatePath, logsTemplate);
 
-	const logs = await shotput({
-		templateDir,
-		templateFile: "logs-template.md",
-		responseDir: templateDir,
-		allowedBasePaths: [join(import.meta.dir, "..")],
-		debug: true,
-		debugFile: join(templateDir, "logs-template-debug.md"),
-	});
+	const logs = await shotput()
+		.templateDir(templateDir)
+		.templateFile("logs-template.md")
+		.responseDir(templateDir)
+		.allowedBasePaths([join(import.meta.dir, "..")])
+		.debug(true)
+		.debugFile(join(templateDir, "logs-template-debug.md"))
+		.run();
 
 	log.info(logs.metadata);
 } catch (error) {

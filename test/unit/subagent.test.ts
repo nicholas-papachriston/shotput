@@ -112,13 +112,15 @@ model: test-model
 temperature: 0.5
 ---
 # Template body`;
-		const result = await shotput({
-			template: templateContent,
-			templateDir: process.cwd(),
-			allowedBasePaths: [process.cwd()],
-			parseSubagentFrontmatter: true,
-			allowHttp: false,
-		});
+		const result = await shotput()
+			.with({
+				template: templateContent,
+				templateDir: process.cwd(),
+				allowedBasePaths: [process.cwd()],
+				parseSubagentFrontmatter: true,
+				allowHttp: false,
+			})
+			.run();
 		expect(result.error).toBeUndefined();
 		expect(result.frontmatter).toBeDefined();
 		expect(result.frontmatter?.["model"]).toBe("test-model");
@@ -127,11 +129,13 @@ temperature: 0.5
 	});
 
 	it("should leave content unchanged when no frontmatter", async () => {
-		const result = await shotput({
-			template: "# No frontmatter",
-			templateDir: process.cwd(),
-			parseSubagentFrontmatter: true,
-		});
+		const result = await shotput()
+			.with({
+				template: "# No frontmatter",
+				templateDir: process.cwd(),
+				parseSubagentFrontmatter: true,
+			})
+			.run();
 		expect(result.content).toBe("# No frontmatter");
 		expect(result.frontmatter).toBeUndefined();
 	});

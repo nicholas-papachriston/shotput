@@ -49,14 +49,17 @@ const templatePath = join(templateDir, "template.md");
 writeFileSync(templatePath, templateContent);
 
 try {
-	const glob = await shotput({
-		templateDir,
-		templateFile: "template.md",
-		responseDir: templateDir,
-		allowedBasePaths: [join(import.meta.dir, "..")],
-		debug: true,
-		debugFile: join(templateDir, "template-debug.md"),
-	});
+	const base = shotput()
+		.templateDir(templateDir)
+		.responseDir(templateDir)
+		.allowedBasePaths([join(import.meta.dir, "..")])
+		.debug(true)
+		.build();
+
+	const glob = await base
+		.templateFile("template.md")
+		.debugFile(join(templateDir, "template-debug.md"))
+		.run();
 
 	log.info(glob.metadata);
 
@@ -76,14 +79,10 @@ Done!
 	const specificTemplatePath = join(templateDir, "specific-template.md");
 	writeFileSync(specificTemplatePath, specificTemplate);
 
-	const specific = await shotput({
-		templateDir,
-		templateFile: "specific-template.md",
-		responseDir: templateDir,
-		allowedBasePaths: [join(import.meta.dir, "..")],
-		debug: true,
-		debugFile: join(templateDir, "specific-template-debug.md"),
-	});
+	const specific = await base
+		.templateFile("specific-template.md")
+		.debugFile(join(templateDir, "specific-template-debug.md"))
+		.run();
 
 	log.info(specific.metadata);
 } catch (error) {

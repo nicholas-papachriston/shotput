@@ -47,14 +47,17 @@ const templatePath = join(templateDir, "template.md");
 writeFileSync(templatePath, templateContent);
 
 try {
-	const template = await shotput({
-		templateDir,
-		templateFile: "template.md",
-		responseDir: templateDir,
-		allowedBasePaths: [join(import.meta.dir, "..")],
-		debug: true,
-		debugFile: join(templateDir, "template-debug.md"),
-	});
+	const base = shotput()
+		.templateDir(templateDir)
+		.responseDir(templateDir)
+		.allowedBasePaths([join(import.meta.dir, "..")])
+		.debug(true)
+		.build();
+
+	const template = await base
+		.templateFile("template.md")
+		.debugFile(join(templateDir, "template-debug.md"))
+		.run();
 
 	log.info(template.metadata);
 
@@ -78,14 +81,10 @@ try {
 	const complexTemplatePath = join(templateDir, "complex-template.md");
 	writeFileSync(complexTemplatePath, complexTemplate);
 
-	const complex = await shotput({
-		templateDir,
-		templateFile: "complex-template.md",
-		responseDir: templateDir,
-		allowedBasePaths: [join(import.meta.dir, "..")],
-		debug: true,
-		debugFile: join(templateDir, "complex-template-debug.md"),
-	});
+	const complex = await base
+		.templateFile("complex-template.md")
+		.debugFile(join(templateDir, "complex-template-debug.md"))
+		.run();
 
 	log.info(complex.metadata);
 } catch (error) {

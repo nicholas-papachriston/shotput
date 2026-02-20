@@ -58,15 +58,15 @@ const template = `# Hooks Demo
 `;
 
 try {
-	const result = await shotput({
-		template,
-		templateDir: outputDir,
-		responseDir: outputDir,
-		allowedBasePaths: [join(import.meta.dir, "..")],
-		hooks,
-		debug: true,
-		debugFile: join(outputDir, "hooks-debug.txt"),
-	});
+	const result = await shotput()
+		.template(template)
+		.templateDir(outputDir)
+		.responseDir(outputDir)
+		.allowedBasePaths([join(import.meta.dir, "..")])
+		.hooks(hooks)
+		.debug(true)
+		.debugFile(join(outputDir, "hooks-debug.txt"))
+		.run();
 	log.info(result.metadata);
 	console.log("Output length:", result.content?.length ?? 0);
 } catch (error) {

@@ -33,13 +33,15 @@ describe("Parallel Processing Integration", () => {
 File 2: {{${join(dataDir, "file2.txt")}}}
 File 3: {{${join(dataDir, "file3.txt")}}}`;
 
-			const result = await shotput({
-				template,
-				templateDir: dataDir,
-				allowedBasePaths: [dataDir],
-				maxConcurrency: 3,
-				enableContentLengthPlanning: true,
-			});
+			const result = await shotput()
+				.with({
+					template,
+					templateDir: dataDir,
+					allowedBasePaths: [dataDir],
+					maxConcurrency: 3,
+					enableContentLengthPlanning: true,
+				})
+				.run();
 
 			expect(result.content).toContain("Content 1");
 			expect(result.content).toContain("Content 2");
@@ -56,13 +58,15 @@ File 3: {{${join(dataDir, "file3.txt")}}}`;
 Second: {{${join(dataDir, "b.txt")}}}
 Third: {{${join(dataDir, "c.txt")}}}`;
 
-			const result = await shotput({
-				template,
-				templateDir: dataDir,
-				allowedBasePaths: [dataDir],
-				maxConcurrency: 4,
-				enableContentLengthPlanning: true,
-			});
+			const result = await shotput()
+				.with({
+					template,
+					templateDir: dataDir,
+					allowedBasePaths: [dataDir],
+					maxConcurrency: 4,
+					enableContentLengthPlanning: true,
+				})
+				.run();
 
 			expect(result.content).toBeDefined();
 			expect(result.error).toBeUndefined();
@@ -73,13 +77,15 @@ Third: {{${join(dataDir, "c.txt")}}}`;
 
 			const template = `Content: {{${join(dataDir, "test.txt")}}}`;
 
-			const result = await shotput({
-				template,
-				templateDir: dataDir,
-				allowedBasePaths: [dataDir],
-				maxConcurrency: 1,
-				enableContentLengthPlanning: false,
-			});
+			const result = await shotput()
+				.with({
+					template,
+					templateDir: dataDir,
+					allowedBasePaths: [dataDir],
+					maxConcurrency: 1,
+					enableContentLengthPlanning: false,
+				})
+				.run();
 
 			expect(result.content).toContain("Test content");
 		});
@@ -96,13 +102,15 @@ Third: {{${join(dataDir, "c.txt")}}}`;
 Medium: {{${join(dataDir, "medium.txt")}}}
 Large: {{${join(dataDir, "large.txt")}}}`;
 
-			const result = await shotput({
-				template,
-				templateDir: dataDir,
-				allowedBasePaths: [dataDir],
-				maxConcurrency: 4,
-				enableContentLengthPlanning: true,
-			});
+			const result = await shotput()
+				.with({
+					template,
+					templateDir: dataDir,
+					allowedBasePaths: [dataDir],
+					maxConcurrency: 4,
+					enableContentLengthPlanning: true,
+				})
+				.run();
 
 			expect(result.content).toBeDefined();
 			expect(result.metadata.resultMetadata).toBeDefined();
@@ -115,14 +123,16 @@ Large: {{${join(dataDir, "large.txt")}}}`;
 			const template = `First: {{${join(dataDir, "huge1.txt")}}}
 Second: {{${join(dataDir, "huge2.txt")}}}`;
 
-			const result = await shotput({
-				template,
-				templateDir: dataDir,
-				allowedBasePaths: [dataDir],
-				maxConcurrency: 2,
-				maxPromptLength: 600,
-				enableContentLengthPlanning: true,
-			});
+			const result = await shotput()
+				.with({
+					template,
+					templateDir: dataDir,
+					allowedBasePaths: [dataDir],
+					maxConcurrency: 2,
+					maxPromptLength: 600,
+					enableContentLengthPlanning: true,
+				})
+				.run();
 
 			expect(result.content?.length).toBeLessThan(1200);
 		});
@@ -135,13 +145,15 @@ Second: {{${join(dataDir, "huge2.txt")}}}`;
 			const template = `Directory: {{${join(dataDir, "subdir")}/}}
 File: {{${join(dataDir, "file.txt")}}}`;
 
-			const result = await shotput({
-				template,
-				templateDir: dataDir,
-				allowedBasePaths: [dataDir],
-				maxConcurrency: 4,
-				enableContentLengthPlanning: true,
-			});
+			const result = await shotput()
+				.with({
+					template,
+					templateDir: dataDir,
+					allowedBasePaths: [dataDir],
+					maxConcurrency: 4,
+					enableContentLengthPlanning: true,
+				})
+				.run();
 
 			expect(result.content).toBeDefined();
 		});
@@ -157,13 +169,15 @@ File: {{${join(dataDir, "file.txt")}}}`;
 {{${join(dataDir, "f2.txt")}}}
 {{${join(dataDir, "f3.txt")}}}`;
 
-			const result = await shotput({
-				template,
-				templateDir: dataDir,
-				allowedBasePaths: [dataDir],
-				maxConcurrency: 2,
-				enableContentLengthPlanning: true,
-			});
+			const result = await shotput()
+				.with({
+					template,
+					templateDir: dataDir,
+					allowedBasePaths: [dataDir],
+					maxConcurrency: 2,
+					enableContentLengthPlanning: true,
+				})
+				.run();
 
 			expect(result.content).toBeDefined();
 			expect(result.metadata.duration).toBeGreaterThanOrEqual(0);
@@ -182,13 +196,15 @@ File: {{${join(dataDir, "file.txt")}}}`;
 			);
 			const template = templateParts.join("\n");
 
-			const result = await shotput({
-				template,
-				templateDir: dataDir,
-				allowedBasePaths: [dataDir],
-				maxConcurrency: 2,
-				enableContentLengthPlanning: true,
-			});
+			const result = await shotput()
+				.with({
+					template,
+					templateDir: dataDir,
+					allowedBasePaths: [dataDir],
+					maxConcurrency: 2,
+					enableContentLengthPlanning: true,
+				})
+				.run();
 
 			expect(result.content).toBeDefined();
 			expect(result.metadata.resultMetadata?.length).toBeGreaterThan(0);
@@ -205,13 +221,15 @@ File: {{${join(dataDir, "file.txt")}}}`;
 			);
 			const template = templateParts.join("\n");
 
-			const result = await shotput({
-				template,
-				templateDir: dataDir,
-				allowedBasePaths: [dataDir],
-				maxConcurrency: 10,
-				enableContentLengthPlanning: true,
-			});
+			const result = await shotput()
+				.with({
+					template,
+					templateDir: dataDir,
+					allowedBasePaths: [dataDir],
+					maxConcurrency: 10,
+					enableContentLengthPlanning: true,
+				})
+				.run();
 
 			expect(result.content).toBeDefined();
 		});
@@ -226,13 +244,15 @@ File: {{${join(dataDir, "file.txt")}}}`;
 			const template = `File: {{${join(dataDir, "readme.txt")}}}
 Dir: {{${join(dataDir, "docs")}/}}`;
 
-			const result = await shotput({
-				template,
-				templateDir: dataDir,
-				allowedBasePaths: [dataDir],
-				maxConcurrency: 4,
-				enableContentLengthPlanning: true,
-			});
+			const result = await shotput()
+				.with({
+					template,
+					templateDir: dataDir,
+					allowedBasePaths: [dataDir],
+					maxConcurrency: 4,
+					enableContentLengthPlanning: true,
+				})
+				.run();
 
 			expect(result.content).toContain("README");
 		});
@@ -245,13 +265,15 @@ Dir: {{${join(dataDir, "docs")}/}}`;
 			const template = `File: {{${join(dataDir, "local.txt")}}}
 Glob: {{${join(dataDir, "data*.txt")}}}`;
 
-			const result = await shotput({
-				template,
-				templateDir: dataDir,
-				allowedBasePaths: [dataDir],
-				maxConcurrency: 4,
-				enableContentLengthPlanning: true,
-			});
+			const result = await shotput()
+				.with({
+					template,
+					templateDir: dataDir,
+					allowedBasePaths: [dataDir],
+					maxConcurrency: 4,
+					enableContentLengthPlanning: true,
+				})
+				.run();
 
 			expect(result.content).toBeDefined();
 		});
@@ -266,13 +288,15 @@ Glob: {{${join(dataDir, "data*.txt")}}}`;
 Bad: {{${join(dataDir, "nonexistent.txt")}}}
 Good2: {{${join(dataDir, "good2.txt")}}}`;
 
-			const result = await shotput({
-				template,
-				templateDir: dataDir,
-				allowedBasePaths: [process.cwd(), dataDir],
-				maxConcurrency: 3,
-				enableContentLengthPlanning: true,
-			});
+			const result = await shotput()
+				.with({
+					template,
+					templateDir: dataDir,
+					allowedBasePaths: [process.cwd(), dataDir],
+					maxConcurrency: 3,
+					enableContentLengthPlanning: true,
+				})
+				.run();
 
 			expect(result.content).toBeDefined();
 		});
@@ -280,13 +304,15 @@ Good2: {{${join(dataDir, "good2.txt")}}}`;
 		test("should record errors in metadata", async () => {
 			const template = `Missing: {{${join(dataDir, "missing.txt")}}}`;
 
-			const result = await shotput({
-				template,
-				templateDir: dataDir,
-				allowedBasePaths: [process.cwd(), dataDir],
-				maxConcurrency: 2,
-				enableContentLengthPlanning: true,
-			});
+			const result = await shotput()
+				.with({
+					template,
+					templateDir: dataDir,
+					allowedBasePaths: [process.cwd(), dataDir],
+					maxConcurrency: 2,
+					enableContentLengthPlanning: true,
+				})
+				.run();
 
 			expect(result.error || result.content?.includes("Error")).toBeTruthy();
 		});
@@ -308,23 +334,27 @@ Good2: {{${join(dataDir, "good2.txt")}}}`;
 			const template = templateParts.join("\n");
 
 			const startParallel = Date.now();
-			const parallelResult = await shotput({
-				template,
-				templateDir: dataDir,
-				allowedBasePaths: [dataDir],
-				maxConcurrency: 4,
-				enableContentLengthPlanning: true,
-			});
+			const parallelResult = await shotput()
+				.with({
+					template,
+					templateDir: dataDir,
+					allowedBasePaths: [dataDir],
+					maxConcurrency: 4,
+					enableContentLengthPlanning: true,
+				})
+				.run();
 			const parallelTime = Date.now() - startParallel;
 
 			const startSequential = Date.now();
-			const sequentialResult = await shotput({
-				template,
-				templateDir: dataDir,
-				allowedBasePaths: [dataDir],
-				maxConcurrency: 1,
-				enableContentLengthPlanning: false,
-			});
+			const sequentialResult = await shotput()
+				.with({
+					template,
+					templateDir: dataDir,
+					allowedBasePaths: [dataDir],
+					maxConcurrency: 1,
+					enableContentLengthPlanning: false,
+				})
+				.run();
 			const sequentialTime = Date.now() - startSequential;
 
 			expect(parallelResult.content).toBeDefined();
@@ -340,12 +370,14 @@ Good2: {{${join(dataDir, "good2.txt")}}}`;
 
 			const template = `Content: {{${join(dataDir, "test.txt")}}}`;
 
-			const result = await shotput({
-				template,
-				templateDir: dataDir,
-				allowedBasePaths: [dataDir],
-				enableContentLengthPlanning: false,
-			});
+			const result = await shotput()
+				.with({
+					template,
+					templateDir: dataDir,
+					allowedBasePaths: [dataDir],
+					enableContentLengthPlanning: false,
+				})
+				.run();
 
 			expect(result.content).toContain("Test");
 		});
@@ -355,11 +387,13 @@ Good2: {{${join(dataDir, "good2.txt")}}}`;
 
 			const template = `Content: {{${join(dataDir, "test.txt")}}}`;
 
-			const result = await shotput({
-				template,
-				templateDir: dataDir,
-				allowedBasePaths: [dataDir],
-			});
+			const result = await shotput()
+				.with({
+					template,
+					templateDir: dataDir,
+					allowedBasePaths: [dataDir],
+				})
+				.run();
 
 			expect(result.content).toContain("Default");
 		});

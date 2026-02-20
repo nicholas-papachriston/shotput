@@ -106,14 +106,16 @@ describe("command resolution", () => {
 
 describe("shotput with commands", () => {
 	it("should resolve command when commandsDir is set", async () => {
-		const result = await shotput({
-			template: "Prefix {{command:review scope=app}} Suffix",
-			templateDir: process.cwd(),
-			allowedBasePaths: [process.cwd()],
-			commandsDir,
-			allowHttp: false,
-			maxConcurrency: 1,
-		});
+		const result = await shotput()
+			.with({
+				template: "Prefix {{command:review scope=app}} Suffix",
+				templateDir: process.cwd(),
+				allowedBasePaths: [process.cwd()],
+				commandsDir,
+				allowHttp: false,
+				maxConcurrency: 1,
+			})
+			.run();
 		expect(result.error).toBeUndefined();
 		expect(result.content).toContain("Prefix");
 		expect(result.content).toContain("Suffix");
@@ -121,13 +123,15 @@ describe("shotput with commands", () => {
 	});
 
 	it("should leave {{command:name}} unmodified when commandsDir not set", async () => {
-		const result = await shotput({
-			template: "Before {{command:review}} After",
-			templateDir: process.cwd(),
-			allowedBasePaths: [process.cwd()],
-			commandsDir: undefined,
-			allowHttp: false,
-		});
+		const result = await shotput()
+			.with({
+				template: "Before {{command:review}} After",
+				templateDir: process.cwd(),
+				allowedBasePaths: [process.cwd()],
+				commandsDir: undefined,
+				allowHttp: false,
+			})
+			.run();
 		expect(result.error).toBeUndefined();
 		expect(result.content).toBe("Before {{command:review}} After");
 	});

@@ -117,18 +117,25 @@ export function substituteLoopItemVariables(
 const COMBINED_LOOP_VAR_PLACEHOLDER =
 	/\{\{\s*(context\.__loop\.(item\.name|item\.value|index|item|first|last)|context\.[^}]*|params\.[^}]*|env\.[^}]*)\s*\}\}/g;
 
+/**
+ * When knownHasPlaceholders is true, skips the per-call includes() scan (use when
+ * the same content is substituted many times, e.g. loop body; caller should scan once).
+ */
 export function substituteLoopVariables(
 	content: string,
 	item: unknown,
 	index: number,
 	config: ShotputConfig,
+	knownHasPlaceholders?: boolean,
 ): string {
-	const hasLoop = content.includes("context.__loop");
-	const hasVar =
-		content.includes("context.") ||
-		content.includes("params.") ||
-		content.includes("env.");
-	if (!hasLoop && !hasVar) return content;
+	if (!knownHasPlaceholders) {
+		const hasLoop = content.includes("context.__loop");
+		const hasVar =
+			content.includes("context.") ||
+			content.includes("params.") ||
+			content.includes("env.");
+		if (!hasLoop && !hasVar) return content;
+	}
 
 	const itemObj =
 		item != null && typeof item === "object"
@@ -139,7 +146,7 @@ export function substituteLoopVariables(
 	const itemVal = item != null ? String(item) : "";
 	const indexVal = String(index);
 
-	const loopState = config.context?.__loop as
+	const loopState = config.context?.["__loop"] as
 		| { first?: boolean; last?: boolean }
 		| undefined;
 

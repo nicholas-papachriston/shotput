@@ -52,15 +52,18 @@ const lengthTemplatePath = join(templateDir, "length-template.md");
 writeFileSync(lengthTemplatePath, lengthTemplate);
 
 try {
-	const result = await shotput({
-		templateDir,
-		templateFile: "length-template.md",
-		responseDir: templateDir,
-		maxPromptLength: 5000, // Only allow 5KB total
-		allowedBasePaths: [templateDir, join(import.meta.dir, "..")],
-		debug: true,
-		debugFile: join(templateDir, "length-debug.md"),
-	});
+	const base = shotput()
+		.templateDir(templateDir)
+		.responseDir(templateDir)
+		.allowedBasePaths([templateDir, join(import.meta.dir, "..")])
+		.build();
+
+	const result = await base
+		.templateFile("length-template.md")
+		.maxPromptLength(5000) // Only allow 5KB total
+		.debug(true)
+		.debugFile(join(templateDir, "length-debug.md"))
+		.run();
 
 	log.info(result.metadata);
 } catch (error) {
@@ -86,13 +89,10 @@ const priorityTemplatePath = join(templateDir, "priority-template.md");
 writeFileSync(priorityTemplatePath, priorityTemplate);
 
 try {
-	const result = await shotput({
-		templateDir,
-		templateFile: "priority-template.md",
-		responseDir: templateDir,
-		maxPromptLength: 1000,
-		allowedBasePaths: [templateDir, join(import.meta.dir, "..")],
-	});
+	const result = await base
+		.templateFile("priority-template.md")
+		.maxPromptLength(1000)
+		.run();
 
 	log.info(result.metadata);
 } catch (error) {
@@ -112,16 +112,14 @@ if (process.env["S3_ACCESS_KEY_ID"]) {
 	writeFileSync(s3TemplatePath, s3Template);
 
 	try {
-		const result = await shotput({
-			templateDir,
-			templateFile: "s3-limit-template.md",
-			responseDir: templateDir,
-			s3AccessKeyId: process.env["S3_ACCESS_KEY_ID"],
-			s3SecretAccessKey: process.env["S3_SECRET_ACCESS_KEY"],
-			s3Region: process.env["S3_REGION"] || "us-east-1",
-			maxBucketFiles: 10, // Only process first 10 files
-			maxPromptLength: 50000,
-		});
+		const result = await base
+			.templateFile("s3-limit-template.md")
+			.s3AccessKeyId(process.env["S3_ACCESS_KEY_ID"] ?? "")
+			.s3SecretAccessKey(process.env["S3_SECRET_ACCESS_KEY"] ?? "")
+			.s3Region(process.env["S3_REGION"] ?? "us-east-1")
+			.maxBucketFiles(10) // Only process first 10 files
+			.maxPromptLength(50000)
+			.run();
 
 		log.info(result.metadata);
 	} catch (error) {
@@ -140,13 +138,10 @@ const monitorTemplatePath = join(templateDir, "monitor-template.md");
 writeFileSync(monitorTemplatePath, monitorTemplate);
 
 try {
-	const result = await shotput({
-		templateDir,
-		templateFile: "monitor-template.md",
-		responseDir: templateDir,
-		maxPromptLength: 200000,
-		allowedBasePaths: [templateDir, join(import.meta.dir, "..")],
-	});
+	const result = await base
+		.templateFile("monitor-template.md")
+		.maxPromptLength(200000)
+		.run();
 
 	log.info(result.metadata);
 } catch (error) {
@@ -161,8 +156,8 @@ try {
  * 3. Templates are processed in order of appearance
  * 4. Earlier templates have priority over later ones
  * 5. Truncation happens on a per-template basis
- * 6. metadata.truncated indicates if content was cut off
- * 7. metadata.processedTemplates shows details for each template
+ * 6. result.error indicates if processing failed
+ * 7. result.metadata.resultMetadata shows details for each source
  * 8. Choose limits based on your use case
  * 9. Monitor metadata to understand what was included
  * 10. Consider processing time vs output size trade-offs

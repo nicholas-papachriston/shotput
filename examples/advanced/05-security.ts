@@ -43,15 +43,14 @@ const safeTemplatePath = join(templateDir, "safe-template.md");
 writeFileSync(safeTemplatePath, safeTemplate);
 
 try {
-	const result = await shotput({
-		templateDir,
-		templateFile: "safe-template.md",
-		responseDir: templateDir,
-		// Only allow access to the data directory
-		allowedBasePaths: [dataDir],
-		debug: true,
-		debugFile: join(templateDir, "safe-debug.md"),
-	});
+	const result = await shotput()
+		.templateDir(templateDir)
+		.templateFile("safe-template.md")
+		.responseDir(templateDir)
+		.allowedBasePaths([dataDir]) // Only allow access to the data directory
+		.debug(true)
+		.debugFile(join(templateDir, "safe-debug.md"))
+		.run();
 
 	log.info(result.metadata);
 } catch (error) {
@@ -74,17 +73,16 @@ const httpTemplatePath = join(templateDir, "http-template.md");
 writeFileSync(httpTemplatePath, httpTemplate);
 
 try {
-	const result = await shotput({
-		templateDir,
-		templateFile: "http-template.md",
-		responseDir: templateDir,
-		allowHttp: true,
-		// Only allow specific domains
-		allowedDomains: ["api.github.com", "api.example.com"],
-		httpTimeout: 5000,
-		debug: true,
-		debugFile: join(templateDir, "http-debug.md"),
-	});
+	const result = await shotput()
+		.templateDir(templateDir)
+		.templateFile("http-template.md")
+		.responseDir(templateDir)
+		.allowHttp(true)
+		.allowedDomains(["api.github.com", "api.example.com"]) // Only allow specific domains
+		.httpTimeout(5000)
+		.debug(true)
+		.debugFile(join(templateDir, "http-debug.md"))
+		.run();
 
 	log.info(result.metadata);
 } catch (error) {
@@ -118,17 +116,16 @@ const functionTemplatePath = join(templateDir, "function-template.md");
 writeFileSync(functionTemplatePath, functionTemplate);
 
 try {
-	const result = await shotput({
-		templateDir,
-		templateFile: "function-template.md",
-		responseDir: templateDir,
-		allowFunctions: true,
-		// Only allow functions from data directory
-		allowedFunctionPaths: [dataDir],
-		allowedBasePaths: [dataDir, templateDir],
-		debug: true,
-		debugFile: join(templateDir, "function-debug.md"),
-	});
+	const result = await shotput()
+		.templateDir(templateDir)
+		.templateFile("function-template.md")
+		.responseDir(templateDir)
+		.allowFunctions(true)
+		.allowedFunctionPaths([dataDir]) // Only allow functions from data directory
+		.allowedBasePaths([dataDir, templateDir])
+		.debug(true)
+		.debugFile(join(templateDir, "function-debug.md"))
+		.run();
 
 	log.info(result.metadata);
 } catch (error) {
@@ -151,18 +148,17 @@ const skillsTemplatePath = join(templateDir, "skills-template.md");
 writeFileSync(skillsTemplatePath, skillsTemplate);
 
 try {
-	const content = await shotput({
-		templateDir,
-		templateFile: "skills-template.md",
-		responseDir: templateDir,
-		skillsDir: join(import.meta.dir, "../skills"),
-		allowRemoteSkills: true,
-		// Only allow skills from trusted organizations
-		allowedSkillSources: ["anthropics/skills", "myorg/skills"],
-		allowedBasePaths: [dataDir, templateDir, join(import.meta.dir, "..")],
-		debug: true,
-		debugFile: join(templateDir, "skills-debug.md"),
-	});
+	const content = await shotput()
+		.templateDir(templateDir)
+		.templateFile("skills-template.md")
+		.responseDir(templateDir)
+		.skillsDir(join(import.meta.dir, "../skills"))
+		.allowRemoteSkills(true)
+		.allowedSkillSources(["anthropics/skills", "myorg/skills"]) // Only allow skills from trusted organizations
+		.allowedBasePaths([dataDir, templateDir, join(import.meta.dir, "..")])
+		.debug(true)
+		.debugFile(join(templateDir, "skills-debug.md"))
+		.run();
 
 	log.info(content.metadata);
 } catch (error) {
@@ -180,6 +176,6 @@ try {
  * 6. Set maxPromptLength to prevent resource exhaustion
  * 7. Disable debug mode in production
  * 8. Path traversal attempts are automatically blocked
- * 9. All security violations are reported in metadata.errors
+ * 9. Security violations are reported via result.error or in resolved content
  * 10. Principle of least privilege: only enable what you need
  */

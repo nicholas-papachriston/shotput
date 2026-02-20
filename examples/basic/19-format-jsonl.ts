@@ -24,12 +24,12 @@ const template = `Records:
 `;
 
 try {
-	const result = await shotput({
-		template,
-		templateDir: outputDir,
-		responseDir: outputDir,
-		allowedBasePaths: [join(import.meta.dir, "..")],
-	});
+	const result = await shotput()
+		.template(template)
+		.templateDir(outputDir)
+		.responseDir(outputDir)
+		.allowedBasePaths([join(import.meta.dir, "..")])
+		.run();
 
 	const content = result.content ?? "";
 	writeFileSync(join(outputDir, "output.md"), content);

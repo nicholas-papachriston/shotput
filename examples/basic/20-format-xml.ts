@@ -22,12 +22,12 @@ mkdirSync(outputDir, { recursive: true });
 const template = "{{xml:../../data/sample.xml}}";
 
 try {
-	const result = await shotput({
-		template,
-		templateDir: outputDir,
-		responseDir: outputDir,
-		allowedBasePaths: [join(import.meta.dir, "..")],
-	});
+	const result = await shotput()
+		.template(template)
+		.templateDir(outputDir)
+		.responseDir(outputDir)
+		.allowedBasePaths([join(import.meta.dir, "..")])
+		.run();
 
 	const xmlContent = result.content ?? "";
 	writeFileSync(join(outputDir, "output.xml"), xmlContent);

@@ -13,7 +13,9 @@
 | Glob | {{./data/*.json}} | Order preserved |
 | Regex | {{\regex\/g}} | File paths matching regex |
 | HTTP | {{https://example.com/data.json}} | Respects allowedDomains |
-| S3 | {{s3://bucket/path}} | Credentials from env |
+| S3 | {{s3://bucket/path}} | Credentials from env or .s3AccessKeyId()/.s3SecretAccessKey() |
+| SQLite | {{sqlite://path/db.sqlite/query:SELECT * FROM t}} | Requires .sqlite() on builder; path relative to templateDir |
+| Redis | {{redis:///get:key}}, {{redis://host:port/get:key}}, {{redis:///keys:*}} | Requires .redis(url) on builder; empty host uses configured URL |
 | Skill | {{skill:name}} or {{skill:name:full}} | Local or {{skill:github:org/repo}} |
 | Function | {{TemplateType.Function:/path/fn.js}} | allowFunctions required |
 | Variable | {{context.x}}, {{params.y}}, {{env.Z}} | Nested paths: {{context.project.name}} |
@@ -98,12 +100,18 @@ Diff:
 
 - **maxNestingDepth**: 3 by default; nested {{file}} inside {{file}} limited.
 
-- **Expression engine**: expressionEngine: "safe" restricts to ==, !=, &&, || and context/params/env paths; "js" (default) allows full JavaScript.
+- **Expression engine**: `.expressionEngine("safe")` restricts to ==, !=, &&, || and context/params/env paths; `"js"` (default) allows full JavaScript.
 
-- **Path security**: allowedBasePaths must include templateDir for relative paths to resolve.
+- **Path security**: `allowedBasePaths` must include `templateDir` for relative paths to resolve. SQLite paths are also validated against `allowedBasePaths`.
 
 - **Cycles**: Avoid {{fileA}} containing {{fileB}} where fileB includes fileA.
 
-- **Section blocks**: Require outputMode: "sectioned" or "messages" to parse. With outputMode: "flat", section markers pass through as literal text.
+- **Section blocks**: Require `.outputMode("sectioned")` or `.outputMode("messages")` to parse. With `"flat"` (default), section markers pass through as literal text.
 
 - **Command params**: Use {{$param}} in command templates for frontmatter parameter substitution; params flow into context.params for rules.
+
+- **SQLite**: Requires `.sqlite()` on the builder. Paths must be within `allowedBasePaths`; databases are opened read-only.
+
+- **Redis empty host**: `{{redis:///get:key}}` (triple slash = no host) uses the URL from `.redis(url)`, or falls back to `REDIS_URL` / `VALKEY_URL` env vars. `{{redis://host:port/get:key}}` connects directly, ignoring builder config.
+
+- **Redis operations**: Only `get:key` and `keys:pattern` are supported. `keys:*` returns a JSON array of matching key names.

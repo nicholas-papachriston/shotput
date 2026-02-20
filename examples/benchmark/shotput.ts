@@ -24,16 +24,18 @@ function formatBytes(bytes: number): string {
 	return `${bytes} B`;
 }
 
+const baseProgram = shotput()
+	.template(template)
+	.templateDir(join(import.meta.dir, ".."))
+	.responseDir(join(import.meta.dir, ".."))
+	.allowedBasePaths([join(import.meta.dir, "../..")])
+	.context(benchmarkContext)
+	.enableContentLengthPlanning(false)
+	.debug(false)
+	.build();
+
 function runOne(): Promise<string> {
-	return shotput({
-		template,
-		templateDir: join(import.meta.dir, ".."),
-		responseDir: join(import.meta.dir, ".."),
-		allowedBasePaths: [join(import.meta.dir, "../..")],
-		context: benchmarkContext,
-		enableContentLengthPlanning: false,
-		debug: false,
-	}).then((r) => r.content ?? "");
+	return baseProgram.run().then((r) => r.content ?? "");
 }
 
 async function main(): Promise<void> {

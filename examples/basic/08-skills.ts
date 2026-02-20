@@ -50,15 +50,18 @@ const templatePath = join(templateDir, "template.md");
 writeFileSync(templatePath, templateContent);
 
 try {
-	const result = await shotput({
-		templateDir,
-		templateFile: "template.md",
-		responseDir: templateDir,
-		allowedBasePaths: [join(import.meta.dir, "..")],
-		skillsDir: join(import.meta.dir, "../skills"),
-		debug: true,
-		debugFile: join(templateDir, "template-debug.md"),
-	});
+	const base = shotput()
+		.templateDir(templateDir)
+		.responseDir(templateDir)
+		.allowedBasePaths([join(import.meta.dir, "..")])
+		.skillsDir(join(import.meta.dir, "../skills"))
+		.debug(true)
+		.build();
+
+	const result = await base
+		.templateFile("template.md")
+		.debugFile(join(templateDir, "template-debug.md"))
+		.run();
 
 	log.info(result.metadata);
 
@@ -76,15 +79,10 @@ The :full suffix includes the skill's reference materials.
 	const fullTemplatePath = join(templateDir, "full-template.md");
 	writeFileSync(fullTemplatePath, fullTemplate);
 
-	const fullResult = await shotput({
-		templateDir,
-		templateFile: "full-template.md",
-		responseDir: templateDir,
-		allowedBasePaths: [join(import.meta.dir, "..")],
-		skillsDir: join(import.meta.dir, "../skills"),
-		debug: true,
-		debugFile: join(templateDir, "full-template-debug.md"),
-	});
+	const fullResult = await base
+		.templateFile("full-template.md")
+		.debugFile(join(templateDir, "full-template-debug.md"))
+		.run();
 
 	log.info(fullResult.metadata);
 
@@ -110,15 +108,10 @@ Multiple skills can be combined in a single template.
 	const multiTemplatePath = join(templateDir, "multi-template.md");
 	writeFileSync(multiTemplatePath, multiTemplate);
 
-	const multiResult = await shotput({
-		templateDir,
-		templateFile: "multi-template.md",
-		responseDir: templateDir,
-		allowedBasePaths: [join(import.meta.dir, "..")],
-		skillsDir: join(import.meta.dir, "../skills"),
-		debug: true,
-		debugFile: join(templateDir, "multi-template-debug.md"),
-	});
+	const multiResult = await base
+		.templateFile("multi-template.md")
+		.debugFile(join(templateDir, "multi-template-debug.md"))
+		.run();
 
 	log.info(multiResult.metadata);
 } catch (error) {

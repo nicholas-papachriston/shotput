@@ -86,15 +86,15 @@ File 4: {{${join(DATA_DIR, "medium2.txt")}}}
 ## Configuration
 {{${join(DATA_DIR, "config.json")}}}`;
 
-	const result = await shotput({
-		template,
-		templateDir: DATA_DIR,
-		allowedBasePaths: [DATA_DIR],
-		maxConcurrency: 4,
-		enableContentLengthPlanning: true,
-		debug: true,
-		debugFile: join(OUTPUT_DIR, "parallel-basic-debug.txt"),
-	});
+	const result = await shotput()
+		.template(template)
+		.templateDir(DATA_DIR)
+		.allowedBasePaths([DATA_DIR])
+		.maxConcurrency(4)
+		.enableContentLengthPlanning(true)
+		.debug(true)
+		.debugFile(join(OUTPUT_DIR, "parallel-basic-debug.txt"))
+		.run();
 
 	log.info(result.metadata);
 }
@@ -108,16 +108,16 @@ async function example2_contentLengthPlanning() {
 {{${join(DATA_DIR, "large1.txt")}}}
 {{${join(DATA_DIR, "large2.txt")}}}`;
 
-	const result = await shotput({
-		template,
-		templateDir: DATA_DIR,
-		allowedBasePaths: [DATA_DIR],
-		maxConcurrency: 4,
-		maxPromptLength: 5000,
-		enableContentLengthPlanning: true,
-		debug: true,
-		debugFile: join(OUTPUT_DIR, "length-planning-debug.txt"),
-	});
+	const result = await shotput()
+		.template(template)
+		.templateDir(DATA_DIR)
+		.allowedBasePaths([DATA_DIR])
+		.maxConcurrency(4)
+		.maxPromptLength(5000)
+		.enableContentLengthPlanning(true)
+		.debug(true)
+		.debugFile(join(OUTPUT_DIR, "length-planning-debug.txt"))
+		.run();
 
 	log.info(result.metadata);
 }
@@ -132,18 +132,18 @@ async function example3_retryLogic() {
 ## This file might not exist (will retry)
 {{${join(DATA_DIR, "maybe-missing.txt")}}}`;
 
-	const result = await shotput({
-		template,
-		templateDir: DATA_DIR,
-		allowedBasePaths: [DATA_DIR],
-		maxConcurrency: 2,
-		maxRetries: 3,
-		retryDelay: 500,
-		retryBackoffMultiplier: 2,
-		enableContentLengthPlanning: true,
-		debug: true,
-		debugFile: join(OUTPUT_DIR, "retry-debug.txt"),
-	});
+	const result = await shotput()
+		.template(template)
+		.templateDir(DATA_DIR)
+		.allowedBasePaths([DATA_DIR])
+		.maxConcurrency(2)
+		.maxRetries(3)
+		.retryDelay(500)
+		.retryBackoffMultiplier(2)
+		.enableContentLengthPlanning(true)
+		.debug(true)
+		.debugFile(join(OUTPUT_DIR, "retry-debug.txt"))
+		.run();
 
 	log.info(result.metadata);
 }
@@ -158,27 +158,26 @@ async function example4_performanceComparison() {
 {{${join(DATA_DIR, "large1.txt")}}}
 {{${join(DATA_DIR, "large2.txt")}}}`;
 
-	const sequentialResult = await shotput({
-		template,
-		templateDir: DATA_DIR,
-		allowedBasePaths: [DATA_DIR],
-		maxConcurrency: 1,
-		enableContentLengthPlanning: false,
-		debug: true,
-		debugFile: join(OUTPUT_DIR, "sequential-debug.txt"),
-	});
+	const base = shotput()
+		.template(template)
+		.templateDir(DATA_DIR)
+		.allowedBasePaths([DATA_DIR])
+		.debug(true)
+		.build();
+
+	const sequentialResult = await base
+		.maxConcurrency(1)
+		.enableContentLengthPlanning(false)
+		.debugFile(join(OUTPUT_DIR, "sequential-debug.txt"))
+		.run();
 
 	log.info(sequentialResult.metadata);
 
-	const parallelResult = await shotput({
-		template,
-		templateDir: DATA_DIR,
-		allowedBasePaths: [DATA_DIR],
-		maxConcurrency: 4,
-		enableContentLengthPlanning: true,
-		debug: true,
-		debugFile: join(OUTPUT_DIR, "parallel-debug.txt"),
-	});
+	const parallelResult = await base
+		.maxConcurrency(4)
+		.enableContentLengthPlanning(true)
+		.debugFile(join(OUTPUT_DIR, "parallel-debug.txt"))
+		.run();
 
 	log.info(parallelResult.metadata);
 }
@@ -192,16 +191,18 @@ async function example5_highConcurrency() {
 {{${join(DATA_DIR, "medium2.txt")}}}
 {{${join(DATA_DIR, "large1.txt")}}}
 {{${join(DATA_DIR, "large2.txt")}}}`;
+	const concBase = shotput()
+		.template(template)
+		.templateDir(DATA_DIR)
+		.allowedBasePaths([DATA_DIR])
+		.enableContentLengthPlanning(true)
+		.debug(true)
+		.build();
 	for (const concurrency of [1, 2, 4, 8]) {
-		const result = await shotput({
-			template,
-			templateDir: DATA_DIR,
-			allowedBasePaths: [DATA_DIR],
-			maxConcurrency: concurrency,
-			enableContentLengthPlanning: true,
-			debug: true,
-			debugFile: join(OUTPUT_DIR, `high-concurrency-${concurrency}-debug.txt`),
-		});
+		const result = await concBase
+			.maxConcurrency(concurrency)
+			.debugFile(join(OUTPUT_DIR, `high-concurrency-${concurrency}-debug.txt`))
+			.run();
 
 		log.info(result.metadata);
 	}
@@ -216,15 +217,15 @@ async function example6_globParallel() {
 ## Specific Config
 {{${join(DATA_DIR, "config.json")}}}`;
 
-	const result = await shotput({
-		template,
-		templateDir: DATA_DIR,
-		allowedBasePaths: [DATA_DIR],
-		maxConcurrency: 6,
-		enableContentLengthPlanning: true,
-		debug: true,
-		debugFile: join(OUTPUT_DIR, "glob-parallel-debug.txt"),
-	});
+	const result = await shotput()
+		.template(template)
+		.templateDir(DATA_DIR)
+		.allowedBasePaths([DATA_DIR])
+		.maxConcurrency(6)
+		.enableContentLengthPlanning(true)
+		.debug(true)
+		.debugFile(join(OUTPUT_DIR, "glob-parallel-debug.txt"))
+		.run();
 
 	log.info(result.metadata);
 }

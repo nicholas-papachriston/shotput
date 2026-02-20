@@ -33,3 +33,7 @@ await import("./advanced/10-nested-templates.ts");
 await import("./advanced/11-nested-mixed-sources.ts");
 await import("./advanced/12-custom-source.ts");
 await import("./advanced/13-token-budgeting.ts");
+await import("./advanced/14-db-sqlite.ts");
+await import("./advanced/15-db-redis.ts");
+
+export {};

@@ -50,15 +50,15 @@ const template = `# Custom Source Demo
 `;
 
 try {
-	const result = await shotput({
-		template,
-		templateDir: outputDir,
-		responseDir: outputDir,
-		allowedBasePaths: [join(import.meta.dir, "..")],
-		customSources: [echoPlugin],
-		debug: true,
-		debugFile: join(outputDir, "custom-source-debug.txt"),
-	});
+	const result = await shotput()
+		.template(template)
+		.templateDir(outputDir)
+		.responseDir(outputDir)
+		.allowedBasePaths([join(import.meta.dir, "..")])
+		.customSources([echoPlugin])
+		.debug(true)
+		.debugFile(join(outputDir, "custom-source-debug.txt"))
+		.run();
 	log.info(result.metadata);
 	console.log("Output:", result.content?.slice(0, 400));
 } catch (error) {

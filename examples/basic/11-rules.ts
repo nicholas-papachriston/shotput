@@ -51,27 +51,26 @@ Non-production.
 `;
 
 try {
-	const resultProd = await shotput({
-		template,
-		templateDir: outputDir,
-		responseDir: outputDir,
-		allowedBasePaths: [join(import.meta.dir, "..")],
-		context: { taskType: "security", env: "prod", strict: true },
-		debug: true,
-		debugFile: join(outputDir, "rules-prod-debug.txt"),
-	});
+	const base = shotput()
+		.template(template)
+		.templateDir(outputDir)
+		.responseDir(outputDir)
+		.allowedBasePaths([join(import.meta.dir, "..")])
+		.build();
+
+	const resultProd = await base
+		.context({ taskType: "security", env: "prod", strict: true })
+		.debug(true)
+		.debugFile(join(outputDir, "rules-prod-debug.txt"))
+		.run();
 	log.info(`Prod context: ${JSON.stringify(resultProd.metadata)}`);
 	console.log("--- Prod output (excerpt) ---");
 	console.log(resultProd.content?.slice(0, 400));
 
-	const resultDefault = await shotput({
-		template,
-		templateDir: outputDir,
-		responseDir: outputDir,
-		allowedBasePaths: [join(import.meta.dir, "..")],
-		context: { env: "staging" },
-		debug: false,
-	});
+	const resultDefault = await base
+		.context({ env: "staging" })
+		.debug(false)
+		.run();
 	log.info(`Default context: ${JSON.stringify(resultDefault.metadata)}`);
 	console.log("--- Default output (excerpt) ---");
 	console.log(resultDefault.content?.slice(0, 350));

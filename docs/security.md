@@ -10,6 +10,7 @@ This document outlines security considerations and best practices when using Sho
 - [HTTP Security](#http-security)
 - [Function Execution Security](#function-execution-security)
 - [S3/R2 Security](#s3r2-security)
+- [Database Security](#database-security)
 - [Skills Security](#skills-security)
 - [Production Configuration](#production-configuration)
 - [Security Checklist](#security-checklist)
@@ -32,22 +33,21 @@ Shotput processes templates that can include content from various sources: local
 Shotput's security model is based on explicit allowlists for all resource access:
 
 ```typescript
-const secureConfig = {
+import { shotput } from "shotput";
+
+const result = await shotput()
   // Only allow file access within these directories
-  allowedBasePaths: ["./data", "./templates"],
-  
+  .allowedBasePaths(["./data", "./templates"])
   // Only allow HTTP requests to these domains
-  allowHttp: true,
-  allowedDomains: ["api.github.com"],
-  
+  .allowHttp(true)
+  .allowedDomains(["api.github.com"])
   // Only allow function execution from these paths
-  allowFunctions: true,
-  allowedFunctionPaths: ["./functions"],
-  
+  .allowFunctions(true)
+  .allowedFunctionPaths(["./functions"])
   // Only allow remote skills from these sources
-  allowRemoteSkills: true,
-  allowedSkillSources: ["anthropics/skills"],
-};
+  .allowRemoteSkills(true)
+  .allowedSkillSources(["anthropics/skills"])
+  .run();
 ```
 
 **Default Security Posture:**
@@ -113,10 +113,10 @@ allowedBasePaths: [
 Enable debug mode during development to monitor what files are being accessed:
 
 ```typescript
-{
-  debug: true,
-  debugFile: "./logs/file-access.log"
-}
+shotput()
+  .debug(true)
+  .debugFile("./logs/file-access.log")
+  // ...other config
 ```
 
 ### Symlink Security
@@ -144,19 +144,12 @@ Always restrict HTTP access to specific domains:
 
 ```typescript
 // ❌ BAD: Allows any domain
-{
-  allowHttp: true,
-  allowedDomains: []  // Empty = all allowed
-}
+shotput().allowHttp(true).allowedDomains([])  // Empty = all allowed
 
-// ✓ GOOD: Explicit whitelist
-{
-  allowHttp: true,
-  allowedDomains: [
-    "api.github.com",
-    "api.example.com"
-  ]
-}
+// ✓ GOOD: Explicit allowlist
+shotput()
+  .allowHttp(true)
+  .allowedDomains(["api.github.com", "api.example.com"])
 ```
 
 ### HTTPS Enforcement
@@ -176,10 +169,9 @@ Shotput automatically upgrades HTTP to HTTPS, but you should still verify:
 Set appropriate timeouts to prevent resource exhaustion:
 
 ```typescript
-{
-  httpTimeout: 10000,  // 10 seconds
-  maxPromptLength: 100000  // Limit total response size
-}
+shotput()
+  .httpTimeout(10000)       // 10 seconds
+  .maxPromptLength(100000)  // Limit total response size
 ```
 
 ### Server-Side Request Forgery (SSRF)
@@ -188,19 +180,13 @@ Shotput can be used to make HTTP requests. Prevent SSRF attacks:
 
 ```typescript
 // ❌ BAD: Can access internal services
-{
-  allowHttp: true,
-  allowedDomains: []
-}
+shotput().allowHttp(true).allowedDomains([])
 
-// ✓ GOOD: Block internal IPs
-{
-  allowHttp: true,
-  allowedDomains: [
-    "api.external-service.com"  // Only external services
-  ]
-  // Do NOT allow: localhost, 127.0.0.1, 10.0.0.0/8, 192.168.0.0/16, 172.16.0.0/12
-}
+// ✓ GOOD: Explicit external-only allowlist
+// Do NOT allow: localhost, 127.0.0.1, 10.0.0.0/8, 192.168.0.0/16, 172.16.0.0/12
+shotput()
+  .allowHttp(true)
+  .allowedDomains(["api.external-service.com"])
 ```
 
 **Additional Protection:**
@@ -216,16 +202,13 @@ Function execution is the highest-risk feature and should be used with extreme c
 ### Disable in Production
 
 ```typescript
-// ✓ PRODUCTION: Disable functions
-{
-  allowFunctions: false
-}
+// ✓ PRODUCTION: Disable functions (default)
+shotput().allowFunctions(false)
 
 // ⚠️  DEVELOPMENT ONLY: Enable with strict path controls
-{
-  allowFunctions: true,
-  allowedFunctionPaths: ["./safe-functions"]
-}
+shotput()
+  .allowFunctions(true)
+  .allowedFunctionPaths(["./safe-functions"])
 ```
 
 ### Function Sandboxing
@@ -267,13 +250,12 @@ const userFunctionPath = req.body.functionPath;  // User input
 **3. Use Allowlist for Function Paths**
 
 ```typescript
-{
-  allowFunctions: true,
-  allowedFunctionPaths: [
+shotput()
+  .allowFunctions(true)
+  .allowedFunctionPaths([
     "./functions/safe",      // Only pre-approved functions
-    "./functions/validated"
-  ]
-}
+    "./functions/validated",
+  ])
 ```
 
 **4. Consider Alternatives**
@@ -291,27 +273,22 @@ Before enabling function execution, consider:
 
 ```typescript
 // ❌ BAD: Hardcoded credentials
-{
-  s3AccessKeyId: "AKIAIOSFODNN7EXAMPLE",
-  s3SecretAccessKey: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
-}
+shotput()
+  .s3AccessKeyId("AKIAIOSFODNN7EXAMPLE")
+  .s3SecretAccessKey("wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY")
 
 // ✓ GOOD: Use environment variables
-{
-  s3AccessKeyId: process.env["S3_ACCESS_KEY_ID"],
-  s3SecretAccessKey: process.env["S3_SECRET_ACCESS_KEY"]
-}
+shotput()
+  .s3AccessKeyId(process.env["S3_ACCESS_KEY_ID"] ?? "")
+  .s3SecretAccessKey(process.env["S3_SECRET_ACCESS_KEY"] ?? "")
 ```
 
 **Use IAM roles when possible:**
 
 ```typescript
 // ✓ BEST: Use IAM roles (no credentials needed)
-// Configure IAM role for your EC2/ECS/Lambda
-{
-  s3Region: "us-east-1"
-  // Credentials automatically loaded from IAM role
-}
+// Configure IAM role for your EC2/ECS/Lambda - credentials loaded automatically
+shotput().s3Region("us-east-1")
 ```
 
 ### Bucket Access Control
@@ -356,9 +333,7 @@ Before enabling function execution, consider:
 **2. Limit Bucket File Count**
 
 ```typescript
-{
-  maxBucketFiles: 50  // Prevent processing thousands of files
-}
+shotput().maxBucketFiles(50)  // Prevent processing thousands of files
 ```
 
 **3. Use VPC Endpoints**
@@ -366,9 +341,7 @@ Before enabling function execution, consider:
 For AWS S3, use VPC endpoints to prevent traffic from leaving your network:
 
 ```typescript
-{
-  awsS3Url: "bucket.vpce-1234567-abcdefg.s3.us-east-1.vpce.amazonaws.com"
-}
+shotput().awsS3Url("bucket.vpce-1234567-abcdefg.s3.us-east-1.vpce.amazonaws.com")
 ```
 
 ### Temporary Credentials
@@ -376,12 +349,11 @@ For AWS S3, use VPC endpoints to prevent traffic from leaving your network:
 Use temporary credentials with session tokens:
 
 ```typescript
-{
-  s3AccessKeyId: process.env.AWS_ACCESS_KEY_ID,
-  s3SecretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-  s3SessionToken: process.env.AWS_SESSION_TOKEN,  // Expires
-  s3Region: "us-east-1"
-}
+shotput()
+  .s3AccessKeyId(process.env["AWS_ACCESS_KEY_ID"] ?? "")
+  .s3SecretAccessKey(process.env["AWS_SECRET_ACCESS_KEY"] ?? "")
+  .s3SessionToken(process.env["AWS_SESSION_TOKEN"] ?? "")  // Expires automatically
+  .s3Region("us-east-1")
 ```
 
 **Generate temporary credentials with AWS STS:**
@@ -393,16 +365,81 @@ aws sts assume-role \
   --duration-seconds 3600
 ```
 
+## Database Security
+
+Shotput includes first-class support for SQLite (`{{sqlite://...}}`) and Redis (`{{redis://...}}`). Both are disabled by default and must be explicitly enabled.
+
+### SQLite
+
+SQLite databases are opened **read-only**. All paths are validated against `allowedBasePaths` before opening.
+
+**Best Practices:**
+
+```typescript
+// ✓ GOOD: Restrict to a dedicated data directory
+shotput()
+  .allowedBasePaths(["./data"])
+  .sqlite()
+  .templateDir("./data")
+  .template("{{sqlite://app.db/query:SELECT id, name FROM users}}")
+  .run()
+```
+
+```typescript
+// ❌ BAD: Allowing the entire filesystem
+shotput()
+  .allowedBasePaths(["/"])
+  .sqlite()
+```
+
+**What Shotput enforces:**
+- Paths containing `..` or `~` are rejected immediately.
+- The resolved absolute path must start with one of the `allowedBasePaths` entries.
+- Databases are opened with `{ readonly: true }` — no writes are possible.
+
+### Redis
+
+Redis connections require explicit configuration via `.redis(url | options)` or the `REDIS_URL` / `VALKEY_URL` environment variables.
+
+**Credential Management:**
+
+```typescript
+// ✓ GOOD: URL from environment variable
+shotput().redis(process.env["REDIS_URL"] ?? "redis://localhost:6379")
+
+// ✓ GOOD: Separate credentials
+shotput().redis({
+  redisUsername: process.env["REDIS_USERNAME"] ?? "",
+  redisPassword: process.env["REDIS_PASSWORD"] ?? "",
+})
+
+// ✓ BEST: Hashed password — Bun.password.verify() runs before connecting
+shotput().redis({
+  redisPassword: process.env["REDIS_PASSWORD"] ?? "",
+  redisPasswordHash: process.env["REDIS_PASSWORD_HASH"] ?? "",
+})
+
+// ❌ BAD: Hardcoded credentials
+shotput().redis("redis://admin:plaintext@prod-redis:6379")
+```
+
+**Supported operations** are limited to `get:key` and `keys:pattern` — no write or delete operations are possible through the template placeholder interface.
+
+**Production checklist:**
+- Use TLS (`rediss://`) in production environments.
+- Scope the Redis user to `read` permissions only (ACL in Redis 6+).
+- Store credentials in environment variables or a secrets manager, never in code.
+- Use `REDIS_PASSWORD_HASH` for an extra layer of verification when the hash is stored separately from the plaintext password.
+
 ## Skills Security
 
 ### Local Skills Only (Recommended)
 
 ```typescript
-// ✓ PRODUCTION: Only local skills
-{
-  skillsDir: "./skills",
-  allowRemoteSkills: false
-}
+// ✓ PRODUCTION: Only local skills (default)
+shotput()
+  .skillsDir("./skills")
+  .allowRemoteSkills(false)
 ```
 
 ### Remote Skills (Use with Caution)
@@ -410,14 +447,13 @@ aws sts assume-role \
 If you must use remote skills:
 
 ```typescript
-{
-  skillsDir: "./skills",
-  allowRemoteSkills: true,
-  allowedSkillSources: [
+shotput()
+  .skillsDir("./skills")
+  .allowRemoteSkills(true)
+  .allowedSkillSources([
     "your-org/verified-skills",  // Only your organization
-    "anthropics/skills"           // Trusted third party
-  ]
-}
+    "anthropics/skills",          // Trusted third party
+  ])
 ```
 
 ### Supply Chain Security
@@ -459,92 +495,77 @@ git clone --branch v1.0.0 https://github.com/anthropics/skills
 ### Minimal Production Config
 
 ```typescript
-const productionConfig = {
+import { shotput } from "shotput";
+
+const base = shotput()
   // Core settings
-  templateDir: "./templates",
-  templateFile: "prompt.md",
-  responseDir: "./output",
-  
+  .templateDir("./templates")
+  .responseDir("./output")
   // File access - very restrictive
-  allowedBasePaths: [
-    "./templates",
-    "./data"
-  ],
-  
-  // HTTP - disabled or highly restricted
-  allowHttp: false,  // Disable if not needed
-  // OR
-  allowHttp: true,
-  allowedDomains: ["api.trusted-service.com"],
-  httpTimeout: 5000,
-  
+  .allowedBasePaths(["./templates", "./data"])
+  // HTTP - restrict to known domains (or .allowHttp(false) to disable entirely)
+  .allowHttp(true)
+  .allowedDomains(["api.trusted-service.com"])
+  .httpTimeout(5000)
   // Functions - disabled
-  allowFunctions: false,
-  
+  .allowFunctions(false)
   // Skills - local only
-  skillsDir: "./skills",
-  allowRemoteSkills: false,
-  
-  // S3 - with IAM role (no credentials)
-  s3Region: process.env.AWS_REGION,
-  maxBucketFiles: 50,
-  
+  .skillsDir("./skills")
+  .allowRemoteSkills(false)
+  // S3 - with IAM role (no credentials needed when using EC2/ECS/Lambda role)
+  .s3Region(process.env["AWS_REGION"] ?? "us-east-1")
+  .maxBucketFiles(50)
   // Limits
-  maxPromptLength: 100000,
-  maxConcurrency: 4,
-  
+  .maxPromptLength(100000)
+  .maxConcurrency(4)
   // Debug - disabled
-  debug: false
-};
+  .debug(false)
+  .build();
+
+// Derive per-request programs from the base
+const result = await base.templateFile("prompt.md").run();
 ```
 
 ### Environment-Specific Configs
 
 ```typescript
-const configs = {
-  development: {
-    allowRemoteSkills: true,
-    allowFunctions: true,
-    debug: true,
-    allowHttp: true,
-    allowedDomains: []  // More permissive
-  },
-  
-  staging: {
-    allowRemoteSkills: false,
-    allowFunctions: false,
-    debug: true,
-    allowHttp: true,
-    allowedDomains: ["api.staging.example.com"]
-  },
-  
-  production: {
-    allowRemoteSkills: false,
-    allowFunctions: false,
-    debug: false,
-    allowHttp: true,
-    allowedDomains: ["api.example.com"],
-    httpTimeout: 5000,
-    maxPromptLength: 50000
-  }
-};
+import { shotput } from "shotput";
 
-const config = configs[process.env.NODE_ENV || 'development'];
+const env = process.env["NODE_ENV"] ?? "development";
+
+const base = shotput()
+  .allowRemoteSkills(env === "development")
+  .allowFunctions(env === "development")
+  .debug(env !== "production")
+  .allowHttp(true)
+  .allowedDomains(
+    env === "production"
+      ? ["api.example.com"]
+      : env === "staging"
+        ? ["api.staging.example.com"]
+        : []  // development: all domains allowed
+  )
+  .httpTimeout(env === "production" ? 5000 : 30000)
+  .maxPromptLength(env === "production" ? 50000 : 100000)
+  .build();
 ```
 
 ## Security Checklist
 
 ### Pre-Deployment
 
-- [ ] Review all `allowedBasePaths` - are they minimal?
-- [ ] Disable `allowFunctions` unless absolutely necessary
-- [ ] Set `allowRemoteSkills: false`
-- [ ] Configure `allowedDomains` if HTTP is enabled
-- [ ] Use environment variables for all credentials
-- [ ] Set appropriate `maxPromptLength` and `maxBucketFiles`
-- [ ] Disable `debug` mode
+- [ ] Review all `allowedBasePaths` — are they minimal?
+- [ ] Disable `.allowFunctions(false)` unless absolutely necessary
+- [ ] Set `.allowRemoteSkills(false)`
+- [ ] Configure `.allowedDomains()` if HTTP is enabled
+- [ ] Use environment variables for all credentials (S3, Redis)
+- [ ] Set appropriate `.maxPromptLength()` and `.maxBucketFiles()`
+- [ ] Disable `.debug(false)` in production
 - [ ] Review all custom functions for security issues
 - [ ] Audit local skills directory for untrusted content
+- [ ] Only call `.sqlite()` / `.redis()` when database sources are actually needed
+- [ ] For Redis: use TLS (`rediss://`) and a read-only ACL user in production
+- [ ] For SQLite: confirm databases are within `allowedBasePaths` and contain no sensitive data
 - [ ] Test with security scanning tools
 
 ### AWS/S3 Specific
