@@ -15,6 +15,7 @@ This document outlines security considerations and best practices when using Sho
 - [Production Configuration](#production-configuration)
 - [Security Checklist](#security-checklist)
 - [Common Vulnerabilities](#common-vulnerabilities)
+- [Additional Resources](#additional-resources)
 
 ## Overview
 
@@ -52,10 +53,10 @@ const result = await shotput()
 
 **Default Security Posture:**
 
-- ✓ File access limited to `process.cwd()`
-- ✓ HTTP allowed but can be restricted by domain
-- ✗ Function execution disabled by default
-- ✗ Remote skills disabled by default
+- File access limited to `process.cwd()`
+- HTTP allowed but can be restricted by domain
+- Function execution disabled by default
+- Remote skills disabled by default
 
 ## File System Security
 
@@ -64,7 +65,7 @@ const result = await shotput()
 Shotput automatically prevents path traversal attacks:
 
 ```markdown
-<!-- ❌ These will be blocked -->
+<!-- These will be blocked -->
 {{../../../etc/passwd}}
 {{/etc/shadow}}
 {{~/.ssh/id_rsa}}
@@ -78,19 +79,19 @@ All file paths are resolved and validated against `allowedBasePaths`.
 **1. Set Explicit Allowed Paths**
 
 ```typescript
-// ❌ BAD: Too permissive
+// BAD: Too permissive
 allowedBasePaths: ["/"]
 
-// ✓ GOOD: Specific directories only
+// GOOD: Specific directories only
 allowedBasePaths: ["./data", "./templates", "./config"]
 ```
 
 **2. Use Absolute Paths in Configuration**
 
 ```typescript
-import { resolve } from "path";
+import { resolve } from "node:path";
 
-// ✓ GOOD: Absolute paths are clear
+// GOOD: Absolute paths are clear
 allowedBasePaths: [
   resolve("./data"),
   resolve("./templates")
@@ -100,7 +101,7 @@ allowedBasePaths: [
 **3. Separate User Content from System Files**
 
 ```typescript
-// ✓ GOOD: Clear separation
+// GOOD: Clear separation
 allowedBasePaths: [
   "/app/user-data",      // User-provided content
   "/app/templates",      // System templates
@@ -124,7 +125,7 @@ shotput()
 Shotput follows symlinks, which can bypass path restrictions:
 
 ```bash
-# ⚠️  Potential security issue
+# Potential security issue
 ln -s /etc/passwd ./data/passwd
 
 # Template can now access /etc/passwd via symlink
@@ -132,6 +133,7 @@ ln -s /etc/passwd ./data/passwd
 ```
 
 **Mitigation:**
+
 - Disable symlink following in your file system configuration
 - Regularly audit directories for unexpected symlinks
 - Use read-only mounts where possible
@@ -143,25 +145,13 @@ ln -s /etc/passwd ./data/passwd
 Always restrict HTTP access to specific domains:
 
 ```typescript
-// ❌ BAD: Allows any domain
+// BAD: Allows any domain
 shotput().allowHttp(true).allowedDomains([])  // Empty = all allowed
 
-// ✓ GOOD: Explicit allowlist
+// GOOD: Explicit allowlist
 shotput()
   .allowHttp(true)
   .allowedDomains(["api.github.com", "api.example.com"])
-```
-
-### HTTPS Enforcement
-
-Shotput automatically upgrades HTTP to HTTPS, but you should still verify:
-
-```typescript
-{
-  allowHttp: true,
-  // Only allow HTTPS endpoints in production
-  allowedDomains: ["api.example.com"]  // Will use HTTPS
-}
 ```
 
 ### Request Timeouts
@@ -179,10 +169,10 @@ shotput()
 Shotput can be used to make HTTP requests. Prevent SSRF attacks:
 
 ```typescript
-// ❌ BAD: Can access internal services
+// BAD: Can access internal services
 shotput().allowHttp(true).allowedDomains([])
 
-// ✓ GOOD: Explicit external-only allowlist
+// GOOD: Explicit external-only allowlist
 // Do NOT allow: localhost, 127.0.0.1, 10.0.0.0/8, 192.168.0.0/16, 172.16.0.0/12
 shotput()
   .allowHttp(true)
@@ -202,10 +192,10 @@ Function execution is the highest-risk feature and should be used with extreme c
 ### Disable in Production
 
 ```typescript
-// ✓ PRODUCTION: Disable functions (default)
+// PRODUCTION: Disable functions (default)
 shotput().allowFunctions(false)
 
-// ⚠️  DEVELOPMENT ONLY: Enable with strict path controls
+// DEVELOPMENT ONLY: Enable with strict path controls
 shotput()
   .allowFunctions(true)
   .allowedFunctionPaths(["./safe-functions"])
@@ -216,7 +206,7 @@ shotput()
 Functions execute in the same process as Shotput with full permissions:
 
 ```javascript
-// ⚠️  This function has full system access
+// This function has full system access
 export default async function(result, path, match, remainingLength) {
   // Can do ANYTHING, including:
   // - File system access
@@ -236,7 +226,7 @@ export default async function(result, path, match, remainingLength) {
 **1. Never Allow User-Provided Functions**
 
 ```typescript
-// ❌ NEVER do this
+// NEVER do this
 const userFunctionPath = req.body.functionPath;  // User input
 {{TemplateType.Function:${userFunctionPath}}}
 ```
@@ -261,6 +251,7 @@ shotput()
 **4. Consider Alternatives**
 
 Before enabling function execution, consider:
+
 - Can this be done with template logic?
 - Can this be pre-processed?
 - Can this use a safer data transformation approach?
@@ -272,12 +263,12 @@ Before enabling function execution, consider:
 **Never hardcode credentials:**
 
 ```typescript
-// ❌ BAD: Hardcoded credentials
+// BAD: Hardcoded credentials
 shotput()
   .s3AccessKeyId("AKIAIOSFODNN7EXAMPLE")
   .s3SecretAccessKey("wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY")
 
-// ✓ GOOD: Use environment variables
+// GOOD: Use environment variables
 shotput()
   .s3AccessKeyId(process.env["S3_ACCESS_KEY_ID"] ?? "")
   .s3SecretAccessKey(process.env["S3_SECRET_ACCESS_KEY"] ?? "")
@@ -286,7 +277,7 @@ shotput()
 **Use IAM roles when possible:**
 
 ```typescript
-// ✓ BEST: Use IAM roles (no credentials needed)
+// BEST: Use IAM roles (no credentials needed)
 // Configure IAM role for your EC2/ECS/Lambda - credentials loaded automatically
 shotput().s3Region("us-east-1")
 ```
@@ -376,7 +367,7 @@ SQLite databases are opened **read-only**. All paths are validated against `allo
 **Best Practices:**
 
 ```typescript
-// ✓ GOOD: Restrict to a dedicated data directory
+// GOOD: Restrict to a dedicated data directory
 shotput()
   .allowedBasePaths(["./data"])
   .sqlite()
@@ -386,16 +377,17 @@ shotput()
 ```
 
 ```typescript
-// ❌ BAD: Allowing the entire filesystem
+// BAD: Allowing the entire filesystem
 shotput()
   .allowedBasePaths(["/"])
   .sqlite()
 ```
 
 **What Shotput enforces:**
+
 - Paths containing `..` or `~` are rejected immediately.
 - The resolved absolute path must start with one of the `allowedBasePaths` entries.
-- Databases are opened with `{ readonly: true }` — no writes are possible.
+- Databases are opened with `{ readonly: true }` -- no writes are possible.
 
 ### Redis
 
@@ -404,28 +396,29 @@ Redis connections require explicit configuration via `.redis(url | options)` or 
 **Credential Management:**
 
 ```typescript
-// ✓ GOOD: URL from environment variable
+// GOOD: URL from environment variable
 shotput().redis(process.env["REDIS_URL"] ?? "redis://localhost:6379")
 
-// ✓ GOOD: Separate credentials
+// GOOD: Separate credentials
 shotput().redis({
   redisUsername: process.env["REDIS_USERNAME"] ?? "",
   redisPassword: process.env["REDIS_PASSWORD"] ?? "",
 })
 
-// ✓ BEST: Hashed password — Bun.password.verify() runs before connecting
+// BEST: Hashed password -- Bun.password.verify() runs before connecting
 shotput().redis({
   redisPassword: process.env["REDIS_PASSWORD"] ?? "",
   redisPasswordHash: process.env["REDIS_PASSWORD_HASH"] ?? "",
 })
 
-// ❌ BAD: Hardcoded credentials
+// BAD: Hardcoded credentials
 shotput().redis("redis://admin:plaintext@prod-redis:6379")
 ```
 
-**Supported operations** are limited to `get:key` and `keys:pattern` — no write or delete operations are possible through the template placeholder interface.
+**Supported operations** are limited to `get:key` and `keys:pattern` -- no write or delete operations are possible through the template placeholder interface.
 
 **Production checklist:**
+
 - Use TLS (`rediss://`) in production environments.
 - Scope the Redis user to `read` permissions only (ACL in Redis 6+).
 - Store credentials in environment variables or a secrets manager, never in code.
@@ -436,7 +429,7 @@ shotput().redis("redis://admin:plaintext@prod-redis:6379")
 ### Local Skills Only (Recommended)
 
 ```typescript
-// ✓ PRODUCTION: Only local skills (default)
+// PRODUCTION: Only local skills (default)
 shotput()
   .skillsDir("./skills")
   .allowRemoteSkills(false)
@@ -459,6 +452,7 @@ shotput()
 ### Supply Chain Security
 
 **Risks of remote skills:**
+
 - Dependency on GitHub availability
 - Risk of compromised repositories
 - Potential for malicious content injection
@@ -476,14 +470,14 @@ git clone https://github.com/anthropics/skills ./skills/anthropics
 {{skill:brand-guidelines}}  # Loads from ./skills/brand-guidelines
 ```
 
-2. **Verify Content**
+1. **Verify Content**
 
 ```bash
 # Check skill content before use
 cat ./skills/anthropics/brand-guidelines/README.md
 ```
 
-3. **Pin Versions**
+1. **Pin Versions**
 
 ```bash
 # Use specific commit or tag
@@ -554,7 +548,7 @@ const base = shotput()
 
 ### Pre-Deployment
 
-- [ ] Review all `allowedBasePaths` — are they minimal?
+- [ ] Review all `allowedBasePaths` -- are they minimal?
 - [ ] Disable `.allowFunctions(false)` unless absolutely necessary
 - [ ] Set `.allowRemoteSkills(false)`
 - [ ] Configure `.allowedDomains()` if HTTP is enabled
@@ -593,11 +587,13 @@ const base = shotput()
 ### 1. Path Traversal
 
 **Vulnerability:**
+
 ```markdown
 {{../../../etc/passwd}}
 ```
 
 **Mitigation:**
+
 - Automatically prevented by Shotput
 - Verify `allowedBasePaths` is properly configured
 - Audit for symlinks in allowed directories
@@ -605,12 +601,14 @@ const base = shotput()
 ### 2. Server-Side Request Forgery (SSRF)
 
 **Vulnerability:**
+
 ```markdown
 {{http://169.254.169.254/latest/meta-data/}}  <!-- AWS metadata endpoint -->
 {{http://localhost:8080/admin}}
 ```
 
 **Mitigation:**
+
 - Use `allowedDomains` whitelist
 - Never allow `localhost`, `127.0.0.1`, or internal IPs
 - Use network-level controls
@@ -618,12 +616,14 @@ const base = shotput()
 ### 3. Credential Exposure
 
 **Vulnerability:**
+
 ```typescript
 // Hardcoded credentials in code
 s3SecretAccessKey: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
 ```
 
 **Mitigation:**
+
 - Always use environment variables
 - Use IAM roles when available
 - Rotate credentials regularly
@@ -632,11 +632,13 @@ s3SecretAccessKey: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
 ### 4. Arbitrary Code Execution
 
 **Vulnerability:**
+
 ```markdown
 {{TemplateType.Function:/tmp/user-uploaded-malicious.js}}
 ```
 
 **Mitigation:**
+
 - Disable `allowFunctions` in production
 - Use strict `allowedFunctionPaths`
 - Never execute user-provided functions
@@ -645,12 +647,14 @@ s3SecretAccessKey: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
 ### 5. Resource Exhaustion
 
 **Vulnerability:**
+
 ```markdown
 <!-- Processing thousands of large files -->
 {{s3://bucket/huge-prefix/}}
 ```
 
 **Mitigation:**
+
 - Set `maxPromptLength`
 - Set `maxBucketFiles`
 - Configure `httpTimeout`
@@ -659,11 +663,13 @@ s3SecretAccessKey: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
 ### 6. Information Disclosure
 
 **Vulnerability:**
+
 - Debug logs containing sensitive data
 - Error messages exposing file paths
 - Stack traces in production
 
 **Mitigation:**
+
 - Disable debug mode in production
 - Sanitize error messages
 - Log to secure locations only
@@ -671,11 +677,13 @@ s3SecretAccessKey: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
 ### 7. Supply Chain Attacks
 
 **Vulnerability:**
+
 ```markdown
 {{skill:github:untrusted-org/malicious-repo/skill}}
 ```
 
 **Mitigation:**
+
 - Use `allowRemoteSkills: false` in production
 - Whitelist trusted sources only
 - Cache skills locally
@@ -685,18 +693,4 @@ s3SecretAccessKey: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
 
 - [OWASP Top 10](https://owasp.org/www-project-top-ten/)
 - [AWS S3 Security Best Practices](https://docs.aws.amazon.com/AmazonS3/latest/userguide/security-best-practices.html)
-- [Node.js Security Best Practices](https://nodejs.org/en/docs/guides/security/)
 - [Anthropic Skills Repository](https://github.com/anthropics/skills)
-
-## Reporting Security Issues
-
-If you discover a security vulnerability in Shotput, please report it responsibly:
-
-1. **Do not** open a public GitHub issue
-2. Email security concerns to the maintainers
-3. Include detailed steps to reproduce
-4. Allow time for a fix before public disclosure
-
-## License
-
-See [LICENSE](../LICENSE) for details.

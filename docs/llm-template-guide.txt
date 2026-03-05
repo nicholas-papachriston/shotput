@@ -31,7 +31,7 @@ What makes templates "high fidelity" for AI agent use:
 
 - **Stable sections for KV-cache**: Use {{#section:system stable=true}} for identity, AGENTS.md, org policies; content rarely changes between turns.
 
-- **Variable sections**: Use sections without stable or omit stable=true for per-request context (VecForge retrieval, recent changes).
+- **Variable sections**: Use sections without stable or omit stable=true for per-request context (semantic retrieval, recent changes).
 
 - **Rules for conditional context**: {{#if context.mode === "security"}} to include mode-specific skills/config.
 
@@ -45,6 +45,7 @@ What makes templates "high fidelity" for AI agent use:
 
 ## Example 1: Flat Prompt with Rules and Variables
 
+--- BEGIN TEMPLATE ---
 # Task Prompt
 
 Task: {{context.taskName}}
@@ -64,9 +65,11 @@ Request ID: {{params.requestId}}
 
 ## Instructions
 Complete the task using the above context.
+--- END TEMPLATE ---
 
 ## Example 2: Sectioned Prompt with Stable Prefix
 
+--- BEGIN TEMPLATE ---
 {{#section:system stable=true}}
 # Code Reviewer
 
@@ -95,6 +98,7 @@ Diff:
 # Conversation History
 (Recent turns inserted here)
 {{/section}}
+--- END TEMPLATE ---
 
 ## Pitfalls and Constraints
 

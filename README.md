@@ -2,23 +2,42 @@
 
 Zero dependency plug-and-play templating for Bun
 
+## Installation
+
+```bash
+bun add shotput
+```
+
 ## Motivation
 
-Shotput is a simple, programmatic templating library to help manage personas, system prompts, and other text-based configurations for use in any project but particularly for Gen AI applications
+Shotput is a programmatic templating library for managing personas, system prompts, and other text-based configurations. It works in any Bun project but is particularly useful for Gen AI applications.
 
 ## Features
 
 - Arbitrary source retrieval and output destination
 - Streaming for large files (>1MB)
 - Security validation for all paths
-- **Templating sources:** file paths, directory paths, functions (cjs/esm), HTTP URLs, glob patterns, regex patterns, S3 paths (including [S3 directory buckets](./docs/s3-advanced-features.md)), [Anthropic Skills](https://github.com/anthropics/skills), SQLite (`.sqlite()` builder method, `{{sqlite://path/query:SQL}}`), Redis (`.redis(url)` builder method, `{{redis:///get:key}}`), custom source plugins
-- **Conditionals and loops:** `{{#if}}...{{else}}...{{/if}}` with `context`, `env`, and `params`; `{{#each context.list}}...{{/each}}` with `context.__loop.item` and `context.__loop.index`
+- **Templating sources:**
+  - File paths, directory paths, glob patterns, regex patterns
+  - HTTP URLs
+  - S3 paths (including S3 Express One Zone directory buckets)
+  - Functions (cjs/esm)
+  - [Anthropic Skills](https://github.com/anthropics/skills)
+  - SQLite (`.sqlite()` builder method, `{{sqlite://path/query:SQL}}`)
+  - Redis (`.redis(url)` builder method, `{{redis:///get:key}}`)
+  - Custom source plugins
+- **Conditionals and loops:**
+  - `{{#if}}...{{else}}...{{/if}}` with `context`, `env`, and `params`
+  - `{{#each context.list}}...{{/each}}` with `context.__loop.item` and `context.__loop.index`
 - **Variable substitution:** `{{context.x}}`, `{{params.x}}`, `{{env.X}}` in template body (nested paths supported)
-- **Token-aware budgeting & Semantic Compression:** optional `tokenizer` config so `maxPromptLength` is in tokens; heuristic or custom `(text) => number`. Provide a `compressor` to semantically compress low-priority sources before they hit length limits.
+- **Token-aware budgeting & Semantic Compression:** optional `tokenizer` config so `maxPromptLength` is in tokens. Provide a `compressor` to semantically compress low-priority sources before they hit length limits.
 - **Lifecycle hooks:** preResolve, postResolveSource, postAssembly, preOutput
 - **Output modes:** flat, sectioned, or messages (system/user/assistant)
 - **Commands and subagents:** `{{command:name}}`, `{{subagent:name}}` with custom source plugins
-- **Format utilities:** In-template format references expand parsed objects: `{{yaml:path}}`, `{{json:path}}`, `{{jsonl:path}}`, `{{xml:path}}`, `{{md:path}}` (path relative to template dir; YAML/JSON/JSONL/XML are parsed and expanded as formatted text; md inserts file content). Plus programmatic helpers: Markdown (to HTML or plaintext), JSONL parse (including streaming), XML parse (including S3 list response keys). Command, subagent, and skill frontmatter use Bun's YAML parser.
+- **Format utilities:**
+  - In-template format references: `{{yaml:path}}`, `{{json:path}}`, `{{jsonl:path}}`, `{{xml:path}}`, `{{md:path}}`
+  - Programmatic helpers: Markdown (to HTML or plaintext), JSONL parse (including streaming), XML parse (including S3 list response keys)
+  - Command, subagent, and skill frontmatter use Bun's YAML parser
 
 **Template authoring for LLMs:** [llms.txt](./llms.txt) at the project root links to the [full template guide](./docs/llm-template-guide.txt) (syntax reference, high-fidelity patterns, examples, pitfalls).
 
@@ -55,6 +74,7 @@ Shotput can be configured via environment variables. All configuration options c
 | `ALLOW_HTTP` | `boolean` | `true` | Allow HTTP/HTTPS requests |
 | `ALLOWED_DOMAINS` | `string` | - | Comma-separated allowed HTTP domains |
 | `HTTP_TIMEOUT` | `number` | `30000` | HTTP timeout in milliseconds |
+| `HTTP_STREAM_THRESHOLD_BYTES` | `number` | `1048576` | Byte threshold above which HTTP responses stream |
 | `ALLOW_FUNCTIONS` | `boolean` | `false` | Allow custom function execution |
 | `ALLOWED_FUNCTION_PATHS` | `string` | - | Comma-separated allowed function paths |
 
@@ -88,58 +108,11 @@ Shotput supports both `S3_*` and `AWS_*` prefixes for credentials. The `S3_*` pr
 | `CLOUDFLARE_R2_URL` | `string` | - | Cloudflare R2 endpoint URL |
 | `S3_VIRTUAL_HOSTED_STYLE` | `boolean` | `false` | Use virtual-hosted-style URLs |
 
-### Example `.env` File
-
-```bash
-# Debug
-DEBUG=false
-DEBUG_FILE=./output/debug.txt
-
-# Templates
-TEMPLATE_DIR=./templates
-TEMPLATE_PATH=prompt.md
-RESPONSE_DIR=./output
-MAX_NESTING_DEPTH=3
-
-# Limits
-MAX_PROMPT_LENGTH=100000
-MAX_BUCKET_FILES=100
-MAX_CONCURRENCY=4
-
-# Parallel Processing
-MAX_RETRIES=3
-RETRY_DELAY=1000
-RETRY_BACKOFF_MULTIPLIER=2
-ENABLE_CONTENT_LENGTH_PLANNING=true
-
-# Security
-ALLOWED_BASE_PATHS=./data,./templates
-ALLOW_HTTP=true
-ALLOWED_DOMAINS=api.github.com,api.example.com
-ALLOW_FUNCTIONS=false
-
-# S3/AWS
-S3_ACCESS_KEY_ID=your-key
-S3_SECRET_ACCESS_KEY=your-secret
-S3_REGION=us-east-1
-
-# Or use Cloudflare R2
-CLOUDFLARE_R2_URL=account-id.r2.cloudflarestorage.com
-
-# Database (optional)
-REDIS_URL=redis://localhost:6379
-SQLITE_ENABLED=false
-
-# Skills
-SKILLS_DIR=./skills
-ALLOW_REMOTE_SKILLS=false
-```
-
-See [`env.example`](./env.example) for a complete reference.
+See [`env.example`](./env.example) for a complete `.env` reference.
 
 ## Usage
 
-In the file format of you choice, simply include any combination of the following to have the file be processed by shotput:
+In the file format of your choice, include any combination of the following to have the file processed by Shotput:
 
 ```sh
 # Files and directories
@@ -218,6 +191,7 @@ const dynamicResult = await shotput()
 ```
 
 **Use Cases:**
+
 - Templates from databases or APIs
 - Programmatically generated templates
 - Dynamic template composition
@@ -237,7 +211,7 @@ await shotput()
 
 ### S3/R2 Configuration
 
-Shotput supports advanced S3 and R2 credential management. See [detailed documentation](./docs/s3-advanced-features.md).
+Shotput supports advanced S3 and R2 credential management.
 
 **Environment Variables (recommended):**
 
@@ -277,13 +251,14 @@ await shotput()
 
 Directory buckets provide single-digit millisecond latency and are automatically detected by their naming pattern: `bucket-name--azid--x-s3`
 
-!! Priority when determining what files to concatenate follows the order of the template strings in your template file !!
+> **Note:** Priority when determining what files to concatenate follows the order of the template strings in your template file.
 
 ### Parallel Processing Configuration
 
 Shotput includes advanced parallel processing capabilities with intelligent planning and retry logic:
 
 **Key Features:**
+
 - **Planning Phase**: Automatically determines all files to be interpolated before processing
 - **Content Length Detection**: Estimates file sizes to prevent exceeding length limits
 - **Parallel Fetching**: Processes multiple templates concurrently with configurable limits
@@ -316,6 +291,7 @@ await shotput()
 6. **Retry**: Automatically retries failed operations with exponential backoff
 
 **Template Priority Order** (highest to lowest):
+
 1. Files (`TemplateType.File`)
 2. HTTP resources (`TemplateType.Http`)
 3. S3 objects (`TemplateType.S3`)
@@ -328,6 +304,7 @@ await shotput()
 **Performance Benefits:**
 
 Parallel processing can significantly improve performance when working with multiple templates:
+
 - 4-8 concurrent operations: typical 40-60% speedup
 - Network-bound operations (HTTP, S3): greatest improvement
 - Local files: modest improvement due to I/O parallelization
@@ -349,11 +326,11 @@ await shotput()
 
 Returns an empty builder. Chain config setters, then execute:
 
-- `.run()` — full pipeline, returns `Promise<ShotputOutput>`
-- `.stream()` — streaming, returns `Promise<ShotputStreamingOutput>`
-- `.streamSegments()` — streaming with literal map, returns `Promise<ShotputSegmentStreamOutput>`
-- `.build()` — returns an immutable `ShotputProgram` to store and reuse
-- `.with(overrides)` — merge a config object and return a new builder (bulk overrides)
+- `.run()` -- full pipeline, returns `Promise<ShotputOutput>`
+- `.stream()` -- streaming, returns `Promise<ShotputStreamingOutput>`
+- `.streamSegments()` -- streaming with literal map, returns `Promise<ShotputSegmentStreamOutput>`
+- `.build()` -- returns an immutable `ShotputProgram` to store and reuse
+- `.with(overrides)` -- merge a config object and return a new builder (bulk overrides)
 
 **Chainable config setters** (each returns a new instance):
 
@@ -370,6 +347,7 @@ Returns an empty builder. Chain config setters, then execute:
 | `.allowHttp(v)` | `boolean` | `true` | Allow HTTP/HTTPS requests |
 | `.allowedDomains(v)` | `string[]` | `[]` | Allowed HTTP domains (empty = all allowed) |
 | `.httpTimeout(v)` | `number` | `30000` | HTTP request timeout in milliseconds |
+| `.httpStreamThresholdBytes(v)` | `number` | `1048576` | Byte threshold above which HTTP responses stream |
 | `.allowFunctions(v)` | `boolean` | `false` | Allow custom function execution |
 | `.allowedFunctionPaths(v)` | `string[]` | `[]` | Allowed paths for function execution |
 | `.skillsDir(v)` | `string` | `"./skills"` | Local skills directory |
@@ -393,13 +371,14 @@ Returns an empty builder. Chain config setters, then execute:
 | `.context(v)` | `Record<string, unknown>` | `undefined` | Context for rules and variable substitution |
 | `.expressionEngine(v)` | `"js"` \| `"safe"` | `"js"` | Condition evaluation: full JS or safe subset |
 | `.tokenizer(v)` | `"openai"` \| `"cl100k_base"` \| `(text: string) => number` | `undefined` | When set, `maxPromptLength` is in tokens |
+| `.tokenizerWorker(v)` | `string` | `undefined` | Path to a worker script for off-thread tokenization |
 | `.compressor(v)` | `SemanticCompressor` | `undefined` | Function to semantically compress content for low-priority sources |
 | `.hooks(v)` | `HookSet` | `undefined` | Lifecycle hooks (preResolve, postResolveSource, postAssembly, preOutput) |
 | `.outputMode(v)` | `"flat"` \| `"sectioned"` \| `"messages"` | `"flat"` | Output shape |
 | `.sectionBudgets(v)` | `Record<string, number>` | `undefined` | Per-section length limits (sectioned mode) |
 | `.sectionRoles(v)` | `Record<string, "system" \| "user" \| "assistant">` | `undefined` | Section to role mapping (messages mode) |
-| `.commandsDir(v)` | `string` | `undefined` | Directory for command templates |
-| `.subagentsDir(v)` | `string` | `undefined` | Directory for subagent definitions |
+| `.commandsDir(v)` | `string` | `"./commands"` | Directory for command templates |
+| `.subagentsDir(v)` | `string` | `"./.agents"` | Directory for subagent definitions |
 | `.parseSubagentFrontmatter(v)` | `boolean` | `false` | Strip YAML frontmatter and set `output.frontmatter` |
 | `.customSources(v)` | `SourcePlugin[]` | `undefined` | Custom source plugins |
 | `.sqlite(v?)` | `boolean` | `false` | Enable `{{sqlite://path/query:SQL}}` placeholder support |
@@ -459,7 +438,7 @@ console.log(inlineResult.content);
 
 ### Format utilities
 
-**In-template format references** — Use a format prefix to parse and expand the file as structured content in the template (path is relative to the template directory, validated against `allowedBasePaths`):
+**In-template format references** -- Use a format prefix to parse and expand the file as structured content in the template (path is relative to the template directory, validated against `allowedBasePaths`):
 
 | Placeholder | Behavior |
 |-------------|----------|
@@ -541,9 +520,11 @@ Comprehensive examples are in [`examples/`](./examples/):
 - **[10-nested-templates.ts](./examples/advanced/10-nested-templates.ts)** - Nested templates
 - **[11-nested-mixed-sources.ts](./examples/advanced/11-nested-mixed-sources.ts)** - Nested mixed sources
 - **[12-custom-source.ts](./examples/advanced/12-custom-source.ts)** - Custom source plugins
+- **[13-token-budgeting.ts](./examples/advanced/13-token-budgeting.ts)** - Token-aware budgeting
 - **[14-db-sqlite.ts](./examples/advanced/14-db-sqlite.ts)** - SQLite database source (`.sqlite()`)
 - **[15-db-redis.ts](./examples/advanced/15-db-redis.ts)** - Redis database source (`.redis(url)`)
-- **[13-token-budgeting.ts](./examples/advanced/13-token-budgeting.ts)** - Token-aware budgeting
+- **[16-semantic-compression.ts](./examples/advanced/16-semantic-compression.ts)** - Semantic compression
+- **[17-playbooks.ts](./examples/advanced/17-playbooks.ts)** - Playbooks
 
 ### Running examples
 
@@ -556,6 +537,7 @@ bun run examples
 ```
 
 Each example includes:
+
 - Clear documentation and comments
 - Step-by-step explanations
 - Expected output

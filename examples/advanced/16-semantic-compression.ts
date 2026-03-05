@@ -21,8 +21,9 @@ const templateDir = join(import.meta.dir, "../output/16-semantic-compression");
 
 try {
 	mkdirSync(templateDir, { recursive: true });
-	const hugeText =
-		"Shotput is an incredible context assembly engine. ".repeat(200);
+	const hugeText = "Shotput is an incredible context assembly engine. ".repeat(
+		200,
+	);
 	writeFileSync(join(templateDir, "huge.txt"), hugeText);
 
 	const base = shotput()
