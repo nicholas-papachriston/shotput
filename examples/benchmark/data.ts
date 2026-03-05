@@ -6,8 +6,20 @@
 export const ITEM_COUNT = 20_000;
 export const FLAG_COUNT = 8_000;
 export const EXTRA_KEYS = 1_000;
+export const RUNS = 20;
+export const WARMUP_RUNS = 3;
 
 export const TAGS_PER_ITEM = 5;
+
+export type BenchmarkMode = "runtime" | "precompiled";
+
+export interface EngineResult {
+	name: string;
+	mode: BenchmarkMode;
+	timesMs: number[];
+	heapDeltas: number[];
+	outputLength: number;
+}
 
 export interface BenchmarkContext {
 	title: string;
@@ -208,5 +220,10 @@ export function getEjsTemplate(): string {
 
 /** Nunjucks uses same syntax as Jinja2 for this benchmark. */
 export function getNunjucksTemplate(): string {
+	return getJinja2Template();
+}
+
+/** Binja uses Jinja2 syntax natively. */
+export function getBinjaTemplate(): string {
 	return getJinja2Template();
 }

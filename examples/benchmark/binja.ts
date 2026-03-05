@@ -1,12 +1,12 @@
 #!/usr/bin/env bun
 
 /**
- * Benchmark: Shotput (Bun)
+ * Benchmark: Binja (Bun)
  * Same large template + context as other engines; timed.
+ * Tests both runtime render() and AOT compile() modes.
  */
 
-import { join } from "node:path";
-import { compileShotputTemplate, shotput } from "../../src/index";
+import { Environment, compile } from "binja";
 import {
 	EXTRA_KEYS,
 	FLAG_COUNT,
@@ -15,11 +15,12 @@ import {
 	WARMUP_RUNS,
 	benchmarkContext,
 	type EngineResult,
-	getShotputTemplate,
+	getBinjaTemplate,
 } from "./data";
 import { computeStats } from "./stats";
 
-const template = getShotputTemplate();
+const templateSrc = getBinjaTemplate();
+const env = new Environment({ autoescape: false });
 
 function formatBytes(bytes: number): string {
 	const absBytes = Math.abs(bytes);
@@ -31,42 +32,21 @@ function formatBytes(bytes: number): string {
 	return `${bytes} B`;
 }
 
-const runtimeProgram = shotput()
-	.template(template)
-	.templateDir(join(import.meta.dir, ".."))
-	.responseDir(join(import.meta.dir, ".."))
-	.allowedBasePaths([join(import.meta.dir, "../..")])
-	.context(benchmarkContext)
-	.enableContentLengthPlanning(false)
-	.debug(false)
-	.build();
-
-const compiledProgram = compileShotputTemplate(template, {
-	templateDir: join(import.meta.dir, ".."),
-	responseDir: join(import.meta.dir, ".."),
-	allowedBasePaths: [join(import.meta.dir, "../..")],
-	enableContentLengthPlanning: false,
-	maxConcurrency: 1,
-	debug: false,
-});
-
-function runRuntime(): Promise<string> {
-	return runtimeProgram.run().then((r) => r.content ?? "");
+async function runRuntime(): Promise<string> {
+	return await env.renderString(templateSrc, { context: benchmarkContext });
 }
 
-function runCompiled(): Promise<string> {
-	return compiledProgram
-		.context(benchmarkContext)
-		.run()
-		.then((r) => r.content ?? "");
+function runCompiled(fn: (ctx: { context: typeof benchmarkContext }) => string): string {
+	return fn({ context: benchmarkContext });
 }
 
 async function runRuntimeBenchmark(): Promise<EngineResult> {
 	for (let i = 0; i < WARMUP_RUNS; i++) {
 		await runRuntime();
 	}
-	const times: number[] = [];
-	const heapDeltas: number[] = [];
+
+	const runtimeTimes: number[] = [];
+	const runtimeHeapDeltas: number[] = [];
 	let outputLength = 0;
 
 	for (let i = 0; i < RUNS; i++) {
@@ -74,49 +54,49 @@ async function runRuntimeBenchmark(): Promise<EngineResult> {
 		const heapBefore = process.memoryUsage().heapUsed;
 		const start = performance.now();
 		const out = await runRuntime();
-		const elapsed = performance.now() - start;
 		Bun.gc(true);
 		const heapAfter = process.memoryUsage().heapUsed;
-		times.push(elapsed);
-		heapDeltas.push(heapAfter - heapBefore);
+		runtimeTimes.push(performance.now() - start);
+		runtimeHeapDeltas.push(heapAfter - heapBefore);
 		if (i === 0) outputLength = out.length;
 	}
 
 	return {
-		name: "Shotput (Bun)",
+		name: "Binja (Bun)",
 		mode: "runtime",
-		timesMs: times,
-		heapDeltas,
+		timesMs: runtimeTimes,
+		heapDeltas: runtimeHeapDeltas,
 		outputLength,
 	};
 }
 
-async function runCompiledBenchmark(): Promise<EngineResult> {
+function runCompiledBenchmark(): EngineResult {
+	const compiled = compile(templateSrc);
 	for (let i = 0; i < WARMUP_RUNS; i++) {
-		await runCompiled();
+		runCompiled(compiled);
 	}
-	const times: number[] = [];
-	const heapDeltas: number[] = [];
+
+	const compiledTimes: number[] = [];
+	const compiledHeapDeltas: number[] = [];
 	let outputLength = 0;
 
 	for (let i = 0; i < RUNS; i++) {
 		Bun.gc(true);
 		const heapBefore = process.memoryUsage().heapUsed;
 		const start = performance.now();
-		const out = await runCompiled();
-		const elapsed = performance.now() - start;
+		const out = runCompiled(compiled);
 		Bun.gc(true);
 		const heapAfter = process.memoryUsage().heapUsed;
-		times.push(elapsed);
-		heapDeltas.push(heapAfter - heapBefore);
+		compiledTimes.push(performance.now() - start);
+		compiledHeapDeltas.push(heapAfter - heapBefore);
 		if (i === 0) outputLength = out.length;
 	}
 
 	return {
-		name: "Shotput compiled (Bun)",
+		name: "Binja AOT (Bun)",
 		mode: "precompiled",
-		timesMs: times,
-		heapDeltas,
+		timesMs: compiledTimes,
+		heapDeltas: compiledHeapDeltas,
 		outputLength,
 	};
 }
@@ -124,7 +104,6 @@ async function runCompiledBenchmark(): Promise<EngineResult> {
 function printResult(result: EngineResult): void {
 	const timeStats = computeStats(result.timesMs);
 	const heapStats = computeStats(result.heapDeltas);
-
 	console.log(result.name);
 	console.log(
 		`  Data: ${ITEM_COUNT} items, ${FLAG_COUNT} flags, ${EXTRA_KEYS} extra keys`,
@@ -143,10 +122,10 @@ function printResult(result: EngineResult): void {
 }
 
 async function main(): Promise<void> {
-	const jsonMode = Bun.argv.includes("--json");
 	const runtime = await runRuntimeBenchmark();
-	const compiled = await runCompiledBenchmark();
+	const compiled = runCompiledBenchmark();
 	const results = [runtime, compiled];
+	const jsonMode = Bun.argv.includes("--json");
 
 	if (jsonMode) {
 		console.log(JSON.stringify(results));

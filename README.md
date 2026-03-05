@@ -1,5 +1,8 @@
 # Shotput
 
+[![npm](https://img.shields.io/npm/v/@agent_oxide/shotput)](https://www.npmjs.com/package/@agent_oxide/shotput)
+[![github](https://img.shields.io/github/stars/nicholas-papachriston/shotput)](https://github.com/nicholas-papachriston/shotput)
+
 Zero dependency plug-and-play templating for Bun
 
 ## Installation
@@ -28,6 +31,15 @@ Shotput is a programmatic templating library for managing personas, system promp
 
 **Template authoring for LLMs:** [llms.txt](./llms.txt) links to the [template guide](docs/llm-template-guide.txt) (syntax, patterns, pitfalls).
 
+## Benchmarks
+
+Benchmark suite comparing Shotput against EJS, Handlebars, Mustache, Nunjucks, Binja, and Jinja2.
+See [examples/benchmark](./examples/benchmark) for full methodology and current results.
+
+```bash
+bun run benchmark
+```
+
 ## Quick start
 
 ```ts
@@ -54,7 +66,7 @@ console.log(result.content);
 ## Scripts
 
 | Command | Description |
-|---------|-------------|
+| --------- | ----------- |
 | `bun run build` | Build dist (Bun bundle + single `index.d.ts` via dts-bundle-generator) |
 | `bun test` | Run all tests |
 | `bun run examples` | Run all examples |
