@@ -96,6 +96,14 @@ export interface ShotputConfig {
 	sqlite?: boolean;
 	/** Optional semantic compressor for actively shrinking low-priority blocks. */
 	compressor?: import("./types").SemanticCompressor;
+	/**
+	 * Template syntax mode:
+	 * - "shotput" uses {{#if}}/{{#each}} and {{context.x}} interpolation
+	 * - "jinja2" evaluates Jinja2 syntax before shotput source interpolation
+	 */
+	templateSyntax?: "shotput" | "jinja2";
+	/** Autoescape setting used by the Jinja2 renderer when templateSyntax is "jinja2". */
+	jinjaAutoescape?: boolean;
 }
 
 export const DEFAULT_CONFIG: ShotputConfig = {
@@ -143,7 +151,11 @@ export const DEFAULT_CONFIG: ShotputConfig = {
 	redis: undefined,
 	sqlite: false,
 	compressor: undefined,
+	templateSyntax: "shotput",
+	jinjaAutoescape: false,
 };
+
+const JINJA_TEMPLATE_EXTENSIONS = [".jinja", ".jinja2", ".j2"] as const;
 
 /**
  * Returns a configuration object populated from environment variables,
@@ -256,6 +268,12 @@ export const getEnvConfig = (): ShotputConfig => ({
 		process.env["VALKEY_URL"] ??
 		DEFAULT_CONFIG.redis,
 	sqlite: process.env["SQLITE_ENABLED"] === "true" || DEFAULT_CONFIG.sqlite,
+	templateSyntax:
+		(process.env["TEMPLATE_SYNTAX"] as "shotput" | "jinja2") ??
+		DEFAULT_CONFIG.templateSyntax,
+	jinjaAutoescape:
+		process.env["JINJA_AUTOESCAPE"] === "true" ||
+		DEFAULT_CONFIG.jinjaAutoescape,
 });
 
 /**
@@ -276,6 +294,16 @@ export const createConfig = (
 			// Note: We allow undefined values to override env config
 			(config as unknown as Record<string, unknown>)[k] = overrides[k];
 		}
+	}
+
+	const hasExplicitTemplateSyntax =
+		overrides !== undefined &&
+		Object.prototype.hasOwnProperty.call(overrides, "templateSyntax");
+	if (
+		!hasExplicitTemplateSyntax &&
+		JINJA_TEMPLATE_EXTENSIONS.some((ext) => config.templateFile.endsWith(ext))
+	) {
+		config.templateSyntax = "jinja2";
 	}
 
 	return config;

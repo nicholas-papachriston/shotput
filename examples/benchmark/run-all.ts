@@ -77,6 +77,35 @@ const commands: BenchCommand[] = [
 			"--json",
 		],
 	},
+	{
+		name: "Shotput Jinja parse",
+		command: [
+			"bun",
+			"run",
+			"examples/benchmark/jinja-parse-shotput.ts",
+			"--json",
+		],
+	},
+	{
+		name: "Binja parse",
+		command: [
+			"bun",
+			"run",
+			"examples/benchmark/jinja-parse-binja.ts",
+			"--json",
+		],
+	},
+	{
+		name: "Jinja2 parse",
+		command: [
+			"uv",
+			"run",
+			"--with",
+			"jinja2",
+			"examples/benchmark/jinja2_parse_benchmark.py",
+			"--json",
+		],
+	},
 ];
 
 function parseJsonPayload(rawOutput: string): unknown {
@@ -98,7 +127,9 @@ function isEngineResult(value: unknown): value is EngineResult {
 	const candidate = value as Record<string, unknown>;
 	return (
 		typeof candidate.name === "string" &&
-		(candidate.mode === "runtime" || candidate.mode === "precompiled") &&
+		(candidate.mode === "runtime" ||
+			candidate.mode === "precompiled" ||
+			candidate.mode === "parse") &&
 		Array.isArray(candidate.timesMs) &&
 		Array.isArray(candidate.heapDeltas) &&
 		typeof candidate.outputLength === "number"
@@ -154,7 +185,9 @@ function printGroup(mode: BenchmarkMode, results: AggregatedResult[]): void {
 	const modeLabel =
 		mode === "runtime"
 			? "Runtime (parse + render per call)"
-			: "Pre-compiled (render only)";
+			: mode === "precompiled"
+				? "Pre-compiled (render only)"
+				: "Parse/compile only";
 	console.log(`\n--- ${modeLabel} ---\n`);
 	if (results.length === 0) {
 		console.log("  No results.\n");
@@ -193,9 +226,11 @@ async function main(): Promise<void> {
 	const precompiledResults = allResults.filter(
 		(result) => result.mode === "precompiled",
 	);
+	const parseResults = allResults.filter((result) => result.mode === "parse");
 
 	printGroup("runtime", runtimeResults);
 	printGroup("precompiled", precompiledResults);
+	printGroup("parse", parseResults);
 }
 
 main().catch(console.error);

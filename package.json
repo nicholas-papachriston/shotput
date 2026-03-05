@@ -1,6 +1,6 @@
 {
 	"name": "@agent_oxide/shotput",
-	"version": "1.0.1",
+	"version": "1.1.0",
 	"description": "Zero dependency plug-and-play templating for Bun",
 	"type": "module",
 	"main": "dist/index.js",
@@ -20,8 +20,10 @@
 		"test:integration": "bun test test/integration && bun run clean:temp",
 		"test:watch": "bun test --watch && bun run clean:temp",
 		"test:coverage": "bun test --coverage && bun run clean:temp",
+		"test:conformance": "SHOTPUT_CONFORMANCE_STRICT=1 bun test test/conformance/run-conformance.test.ts",
 		"examples": "bun run examples/index.ts",
 		"benchmark": "bun run examples/benchmark/run-all.ts",
+		"conformance:generate": "uv run test/conformance/jinja2_render.py",
 		"fix": "bunx biome check --fix --unsafe .",
 		"lint": "bunx biome check .",
 		"typecheck": "tsc --noEmit",
@@ -33,7 +35,8 @@
 		"context engineering",
 		"templating",
 		"llm",
-		"prompt engineering"
+		"prompt engineering",
+		"jinja2"
 	],
 	"author": "https://github.com/nicholas-papachriston",
 	"license": "MIT",

@@ -59,6 +59,8 @@ These examples demonstrate fundamental features:
 19. **[Format: JSONL](./basic/19-format-jsonl.ts)** - `{{jsonl:path}}` (expanded as JSON array), plus `parseJsonl()`, `parseJsonlChunk()`
 20. **[Format: XML](./basic/20-format-xml.ts)** - `{{xml:path}}` (expanded as formatted XML), plus `parseXml()`, `parseS3ListResponse()`
 21. **[Format references (all)](./basic/21-format-references.ts)** - `{{yaml:path}}`, `{{json:path}}`, `{{jsonl:path}}`, `{{xml:path}}`, `{{md:path}}` in one template
+22. **[Jinja2 (native)](./basic/22-jinja2.ts)** - `templateSyntax("jinja2")` with `set`, `if/else`, `for/else`, macros, filters
+23. **[Jinja includes + jinja: format](./basic/23-jinja-includes-and-format.ts)** - Auto-detect `.jinja` templates, `{% include %}`, and `{{jinja:path}}`
 
 ### Advanced Examples
 
@@ -114,7 +116,7 @@ These examples demonstrate advanced features and patterns:
 | Format: Markdown | 18 | - | `{{md:path}}`, markdownToHtml(), markdownToPlaintext() |
 | Format: JSONL | 19 | - | `{{jsonl:path}}`, parseJsonl(), parseJsonlChunk() |
 | Format: XML | 20 | - | `{{xml:path}}`, parseXml(), parseS3ListResponse() |
-| Format references (yaml, json, jsonl, xml, md) | 21 | - | `{{yaml:path}}`, `{{json:path}}`, `{{jsonl:path}}`, `{{xml:path}}`, `{{md:path}}` |
+| Format references (yaml, json, jsonl, xml, md, jinja) | 21, 23 | - | `{{yaml:path}}`, `{{json:path}}`, `{{jsonl:path}}`, `{{xml:path}}`, `{{md:path}}`, `{{jinja:path}}` |
 | Custom source plugin | - | 12 | `customSources: [SourcePlugin]` |
 | DB plugin (SQLite/Redis) | - | 14, 15 | `createDbPlugin(options)`, `{{sqlite://path/query:SQL}}`, `{{redis:///get:key}}` |
 | Semantic compression | - | 16 | `.compressor()` config |
@@ -131,6 +133,7 @@ These examples demonstrate advanced features and patterns:
 {{jsonl:path/to/file.jsonl}} # JSONL -> JSON array
 {{xml:path/to/file.xml}}    # XML -> formatted XML string
 {{md:path/to/file.md}}      # Insert content as-is (no parse)
+{{jinja:path/to/file.jinja}} # Render Jinja template with current context
 ```
 
 ### File Inclusion

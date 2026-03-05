@@ -11,7 +11,7 @@ export const WARMUP_RUNS = 3;
 
 export const TAGS_PER_ITEM = 5;
 
-export type BenchmarkMode = "runtime" | "precompiled";
+export type BenchmarkMode = "runtime" | "precompiled" | "parse";
 
 export interface EngineResult {
 	name: string;
@@ -109,13 +109,16 @@ export function getShotputTemplate(): string {
 }
 
 /** Jinja2 / Nunjucks: nested if/for, filters (| upper, | default), loop.first/last/length */
-export function getJinja2Template(): string {
+export function getJinja2TemplateWithCounts(
+	flagCount: number,
+	extraKeys: number,
+): string {
 	const lines: string[] = [
 		"# {{ context.title | upper }}\n",
 		"Meta: {{ context.meta.version }} / {{ context.meta.env }}\n",
 	];
-	for (let i = 0; i < FLAG_COUNT; i++) {
-		const next = (i + 1) % FLAG_COUNT;
+	for (let i = 0; i < flagCount; i++) {
+		const next = (i + 1) % flagCount;
 		lines.push(
 			`{% if context.flags.flag_${i} %}{% if context.flags.flag_${next} %}Flag ${i}+${next} both on.\n{% else %}Flag ${i} on, ${next} off.\n{% endif %}{% else %}{% if context.flags.flag_${next} %}Flag ${i} off, ${next} on.\n{% else %}Flag ${i}+${next} both off.\n{% endif %}{% endif %}\n`,
 		);
@@ -132,10 +135,14 @@ export function getJinja2Template(): string {
 	lines.push("{% if loop.last %} [last]{% endif %}\n");
 	lines.push("{% endfor %}\n");
 	lines.push("\n## Extra keys\n");
-	for (let i = 0; i < EXTRA_KEYS; i++) {
+	for (let i = 0; i < extraKeys; i++) {
 		lines.push(`key_${i}: {{ context.key_${i} | default('') }}\n`);
 	}
 	return lines.join("");
+}
+
+export function getJinja2Template(): string {
+	return getJinja2TemplateWithCounts(FLAG_COUNT, EXTRA_KEYS);
 }
 
 /** Handlebars: nested if/each, @first/@last in each */

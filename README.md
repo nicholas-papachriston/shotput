@@ -22,12 +22,13 @@ Shotput is a programmatic templating library for managing personas, system promp
 - Security validation for all paths
 - **Templating sources:** file paths, directory paths, glob/regex, HTTP, S3 (including directory buckets), functions, [Anthropic Skills](https://github.com/anthropics/skills), SQLite, Redis, custom source plugins
 - **Conditionals and loops:** `{{#if}}` / `{{#each}}` with `context`, `env`, `params`
+- **Optional native Jinja2 syntax mode:** `{% if %}`, `{% elif %}`, `{% else %}`, `{% for %}` (+ `else`), `{% set %}`, `{% with %}`, `{% macro %}`, `{% raw %}`, `{% include "..." %}`, filters/tests via `templateSyntax("jinja2")` (or auto-detected from `.jinja`, `.jinja2`, `.j2` template files)
 - **Variable substitution:** `{{context.x}}`, `{{params.x}}`, `{{env.X}}` (nested paths supported)
 - **Token-aware budgeting and semantic compression:** optional `tokenizer` and `compressor`
 - **Lifecycle hooks:** preResolve, postResolveSource, postAssembly, preOutput
 - **Output modes:** flat, sectioned, or messages (system/user/assistant)
 - **Commands and subagents:** `{{command:name}}`, `{{subagent:name}}`
-- **Format utilities:** in-template `{{yaml:path}}`, `{{json:path}}`, etc.; programmatic Markdown, JSONL, XML helpers
+- **Format utilities:** in-template `{{yaml:path}}`, `{{json:path}}`, `{{jsonl:path}}`, `{{xml:path}}`, `{{md:path}}`, `{{jinja:path}}`; programmatic Markdown, JSONL, XML helpers
 
 **Template authoring for LLMs:** [llms.txt](./llms.txt) links to the [template guide](docs/llm-template-guide.txt) (syntax, patterns, pitfalls).
 
@@ -39,6 +40,12 @@ See [examples/benchmark](./examples/benchmark) for full methodology and current 
 ```bash
 bun run benchmark
 ```
+
+The benchmark includes:
+
+- Runtime (parse + render)
+- Pre-compiled (render-only)
+- Jinja parse/compile-only (Shotput native Jinja, Binja, CPython Jinja2)
 
 ## Quick start
 
@@ -69,6 +76,8 @@ console.log(result.content);
 | --------- | ----------- |
 | `bun run build` | Build dist (Bun bundle + single `index.d.ts` via dts-bundle-generator) |
 | `bun test` | Run all tests |
+| `bun run test:conformance` | Strict Jinja2 parity test against live CPython Jinja2 output |
+| `bun run conformance:generate` | Generate CPython Jinja2 snapshots (`test/conformance/expected.json`) |
 | `bun run examples` | Run all examples |
 | `bun run lint` | Run Biome check |
 | `bun run typecheck` | TypeScript check |
@@ -76,3 +85,21 @@ console.log(result.content);
 ## Prerequisites
 
 - [Bun](https://bun.sh)
+- [uv](https://docs.astral.sh/uv/)
+- [Python 3](https://www.python.org/)
+- [jinja2](https://pypi.org/project/Jinja2/) package for conformance harness (`uv add jinja2` or `pip install jinja2`)
+
+## Jinja2 Support Scope
+
+Shotput's native Jinja engine currently supports:
+
+- Output expressions: `{{ expr }}`
+- Control flow: `if/elif/else`, `for`, `for ... else`
+- Assignments and scope: `set`, `with`
+- Macros: `macro` declarations and macro invocation
+- Delimiter features: comments `{# ... #}` and `raw` blocks
+- Includes: `{% include "path/to/partial.jinja" %}` (resolved before compile)
+- Filters: `trim`, `upper`, `lower`, `default`, `length`
+- Tests: `divisibleby`, `defined`, `undefined`, `odd`, `even`
+
+Conformance coverage is validated against CPython Jinja2 using fixtures in `test/conformance/fixtures` and the Python renderer `test/conformance/jinja2_render.py`.

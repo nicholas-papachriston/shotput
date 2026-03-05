@@ -1,0 +1,59 @@
+{
+	"cases": [
+		{
+			"name": "variable_output",
+			"template": "Hello {{ user }}",
+			"context": { "user": "world" }
+		},
+		{
+			"name": "if_elif_else",
+			"template": "{% if env == 'prod' %}p{% elif env == 'staging' %}s{% else %}d{% endif %}",
+			"context": { "env": "staging" }
+		},
+		{
+			"name": "for_loop",
+			"template": "{% for n in nums %}{{ n }}{% endfor %}",
+			"context": { "nums": [1, 2, 3] }
+		},
+		{
+			"name": "for_else",
+			"template": "{% for n in nums %}{{ n }}{% else %}empty{% endfor %}",
+			"context": { "nums": [] }
+		},
+		{
+			"name": "tuple_unpack",
+			"template": "{% for k, v in items %}{{ k }}={{ v }};{% endfor %}",
+			"context": { "items": [["a", 1], ["b", 2]] }
+		},
+		{
+			"name": "set_expression",
+			"template": "{% set x = 3 %}{{ x * 7 }}",
+			"context": {}
+		},
+		{
+			"name": "with_scope",
+			"template": "{% with x = 4 %}{{ x }}{% endwith %}",
+			"context": {}
+		},
+		{
+			"name": "macro_call",
+			"template": "{% macro badge(v) %}<b>{{ v }}</b>{% endmacro %}{{ badge('ok') }}",
+			"context": {}
+		},
+		{
+			"name": "filter_chain",
+			"template": "{{ value | trim | upper }}",
+			"context": { "value": "  hi  " }
+		},
+		{
+			"name": "test_expression",
+			"template": "{% if value is divisibleby(3) %}yes{% else %}no{% endif %}",
+			"context": { "value": 9 }
+		},
+		{
+			"name": "raw_block",
+			"template": "{% raw %}{{ untouched }}{% endraw %}",
+			"context": {}
+		}
+	]
+}

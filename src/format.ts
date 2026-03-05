@@ -5,6 +5,7 @@
  */
 import type { ShotputConfig } from "./config";
 import { handlerErrorResult } from "./handlerResult";
+import { buildJinjaContext, getCompiledJinjaRenderer } from "./jinja";
 import { parseJsonl } from "./jsonl";
 import { getLogger } from "./logger";
 import { SecurityError, validatePath } from "./security";
@@ -13,7 +14,14 @@ import { parseYaml } from "./yaml";
 
 const log = getLogger("format");
 
-const FORMAT_PREFIXES = ["yaml:", "json:", "jsonl:", "xml:", "md:"] as const;
+const FORMAT_PREFIXES = [
+	"yaml:",
+	"json:",
+	"jsonl:",
+	"xml:",
+	"md:",
+	"jinja:",
+] as const;
 type FormatKind = (typeof FORMAT_PREFIXES)[number] extends `${infer F}:`
 	? F
 	: never;
@@ -57,6 +65,11 @@ function expandMd(content: string): string {
 	return content;
 }
 
+function expandJinja(content: string, config: ShotputConfig): string {
+	const renderer = getCompiledJinjaRenderer(content);
+	return renderer(buildJinjaContext(config));
+}
+
 export const handleFormat = async (
 	config: ShotputConfig,
 	result: string,
@@ -98,6 +111,9 @@ export const handleFormat = async (
 				break;
 			case "md":
 				expanded = expandMd(content);
+				break;
+			case "jinja":
+				expanded = expandJinja(content, config);
 				break;
 			default:
 				throw new Error(`Unsupported format: ${format}`);

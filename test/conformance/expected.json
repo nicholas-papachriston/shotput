@@ -1,0 +1,13 @@
+{
+	"core:filter_chain": "HI",
+	"core:for_else": "empty",
+	"core:for_loop": "123",
+	"core:if_elif_else": "s",
+	"core:macro_call": "<b>ok</b>",
+	"core:raw_block": "{{ untouched }}",
+	"core:set_expression": "21",
+	"core:test_expression": "yes",
+	"core:tuple_unpack": "a=1;b=2;",
+	"core:variable_output": "Hello world",
+	"core:with_scope": "4"
+}

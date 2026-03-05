@@ -310,6 +310,23 @@ export abstract class ShotputBase<T> {
 		return this._merge({ expressionEngine: value });
 	}
 
+	/**
+	 * Selects template syntax handling:
+	 * - "shotput" (default): {{#if}}/{{#each}} + shotput variables
+	 * - "jinja2": Jinja2 syntax rendered via shotput's native Jinja engine
+	 */
+	templateSyntax(value: "shotput" | "jinja2"): T {
+		return this._merge({ templateSyntax: value });
+	}
+
+	/**
+	 * Enables/disables HTML autoescaping for Jinja2 mode.
+	 * Only used when templateSyntax is set to "jinja2".
+	 */
+	jinjaAutoescape(value: boolean): T {
+		return this._merge({ jinjaAutoescape: value });
+	}
+
 	// --- Tokenizer ---
 
 	/**

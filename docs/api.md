@@ -50,6 +50,8 @@ Each setter returns a new instance:
 | `.maxNestingDepth(v)` | `number` | `3` | Maximum depth for nested template interpolation |
 | `.context(v)` | `Record<string, unknown>` | `undefined` | Context for rules and variable substitution |
 | `.expressionEngine(v)` | `"js"` \| `"safe"` | `"js"` | Condition evaluation: full JS or safe subset |
+| `.templateSyntax(v)` | `"shotput"` \| `"jinja2"` | `"shotput"` | Template syntax mode. `templateFile` ending in `.jinja`, `.jinja2`, or `.j2` auto-selects `"jinja2"` unless explicitly set. |
+| `.jinjaAutoescape(v)` | `boolean` | `false` | Jinja autoescape flag (reserved for compatibility). |
 | `.tokenizer(v)` | `"openai"` \| `"cl100k_base"` \| `(text: string) => number` | `undefined` | When set, `maxPromptLength` is in tokens |
 | `.tokenizerWorker(v)` | `string` | `undefined` | Path to a worker script for off-thread tokenization |
 | `.compressor(v)` | `SemanticCompressor` | `undefined` | Function to semantically compress content for low-priority sources |
@@ -129,6 +131,13 @@ Use a format prefix to parse and expand the file as structured content in the te
 | `{{jsonl:path/to/file.jsonl}}` | Parse JSONL and expand as JSON array. |
 | `{{xml:path/to/file.xml}}` | Parse XML and expand as formatted XML string. |
 | `{{md:path/to/file.md}}` | Insert file content as-is (no parse). |
+| `{{jinja:path/to/file.jinja}}` | Render the file as Jinja using current `context`, `params`, and `env`. |
+
+### Native Jinja mode
+
+Use Jinja syntax for the main template by setting `templateSyntax("jinja2")` or by using a template file with extension `.jinja`, `.jinja2`, or `.j2`.
+
+Supported tags include `if/elif/else`, `for/else`, `set`, `with`, `macro`, `raw`, and `include`.
 
 ### Programmatic helpers
 
@@ -189,6 +198,8 @@ Comprehensive examples are in [examples/](../examples/):
 - [19-format-jsonl.ts](../examples/basic/19-format-jsonl.ts) - JSONL parse and streaming
 - [20-format-xml.ts](../examples/basic/20-format-xml.ts) - XML parse and S3 list response
 - [21-format-references.ts](../examples/basic/21-format-references.ts) - All format references
+- [22-jinja2.ts](../examples/basic/22-jinja2.ts) - Native Jinja template syntax
+- [23-jinja-includes-and-format.ts](../examples/basic/23-jinja-includes-and-format.ts) - Jinja include and `jinja:` format reference
 
 ### Advanced
 

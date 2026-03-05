@@ -2,6 +2,7 @@ import { ShotputBuilder, ShotputProgram } from "./builder";
 import { compileLoopBody } from "./compiledLoop";
 import { type ShotputConfig, createConfig } from "./config";
 import type { ConfigWithCompiled } from "./engine";
+import { getCompiledJinjaRenderer } from "./jinja";
 import { parseAllBlocks } from "./ruleBlocks";
 
 export type { ShotputConfig } from "./config";
@@ -45,8 +46,16 @@ export function compileShotputTemplate(
 	template: string,
 	baseConfig?: Partial<ShotputConfig>,
 ): ShotputProgram {
-	parseAllBlocks(template);
 	const merged = createConfig(baseConfig);
+	if (merged.templateSyntax === "jinja2") {
+		const compiledJinja = getCompiledJinjaRenderer(template);
+		return new ShotputProgram({
+			...baseConfig,
+			template,
+			_compiledJinjaRenderer: compiledJinja,
+		} as Partial<ConfigWithCompiled>);
+	}
+	parseAllBlocks(template);
 	const engine = (merged.expressionEngine ?? "js") as "js" | "safe";
 	const compiledRoot = compileLoopBody(template, { engine });
 	return new ShotputProgram({

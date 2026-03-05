@@ -80,7 +80,7 @@ export async function planTemplates(
 
 	const tasks: TemplateTask[] = [];
 
-	const FORMAT_PREFIX = /^(yaml|json|jsonl|xml|md):/;
+	const FORMAT_PREFIX = /^(yaml|json|jsonl|xml|md|jinja):/;
 
 	for (let i = 0; i < matchesWithIndex.length; i++) {
 		const { match, index: matchIndex } = matchesWithIndex[i];

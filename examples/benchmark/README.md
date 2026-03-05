@@ -17,6 +17,7 @@ Same large input (template + context) across engines; each run is timed. The wor
 - **Execution-model grouping:** results are printed in two tables:
   - Runtime (parse + render per call)
   - Pre-compiled (render-only mode)
+  - Parse/compile only (no render) for Jinja engines
 - **Autoescape normalization:** Jinja-style engines in this suite run with `autoescape: false` for parity.
 
 ## Run Bun engines (Shotput, EJS, Handlebars, Nunjucks, Mustache, Binja)
@@ -39,6 +40,8 @@ bun run examples/benchmark/handlebars.ts
 bun run examples/benchmark/nunjucks.ts
 bun run examples/benchmark/mustache.ts
 bun run examples/benchmark/binja.ts
+bun run examples/benchmark/jinja-parse-shotput.ts
+bun run examples/benchmark/jinja-parse-binja.ts
 ```
 
 ## Run Jinja2 (Python)
@@ -52,11 +55,15 @@ uv run --with jinja2 examples/benchmark/jinja2_benchmark.py
 # Or with pip
 pip install jinja2
 python examples/benchmark/jinja2_benchmark.py
+
+# Parse/compile-only Jinja2 benchmark
+uv run --with jinja2 examples/benchmark/jinja2_parse_benchmark.py
+python examples/benchmark/jinja2_parse_benchmark.py
 ```
 
 ## Results
 
-`run-all.ts` prints grouped tables for runtime and pre-compiled modes. Relative speed is calculated within each group (1.00x = fastest in that group).
+`run-all.ts` prints grouped tables for runtime, pre-compiled, and parse/compile-only modes. Relative speed is calculated within each group (1.00x = fastest in that group).
 
 ## Similar libs
 

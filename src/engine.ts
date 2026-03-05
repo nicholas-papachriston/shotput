@@ -14,6 +14,8 @@ import {
 	runPreResolveHooks,
 } from "./hooks";
 import { interpolationStream } from "./interpolationStream";
+import type { CompiledJinjaRenderer } from "./jinja";
+import { renderJinjaTemplate } from "./jinja";
 import { getLogger } from "./logger";
 import type { RuleContext } from "./ruleConditions";
 import { evaluateRules } from "./rules";
@@ -30,6 +32,7 @@ const log = getLogger("shotput");
 
 export interface ConfigWithCompiled extends ShotputConfig {
 	_compiledRootSegments?: Segment[];
+	_compiledJinjaRenderer?: CompiledJinjaRenderer;
 }
 
 /**
@@ -117,15 +120,30 @@ export async function runStreamingInternal(
 	}
 
 	const compiledRoot = cfg._compiledRootSegments;
+	const compiledJinjaRenderer = cfg._compiledJinjaRenderer;
 	if (compiledRoot !== undefined) {
 		const context = cfg.context ?? {};
 		const env = typeof process !== "undefined" ? process.env : {};
 		const params = (cfg as { params?: Record<string, unknown> }).params;
 		const ctx: RuleContext = { context, env, params };
 		templateContent = renderSegments(compiledRoot, cfg, ctx, undefined);
+	} else if (
+		cfg.templateSyntax === "jinja2" ||
+		compiledJinjaRenderer !== undefined
+	) {
+		templateContent = await renderJinjaTemplate(
+			templateContent,
+			cfg,
+			compiledJinjaRenderer,
+		);
 	} else {
 		templateContent = evaluateRules(templateContent, cfg);
 	}
+
+	const contentFullyEvaluated =
+		compiledRoot !== undefined ||
+		cfg.templateSyntax === "jinja2" ||
+		compiledJinjaRenderer !== undefined;
 
 	const streamResult = interpolationStream(
 		templateContent,
@@ -136,8 +154,8 @@ export async function runStreamingInternal(
 		new Set(),
 		undefined,
 		undefined,
-		compiledRoot !== undefined,
-		compiledRoot !== undefined,
+		contentFullyEvaluated,
+		contentFullyEvaluated,
 	);
 
 	return {

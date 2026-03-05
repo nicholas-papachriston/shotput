@@ -5,6 +5,7 @@ import { SKILL_TEMPLATE, handleSkill } from "../../src/skill";
 
 describe("handleSkill", () => {
 	let tempDir: string;
+	const originalFetch = global.fetch;
 
 	beforeEach(async () => {
 		tempDir = `${process.cwd()}/test-temp-skill-${Date.now()}`;
@@ -58,6 +59,7 @@ See the reference files for more details.
 	});
 
 	afterEach(async () => {
+		global.fetch = originalFetch;
 		try {
 			await Bun.$`rm -rf ${tempDir}`;
 		} catch {
@@ -239,6 +241,47 @@ description: Missing name field
 				"## Skill: test-skill-with-refs",
 			);
 		});
+
+		it("should include local reference content when using :full", async () => {
+			const config = createConfig({
+				skillsDir: `${tempDir}/skills`,
+				allowedBasePaths: [process.cwd(), tempDir],
+				allowHttp: false,
+				allowFunctions: false,
+			});
+
+			const response = await handleSkill(
+				config,
+				"{{skill:test-skill-with-refs:full}}",
+				"skill:test-skill-with-refs:full",
+				"{{skill:test-skill-with-refs:full}}",
+				10000,
+			);
+
+			expect(response.operationResults).toContain("## Skill References");
+			expect(response.operationResults).toContain("### Reference: guide.md");
+			expect(response.operationResults).toContain("### Reference: examples.md");
+		});
+
+		it("should skip local references silently when :full has no reference directory", async () => {
+			const config = createConfig({
+				skillsDir: `${tempDir}/skills`,
+				allowedBasePaths: [process.cwd(), tempDir],
+				allowHttp: false,
+				allowFunctions: false,
+			});
+
+			const response = await handleSkill(
+				config,
+				"{{skill:test-skill:full}}",
+				"skill:test-skill:full",
+				"{{skill:test-skill:full}}",
+				10000,
+			);
+
+			expect(response.operationResults).toContain("## Skill: test-skill");
+			expect(response.operationResults).not.toContain("## Skill References");
+		});
 	});
 
 	describe("remote skill loading", () => {
@@ -293,6 +336,107 @@ description: Missing name field
 			);
 
 			expect(response.operationResults).toContain("[Error loading skill:");
+		});
+
+		it("should reject remote source not in allowed list", async () => {
+			const config = createConfig({
+				skillsDir: `${tempDir}/skills`,
+				allowRemoteSkills: true,
+				allowedSkillSources: ["anthropics/skills"],
+				allowedBasePaths: [process.cwd(), tempDir],
+			});
+
+			const response = await handleSkill(
+				config,
+				"{{skill:github:badorg/badrepo/skill-name}}",
+				"skill:github:badorg/badrepo/skill-name",
+				"{{skill:github:badorg/badrepo/skill-name}}",
+				10000,
+			);
+
+			expect(response.operationResults).toContain("[Security Error:");
+		});
+
+		it("should load remote skill and include remote references with :full", async () => {
+			const config = createConfig({
+				skillsDir: `${tempDir}/skills`,
+				allowRemoteSkills: true,
+				allowedSkillSources: ["anthropics/skills"],
+				allowedBasePaths: [process.cwd(), tempDir],
+			});
+
+			global.fetch = (async (url: string | URL) => {
+				const urlStr = String(url);
+				if (urlStr.endsWith("/SKILL.md")) {
+					return new Response(
+						`---
+name: remote-skill
+description: Remote description
+---
+
+# Remote skill body`,
+						{ status: 200 },
+					);
+				}
+				if (urlStr.endsWith("/reference/mcp_best_practices.md")) {
+					return new Response("# MCP Best Practices", { status: 200 });
+				}
+				if (urlStr.endsWith("/reference/python_mcp_server.md")) {
+					return new Response("Not found", { status: 404 });
+				}
+				// Simulate transport error path for one reference file
+				if (urlStr.endsWith("/reference/node_mcp_server.md")) {
+					throw new Error("network");
+				}
+				return new Response("Not found", { status: 404 });
+			}) as typeof fetch;
+
+			const response = await handleSkill(
+				config,
+				"{{skill:github:anthropics/skills/remote-skill:full}}",
+				"skill:github:anthropics/skills/remote-skill:full",
+				"{{skill:github:anthropics/skills/remote-skill:full}}",
+				10000,
+			);
+
+			expect(response.operationResults).toContain("## Skill: remote-skill");
+			expect(response.operationResults).toContain("Remote description");
+			expect(response.operationResults).toContain("## Skill References");
+			expect(response.operationResults).toContain(
+				"### Reference: mcp_best_practices.md",
+			);
+			expect(response.operationResults).not.toContain(
+				"### Reference: python_mcp_server.md",
+			);
+		});
+
+		it("should return error when remote skill fetch returns non-ok", async () => {
+			const config = createConfig({
+				skillsDir: `${tempDir}/skills`,
+				allowRemoteSkills: true,
+				allowedSkillSources: ["anthropics/skills"],
+				allowedBasePaths: [process.cwd(), tempDir],
+			});
+
+			global.fetch = (async () =>
+				new Response("nope", {
+					status: 500,
+					statusText: "Internal Error",
+				})) as typeof fetch;
+
+			const response = await handleSkill(
+				config,
+				"{{skill:github:anthropics/skills/broken-skill}}",
+				"skill:github:anthropics/skills/broken-skill",
+				"{{skill:github:anthropics/skills/broken-skill}}",
+				10000,
+			);
+
+			expect(response.operationResults).toContain("[Error loading skill:");
+			expect(response.operationResults).toContain(
+				"github:anthropics/skills/broken-skill",
+			);
+			expect(response.combinedRemainingCount).toBe(10000);
 		});
 	});
 
@@ -535,6 +679,61 @@ const example = () => {
 		expect(response.operationResults).toContain("console.log");
 		expect(response.operationResults).toContain("## Table");
 		expect(response.operationResults).toContain("## List");
+	});
+
+	it("should return error for invalid frontmatter YAML", async () => {
+		const config = createConfig({
+			skillsDir: `${tempDir}/skills`,
+			allowedBasePaths: [process.cwd(), tempDir],
+		});
+		await Bun.$`mkdir -p ${tempDir}/skills/bad-yaml`;
+		await Bun.write(
+			`${tempDir}/skills/bad-yaml/SKILL.md`,
+			`---
+name: bad-yaml
+description [oops
+---
+content`,
+		);
+
+		const response = await handleSkill(
+			config,
+			"{{skill:bad-yaml}}",
+			"skill:bad-yaml",
+			"{{skill:bad-yaml}}",
+			10000,
+		);
+
+		expect(response.operationResults).toContain("[Error loading skill:");
+		expect(response.operationResults).toContain("bad-yaml");
+		expect(response.combinedRemainingCount).toBe(10000);
+	});
+
+	it("should return error when frontmatter parses to non-object", async () => {
+		const config = createConfig({
+			skillsDir: `${tempDir}/skills`,
+			allowedBasePaths: [process.cwd(), tempDir],
+		});
+		await Bun.$`mkdir -p ${tempDir}/skills/non-object-frontmatter`;
+		await Bun.write(
+			`${tempDir}/skills/non-object-frontmatter/SKILL.md`,
+			`---
+- item
+---
+content`,
+		);
+
+		const response = await handleSkill(
+			config,
+			"{{skill:non-object-frontmatter}}",
+			"skill:non-object-frontmatter",
+			"{{skill:non-object-frontmatter}}",
+			10000,
+		);
+
+		expect(response.operationResults).toContain("[Error loading skill:");
+		expect(response.operationResults).toContain("non-object-frontmatter");
+		expect(response.combinedRemainingCount).toBe(10000);
 	});
 });
 

@@ -32,6 +32,27 @@ In the text file format of your choice, include any combination of the following
 
 # Anthropic Skills (remote, requires allowRemoteSkills: true)
 {{skill:github:anthropics/skills/brand-guidelines}}
+
+# Format references
+{{yaml:./data.yaml}}
+{{json:./data.json}}
+{{jsonl:./events.jsonl}}
+{{xml:./config.xml}}
+{{md:./notes.md}}
+{{jinja:./partial.jinja}}
+```
+
+## Native Jinja templates
+
+Use Jinja syntax for the root template in either of these ways:
+
+- Set `.templateSyntax("jinja2")`
+- Or set `.templateFile("prompt.jinja")` (also supports `.jinja2` and `.j2`), which auto-selects Jinja mode unless `templateSyntax` is explicitly provided
+
+Jinja templates support include preprocessing:
+
+```jinja
+{% include "./partials/header.jinja" %}
 ```
 
 ## Variables, conditionals, and loops

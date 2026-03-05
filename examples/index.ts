@@ -20,6 +20,8 @@ await import("./basic/18-format-markdown.ts");
 await import("./basic/19-format-jsonl.ts");
 await import("./basic/20-format-xml.ts");
 await import("./basic/21-format-references.ts");
+await import("./basic/22-jinja2.ts");
+await import("./basic/23-jinja-includes-and-format.ts");
 await import("./advanced/01-s3-basic.ts");
 await import("./advanced/02-s3-directory-buckets.ts");
 await import("./advanced/03-s3-cloudflare-r2.ts");
