@@ -8,12 +8,12 @@
 import Handlebars from "handlebars";
 import {
 	EXTRA_KEYS,
+	type EngineResult,
 	FLAG_COUNT,
 	ITEM_COUNT,
 	RUNS,
 	WARMUP_RUNS,
 	benchmarkContext,
-	type EngineResult,
 	getHandlebarsTemplate,
 } from "./data";
 import { computeStats } from "./stats";

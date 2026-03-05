@@ -6,13 +6,13 @@
  */
 
 import {
+	type BenchmarkMode,
 	EXTRA_KEYS,
+	type EngineResult,
 	FLAG_COUNT,
 	ITEM_COUNT,
 	RUNS,
 	WARMUP_RUNS,
-	type BenchmarkMode,
-	type EngineResult,
 } from "./data";
 import { computeStats } from "./stats";
 
@@ -46,7 +46,10 @@ const commands: BenchCommand[] = [
 		name: "Shotput",
 		command: ["bun", "run", "examples/benchmark/shotput.ts", "--json"],
 	},
-	{ name: "EJS", command: ["bun", "run", "examples/benchmark/ejs.ts", "--json"] },
+	{
+		name: "EJS",
+		command: ["bun", "run", "examples/benchmark/ejs.ts", "--json"],
+	},
 	{
 		name: "Handlebars",
 		command: ["bun", "run", "examples/benchmark/handlebars.ts", "--json"],
@@ -184,7 +187,9 @@ async function main(): Promise<void> {
 		}
 	}
 
-	const runtimeResults = allResults.filter((result) => result.mode === "runtime");
+	const runtimeResults = allResults.filter(
+		(result) => result.mode === "runtime",
+	);
 	const precompiledResults = allResults.filter(
 		(result) => result.mode === "precompiled",
 	);

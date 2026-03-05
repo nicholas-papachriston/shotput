@@ -8,12 +8,12 @@
 import Mustache from "mustache";
 import {
 	EXTRA_KEYS,
+	type EngineResult,
 	FLAG_COUNT,
 	ITEM_COUNT,
 	RUNS,
 	WARMUP_RUNS,
 	benchmarkContext,
-	type EngineResult,
 	getMustacheTemplate,
 } from "./data";
 import { computeStats } from "./stats";

@@ -8,12 +8,12 @@
 import Ejs from "ejs";
 import {
 	EXTRA_KEYS,
+	type EngineResult,
 	FLAG_COUNT,
 	ITEM_COUNT,
 	RUNS,
 	WARMUP_RUNS,
 	benchmarkContext,
-	type EngineResult,
 	getEjsTemplate,
 } from "./data";
 import { computeStats } from "./stats";

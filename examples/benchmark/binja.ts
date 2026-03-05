@@ -9,12 +9,12 @@
 import { Environment, compile } from "binja";
 import {
 	EXTRA_KEYS,
+	type EngineResult,
 	FLAG_COUNT,
 	ITEM_COUNT,
 	RUNS,
 	WARMUP_RUNS,
 	benchmarkContext,
-	type EngineResult,
 	getBinjaTemplate,
 } from "./data";
 import { computeStats } from "./stats";
@@ -36,7 +36,9 @@ async function runRuntime(): Promise<string> {
 	return await env.renderString(templateSrc, { context: benchmarkContext });
 }
 
-function runCompiled(fn: (ctx: { context: typeof benchmarkContext }) => string): string {
+function runCompiled(
+	fn: (ctx: { context: typeof benchmarkContext }) => string,
+): string {
 	return fn({ context: benchmarkContext });
 }
 

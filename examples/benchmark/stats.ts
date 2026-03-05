@@ -31,7 +31,8 @@ export function computeStats(values: number[]): Stats {
 	const mean = sorted.reduce((sum, value) => sum + value, 0) / count;
 	const variance =
 		count > 1
-			? sorted.reduce((sum, value) => sum + (value - mean) ** 2, 0) / (count - 1)
+			? sorted.reduce((sum, value) => sum + (value - mean) ** 2, 0) /
+				(count - 1)
 			: 0;
 	const stddev = Math.sqrt(variance);
 	const margin = count > 1 ? (1.96 * stddev) / Math.sqrt(count) : 0;

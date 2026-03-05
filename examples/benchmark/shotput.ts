@@ -9,12 +9,12 @@ import { join } from "node:path";
 import { compileShotputTemplate, shotput } from "../../src/index";
 import {
 	EXTRA_KEYS,
+	type EngineResult,
 	FLAG_COUNT,
 	ITEM_COUNT,
 	RUNS,
 	WARMUP_RUNS,
 	benchmarkContext,
-	type EngineResult,
 	getShotputTemplate,
 } from "./data";
 import { computeStats } from "./stats";
