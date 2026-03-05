@@ -26,6 +26,8 @@ jobs:
           node-version: "24"
           registry-url: "https://registry.npmjs.org"
 
+      - run: npm install -g npm@latest
+
       - run: bun install --frozen-lockfile
 
       - run: bun run lint
@@ -37,5 +39,3 @@ jobs:
       - run: bun test
 
       - run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

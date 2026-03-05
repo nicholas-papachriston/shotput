@@ -5,7 +5,7 @@ Zero dependency plug-and-play templating for Bun
 ## Installation
 
 ```bash
-bun add shotput
+bun add @agent_oxide/shotput
 ```
 
 ## Motivation

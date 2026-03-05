@@ -1,5 +1,5 @@
 {
-	"name": "shotput",
+	"name": "@agent_oxide/shotput",
 	"version": "1.0.0",
 	"description": "Zero dependency plug-and-play templating for Bun",
 	"type": "module",
@@ -37,6 +37,13 @@
 	],
 	"author": "https://github.com/nicholas-papachriston",
 	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/nicholas-papachriston/shotput.git"
+	},
+	"publishConfig": {
+		"access": "public"
+	},
 	"devDependencies": {
 		"@biomejs/biome": "latest",
 		"@types/bun": "latest",
