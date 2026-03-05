@@ -245,7 +245,7 @@ export default async function(result, path, match, remainingLength) {
 ### Basic Configuration
 
 ```typescript
-import { shotput } from "shotput";
+import { shotput } from "@agent_oxide/shotput";
 
 const result = await shotput()
   .templateDir("./templates")

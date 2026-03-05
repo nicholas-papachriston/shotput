@@ -31,7 +31,7 @@ Shotput is a programmatic templating library for managing personas, system promp
 ## Quick start
 
 ```ts
-import { shotput } from "shotput";
+import { shotput } from "@agent_oxide/shotput";
 
 const result = await shotput()
   .templateDir("./templates")

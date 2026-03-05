@@ -34,7 +34,7 @@ Shotput processes templates that can include content from various sources: local
 Shotput's security model is based on explicit allowlists for all resource access:
 
 ```typescript
-import { shotput } from "shotput";
+import { shotput } from "@agent_oxide/shotput";
 
 const result = await shotput()
   // Only allow file access within these directories
@@ -489,7 +489,7 @@ git clone --branch v1.0.0 https://github.com/anthropics/skills
 ### Minimal Production Config
 
 ```typescript
-import { shotput } from "shotput";
+import { shotput } from "@agent_oxide/shotput";
 
 const base = shotput()
   // Core settings
@@ -523,7 +523,7 @@ const result = await base.templateFile("prompt.md").run();
 ### Environment-Specific Configs
 
 ```typescript
-import { shotput } from "shotput";
+import { shotput } from "@agent_oxide/shotput";
 
 const env = process.env["NODE_ENV"] ?? "development";
 
