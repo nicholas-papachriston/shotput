@@ -1,7 +1,7 @@
 import { join, resolve } from "node:path";
-import type { ShotputConfig } from "./config";
-import { getLogger } from "./logger";
-import type { SourceContext, SourcePlugin, SourceResolution } from "./plugins";
+import type { ShotputConfig } from "../../config";
+import { getLogger } from "../../logger";
+import type { SourceContext, SourcePlugin, SourceResolution } from "../plugins";
 
 const log = getLogger("playbook-plugin");
 
@@ -30,11 +30,8 @@ export function createPlaybookPlugin(
 				throw new Error("Invalid playbook URL: missing ID");
 			}
 
-			// Allow explicit extensions, default to .md
 			const ext = id.includes(".") ? "" : ".md";
 			const filePath = resolve(dir, `${id}${ext}`);
-
-			// Prevent directory traversal
 			if (!filePath.startsWith(resolve(dir))) {
 				throw new Error(`Path traversal detected: ${filePath}`);
 			}
@@ -81,25 +78,4 @@ export function createPlaybookPlugin(
 			return 0;
 		},
 	};
-}
-
-/**
- * Utility to write or update an evolving playbook.
- * Allows agents to actively manage their context between turns.
- */
-export async function updatePlaybook(
-	id: string,
-	content: string,
-	options?: PlaybookPluginOptions,
-): Promise<void> {
-	const dir = options?.dir ?? join(process.cwd(), "playbooks");
-	const ext = id.includes(".") ? "" : ".md";
-	const filePath = resolve(dir, `${id}${ext}`);
-
-	if (!filePath.startsWith(resolve(dir))) {
-		throw new Error(`Path traversal detected: ${filePath}`);
-	}
-
-	await Bun.write(filePath, content);
-	log.info(`Updated playbook: ${id}`);
 }

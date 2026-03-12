@@ -2,7 +2,7 @@ import type { ShotputConfig } from "./config";
 import { processContent } from "./content";
 import { handlerErrorResult } from "./handlerResult";
 import { getLogger } from "./logger";
-import type { SourcePlugin } from "./plugins";
+import type { SourcePlugin } from "./sources/plugins";
 
 const log = getLogger("custom");
 

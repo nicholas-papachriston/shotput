@@ -1,11 +1,11 @@
 import { describe, expect, it } from "bun:test";
 import { createConfig } from "../../src/config";
 import { resolveSubagent, shotput } from "../../src/index";
-import { interpolation } from "../../src/interpolation";
+import { interpolation } from "../../src/runtime/interpolation";
 import {
 	createSubagentPlugin,
 	parseSubagentFrontmatter,
-} from "../../src/subagent";
+} from "../../src/sources/subagent";
 
 const agentsDir = "test/fixtures/agents";
 

@@ -1,18 +1,20 @@
-import type { ShotputConfig } from "./config";
+import type { ShotputConfig } from "../config";
+import { getLogger } from "../logger";
+import { ParallelProcessor } from "../parallelProcessor";
+import { clearStatCache } from "../template";
+import { getCountFnAsync } from "../tokens";
+import type { ShotputOutput } from "../types";
 import { interpolation } from "./interpolation";
 import {
 	getInterpolationMatchesWithIndices,
-	inclusionBasePathFor,
 	interpolationPattern,
 } from "./interpolationApply";
-import { getLogger } from "./logger";
-import { ParallelProcessor } from "./parallelProcessor";
-import { evaluateRules } from "./rules";
-import { clearStatCache } from "./template";
-import { getCountFnAsync } from "./tokens";
-import type { ShotputOutput } from "./types";
-import type { TemplateType } from "./types";
-import { substituteVariables } from "./variables";
+import {
+	createEffectiveConfig,
+	evaluateInterpolationContent,
+	mapInterpolationMetadata,
+	resolveNestedInclusionBase,
+} from "./interpolationCore";
 
 const log = getLogger("interpolationStream");
 
@@ -46,22 +48,13 @@ export function interpolationStream(
 	if (depth === 0) {
 		clearStatCache();
 	}
-	const effectiveConfig = mergeContext
-		? {
-				...config,
-				context: { ...(config.context ?? {}), ...mergeContext },
-			}
-		: config;
-	const contentAfterRules =
-		contentFullyEvaluated && depth === 0
-			? content
-			: rulesAlreadyEvaluated && depth === 0
-				? content
-				: evaluateRules(content, effectiveConfig);
-	const contentAfterVariables =
-		contentFullyEvaluated && depth === 0
-			? content
-			: substituteVariables(contentAfterRules, effectiveConfig);
+	const effectiveConfig = createEffectiveConfig(config, mergeContext);
+	const contentAfterVariables = evaluateInterpolationContent(
+		content,
+		effectiveConfig,
+		depth,
+		{ rulesAlreadyEvaluated, contentFullyEvaluated },
+	);
 	const matchEntries = getInterpolationMatchesWithIndices(
 		contentAfterVariables,
 	);
@@ -138,15 +131,12 @@ export function interpolationStream(
 		const processedTemplate =
 			parallelResult.replacementsNeedRulesAndVars === false
 				? processedContent
-				: substituteVariables(
-						evaluateRules(processedContent, effectiveConfig),
+				: evaluateInterpolationContent(
+						processedContent,
 						effectiveConfig,
+						depth,
 					);
-		currentMetadata = parallelResult.metadata.map((m) => ({
-			path: m.path,
-			type: m.type,
-			duration: m.processingTime,
-		}));
+		currentMetadata = mapInterpolationMetadata(parallelResult.metadata);
 		const usedLength = configToUse.tokenizer
 			? await getCountFnAsync(configToUse)(processedTemplate)
 			: processedTemplate.length;
@@ -169,21 +159,11 @@ export function interpolationStream(
 				for (const p of pathsAdded) {
 					expandingPaths.add(p);
 				}
-				const firstFull = moreMatches[0];
-				const innerPath =
-					typeof firstFull === "string" ? firstFull.slice(2, -2).trim() : "";
-				const pathIsFileRelative =
-					innerPath.startsWith("./") ||
-					innerPath.startsWith("../") ||
-					!innerPath.includes("/");
-				const inclusionBase =
-					currentMetadata.length === 1 && pathIsFileRelative
-						? inclusionBasePathFor(
-								currentMetadata[0].type as TemplateType,
-								currentMetadata[0].path,
-								basePath,
-							)
-						: basePath;
+				const inclusionBase = resolveNestedInclusionBase(
+					processedTemplate,
+					currentMetadata,
+					basePath,
+				);
 				try {
 					const nested = await interpolation(
 						processedTemplate,

@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { shotput } from "../../src";
 import { mergeOverrides } from "../../src/builder";
 import type { AssemblyContext, SourceResult } from "../../src/hooks";
-import type { SourcePlugin } from "../../src/plugins";
+import type { SourcePlugin } from "../../src/sources/plugins";
 import type { ShotputOutput } from "../../src/types";
 
 describe("builder base setters", () => {

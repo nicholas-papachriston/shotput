@@ -5,11 +5,14 @@
  */
 import type { ShotputConfig } from "./config";
 import { handlerErrorResult } from "./handlerResult";
-import { buildJinjaContext, getCompiledJinjaRenderer } from "./jinja";
-import { parseJsonl } from "./jsonl";
+import {
+	buildJinjaContext,
+	getCompiledJinjaRenderer,
+} from "./language/jinja/jinja";
 import { getLogger } from "./logger";
 import { SecurityError, validatePath } from "./security";
-import { parseXml, xmlNodeToString } from "./xml";
+import { parseJsonl } from "./support/jsonl";
+import { parseXml, xmlNodeToString } from "./support/xml";
 import { parseYaml } from "./yaml";
 
 const log = getLogger("format");

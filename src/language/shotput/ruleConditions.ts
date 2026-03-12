@@ -1,4 +1,4 @@
-import { getLogger } from "./logger";
+import { getLogger } from "../../logger";
 
 const log = getLogger("ruleConditions");
 

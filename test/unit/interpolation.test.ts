@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { createConfig } from "../../src/config";
-import { interpolation } from "../../src/interpolation";
-import { interpolationStream } from "../../src/interpolationStream";
+import { interpolation } from "../../src/runtime/interpolation";
+import { interpolationStream } from "../../src/runtime/interpolationStream";
 
 describe("interpolation", () => {
 	const defaultConfig = createConfig({

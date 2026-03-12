@@ -1,11 +1,11 @@
 import { describe, expect, it } from "bun:test";
 import fc from "fast-check";
 import { createConfig } from "../../src/config";
-import { interpolation } from "../../src/interpolation";
-import { getInterpolationMatchesWithIndices } from "../../src/interpolationApply";
-import { evaluateRules } from "../../src/rules";
+import { evaluateRules } from "../../src/language/shotput/rules";
+import { substituteVariables } from "../../src/language/shotput/variables";
+import { interpolation } from "../../src/runtime/interpolation";
+import { getInterpolationMatchesWithIndices } from "../../src/runtime/interpolationApply";
 import { parseOutputSections } from "../../src/sections";
-import { substituteVariables } from "../../src/variables";
 
 const assertOpts = { numRuns: 200 };
 

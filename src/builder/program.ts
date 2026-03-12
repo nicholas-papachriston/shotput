@@ -2,7 +2,7 @@ import {
 	runShotput,
 	runShotputStreaming,
 	runShotputStreamingSegments,
-} from "../engine";
+} from "../runtime/engine";
 import type {
 	ShotputOutput,
 	ShotputSegmentStreamOutput,

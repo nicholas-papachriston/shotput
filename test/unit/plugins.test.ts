@@ -1,8 +1,8 @@
 import { describe, expect, it } from "bun:test";
 import { createConfig } from "../../src/config";
-import { interpolation } from "../../src/interpolation";
-import { getMatchingPlugin } from "../../src/plugins";
-import type { SourcePlugin } from "../../src/plugins";
+import { interpolation } from "../../src/runtime/interpolation";
+import { getMatchingPlugin } from "../../src/sources/plugins";
+import type { SourcePlugin } from "../../src/sources/plugins";
 
 describe("custom source plugins", () => {
 	it("should match custom plugin by raw path", () => {

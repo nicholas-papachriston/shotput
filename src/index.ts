@@ -1,31 +1,11 @@
 import { ShotputBuilder, ShotputProgram } from "./builder";
-import { compileLoopBody } from "./compiledLoop";
-import { type ShotputConfig, createConfig } from "./config";
-import type { ConfigWithCompiled } from "./engine";
-import { getCompiledJinjaRenderer } from "./jinja";
-import { parseAllBlocks } from "./ruleBlocks";
+import type { ShotputConfig } from "./config";
+import { createConfig } from "./config";
+import { getCompiledJinjaRenderer } from "./language/jinja";
+import { compileLoopBody, parseAllBlocks } from "./language/shotput";
+import type { ConfigWithCompiled } from "./runtime/engine";
 
-export type { ShotputConfig } from "./config";
-export type {
-	MessageOutput,
-	OutputMode,
-	Section,
-	ShotputOutput,
-	ShotputSegmentStreamOutput,
-	ShotputStreamingOutput,
-} from "./types";
-export { HookAbortError } from "./hooks";
-export type {
-	HookSet,
-	PreResolveHook,
-	PostResolveSourceHook,
-	PostAssemblyHook,
-	PreOutputHook,
-	SourceResult,
-	AssemblyContext,
-} from "./hooks";
-
-export { ShotputBuilder, ShotputProgram };
+export * from "./api";
 
 /**
  * Pre-compile a template for repeated renders. Warms the block parse cache and returns
@@ -87,30 +67,8 @@ export function shotput(): ShotputBuilder {
 	return new ShotputBuilder();
 }
 
-export { markdownToHtml, markdownToPlaintext } from "./markdown";
-export { parseJsonl, parseJsonlChunk } from "./jsonl";
-export {
-	createXmlParser,
-	parseS3ListResponse,
-	parseXml,
-	xmlNodeToString,
-} from "./xml";
-export type { XmlNode } from "./xml";
-export type { SourceContext, SourcePlugin, SourceResolution } from "./plugins";
-export { resolveSubagent } from "./subagent";
-export { createDbPlugin } from "./db";
-export { createPlaybookPlugin, updatePlaybook } from "./playbook";
-export type { PlaybookPluginOptions } from "./playbook";
-export type { DbPluginOptions, SqliteParsed, RedisParsed, RedisOp } from "./db";
-export {
-	parseSqliteUrl,
-	validateSqlitePath,
-	runSqliteQuery,
-	resolveSqlite,
-	parseRedisUrl,
-	resolveRedis,
-} from "./db";
-export type { ResolvedSubagent, SubagentConfig } from "./subagent";
+export * from "./sources";
+export * from "./support";
 
 if (require.main === module) {
 	shotput().run().catch(console.error);

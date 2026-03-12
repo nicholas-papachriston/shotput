@@ -1,5 +1,5 @@
 import { dirname, join } from "node:path";
-import type { ShotputConfig } from "./config";
+import type { ShotputConfig } from "../../config";
 
 export type CompiledJinjaRenderer = (ctx: Record<string, unknown>) => string;
 

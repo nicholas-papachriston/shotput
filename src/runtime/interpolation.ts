@@ -2,19 +2,21 @@
  * Full in-memory interpolation. Used for nested runs (from interpolationStream) and by tests.
  * Top-level pipeline uses interpolationStream + consumeStreamToString.
  */
-import type { ShotputConfig } from "./config";
+import type { ShotputConfig } from "../config";
+import { getLogger } from "../logger";
+import { ParallelProcessor } from "../parallelProcessor";
+import { clearStatCache } from "../template";
+import { getCountFnAsync } from "../tokens";
 import {
 	getInterpolationMatchesWithIndices,
-	inclusionBasePathFor,
 	interpolationPattern,
 } from "./interpolationApply";
-import { getLogger } from "./logger";
-import { ParallelProcessor } from "./parallelProcessor";
-import { evaluateRules } from "./rules";
-import { clearStatCache } from "./template";
-import { getCountFnAsync } from "./tokens";
-import type { TemplateType } from "./types";
-import { substituteVariables } from "./variables";
+import {
+	createEffectiveConfig,
+	evaluateInterpolationContent,
+	mapInterpolationMetadata,
+	resolveNestedInclusionBase,
+} from "./interpolationCore";
 
 const log = getLogger("interpolation");
 
@@ -58,16 +60,11 @@ export const interpolation = async (
 	if (depth === 0) {
 		clearStatCache();
 	}
-	const effectiveConfig = mergeContext
-		? {
-				...config,
-				context: { ...(config.context ?? {}), ...mergeContext },
-			}
-		: config;
-	const contentAfterRules = evaluateRules(content, effectiveConfig);
-	const contentAfterVariables = substituteVariables(
-		contentAfterRules,
+	const effectiveConfig = createEffectiveConfig(config, mergeContext);
+	const contentAfterVariables = evaluateInterpolationContent(
+		content,
 		effectiveConfig,
+		depth,
 	);
 	const matchEntries = getInterpolationMatchesWithIndices(
 		contentAfterVariables,
@@ -113,15 +110,8 @@ export const interpolation = async (
 	processedTemplate =
 		replacementsNeedRulesAndVars === false
 			? processedContent
-			: substituteVariables(
-					evaluateRules(processedContent, effectiveConfig),
-					effectiveConfig,
-				);
-	currentMetadata = metadata.map((m) => ({
-		path: m.path,
-		type: m.type,
-		duration: m.processingTime,
-	}));
+			: evaluateInterpolationContent(processedContent, effectiveConfig, depth);
+	currentMetadata = mapInterpolationMetadata(metadata);
 
 	const usedLength = config.tokenizer
 		? await getCountFnAsync(config)(processedTemplate)
@@ -150,21 +140,11 @@ export const interpolation = async (
 		}
 		// Use inclusion base only when nested paths are file-relative (./x, ../x, bare).
 		// Project-relative paths (e.g. test/fixtures/x) use basePath (cwd).
-		const firstFull = moreMatches[0];
-		const innerPath =
-			typeof firstFull === "string" ? firstFull.slice(2, -2).trim() : "";
-		const pathIsFileRelative =
-			innerPath.startsWith("./") ||
-			innerPath.startsWith("../") ||
-			!innerPath.includes("/");
-		const inclusionBase =
-			currentMetadata.length === 1 && pathIsFileRelative
-				? inclusionBasePathFor(
-						currentMetadata[0].type as TemplateType,
-						currentMetadata[0].path,
-						basePath,
-					)
-				: basePath;
+		const inclusionBase = resolveNestedInclusionBase(
+			processedTemplate,
+			currentMetadata,
+			basePath,
+		);
 		try {
 			const nestedResults = await interpolation(
 				processedTemplate,

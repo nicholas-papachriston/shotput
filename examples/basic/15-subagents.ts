@@ -28,7 +28,7 @@ try {
 		allowedBasePaths: [examplesDir],
 		templateDir: examplesDir,
 		allowHttp: false,
-	}).run();
+	});
 	log.info(`resolveSubagent metadata: ${JSON.stringify(resolved.metadata)}`);
 	console.log("Agent config:", resolved.agentConfig);
 	console.log("System prompt length:", resolved.systemPrompt.length);

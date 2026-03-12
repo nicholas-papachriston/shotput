@@ -1,8 +1,8 @@
 import { dirname } from "node:path";
-import type { ShotputConfig } from "./config";
-import { getPostResolveSourceHooks, runPostResolveSourceHooks } from "./hooks";
-import { evaluateRules } from "./rules";
-import { TemplateType } from "./types";
+import type { ShotputConfig } from "../config";
+import { getPostResolveSourceHooks, runPostResolveSourceHooks } from "../hooks";
+import { evaluateRules } from "../language/shotput/rules";
+import { TemplateType } from "../types";
 
 export const interpolationPattern = /\{\{([^}]+)\}\}/g;
 

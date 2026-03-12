@@ -51,13 +51,13 @@ const lengthTemplate = `# Length Limit Example
 const lengthTemplatePath = join(templateDir, "length-template.md");
 writeFileSync(lengthTemplatePath, lengthTemplate);
 
-try {
-	const base = shotput()
-		.templateDir(templateDir)
-		.responseDir(templateDir)
-		.allowedBasePaths([templateDir, join(import.meta.dir, "..")])
-		.build();
+const base = shotput()
+	.templateDir(templateDir)
+	.responseDir(templateDir)
+	.allowedBasePaths([templateDir, join(import.meta.dir, "..")])
+	.build();
 
+try {
 	const result = await base
 		.templateFile("length-template.md")
 		.maxPromptLength(5000) // Only allow 5KB total

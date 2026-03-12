@@ -1,4 +1,4 @@
-import type { ShotputConfig } from "./config";
+import type { ShotputConfig } from "../../config";
 import { ELSE_MARKER, type ParsedBlock, parseAllBlocks } from "./ruleBlocks";
 import {
 	type RuleContext,

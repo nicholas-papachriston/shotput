@@ -1,6 +1,6 @@
 import { isAbsolute, resolve } from "node:path";
 import type { ShotputConfig } from "./config";
-import { getMatchingPlugin } from "./plugins";
+import { getMatchingPlugin } from "./sources/plugins";
 
 /**
  * Prefixes that should NOT have path resolution applied.

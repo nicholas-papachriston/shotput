@@ -21,3 +21,4 @@ test-temp*/
 fonts
 *.zip
 github
+.cursor/hooks/state

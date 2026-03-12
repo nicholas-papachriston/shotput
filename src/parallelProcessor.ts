@@ -3,12 +3,12 @@ import {
 	detectContentLengths,
 	trimTasksByLength,
 } from "./contentLengthPlanning";
-import { getHandler } from "./handlers";
 import { getPostResolveSourceHooks, runPostResolveSourceHooks } from "./hooks";
 import { getLogger } from "./logger";
 import { type TemplateTask, planTemplates } from "./parallelPlan";
-import { getMatchingPlugin } from "./plugins";
 import { Semaphore } from "./semaphore";
+import { getHandler } from "./sources/handlers";
+import { getMatchingPlugin } from "./sources/plugins";
 import { getCountFnAsync } from "./tokens";
 import type { ProcessingProgress, TemplateResult } from "./types";
 import { TemplateType } from "./types";

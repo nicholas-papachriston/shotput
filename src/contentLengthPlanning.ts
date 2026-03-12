@@ -1,8 +1,8 @@
 import type { ShotputConfig } from "./config";
 import { getLogger } from "./logger";
 import type { TemplateTask } from "./parallelPlan";
-import { getMatchingPlugin } from "./plugins";
 import type { Semaphore } from "./semaphore";
+import { getMatchingPlugin } from "./sources/plugins";
 import type { ProcessingProgress } from "./types";
 import { TemplateType } from "./types";
 

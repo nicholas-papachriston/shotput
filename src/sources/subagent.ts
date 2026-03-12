@@ -1,12 +1,12 @@
 import { join } from "node:path";
-import { type ShotputConfig, createConfig } from "./config";
-import { interpolationStream } from "./interpolationStream";
-import { getLogger } from "./logger";
+import { type ShotputConfig, createConfig } from "../config";
+import { getLogger } from "../logger";
+import { interpolationStream } from "../runtime/interpolationStream";
+import { validatePath } from "../security";
+import { consumeStreamToString } from "../streamUtils";
+import type { ShotputOutput } from "../types";
+import { parseYaml } from "../yaml";
 import type { SourcePlugin } from "./plugins";
-import { validatePath } from "./security";
-import { consumeStreamToString } from "./streamUtils";
-import type { ShotputOutput } from "./types";
-import { parseYaml } from "./yaml";
 
 const log = getLogger("subagent");
 

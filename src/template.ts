@@ -1,8 +1,8 @@
 import { stat } from "node:fs/promises";
 import type { ShotputConfig } from "./config";
 import { FUNCTION_TEMPLATE } from "./function";
-import { getMatchingPlugin } from "./plugins";
 import { SKILL_TEMPLATE } from "./skill";
+import { getMatchingPlugin } from "./sources/plugins";
 import { TemplateType } from "./types";
 
 const GLOB_CHARS = /[*?\[\]]/;

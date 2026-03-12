@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { createXmlParser } from "../../src/xml";
+import { createXmlParser } from "../../src/support/xml";
 
 describe("xml", () => {
 	const parser = createXmlParser();

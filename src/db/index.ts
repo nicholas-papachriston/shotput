@@ -1,5 +1,9 @@
 import type { ShotputConfig } from "../config";
-import type { SourceContext, SourcePlugin, SourceResolution } from "../plugins";
+import type {
+	SourceContext,
+	SourcePlugin,
+	SourceResolution,
+} from "../sources/plugins";
 import type { DbPluginOptions } from "./options";
 import { resolveRedis } from "./redis";
 import { resolveSqlite } from "./sqlite";

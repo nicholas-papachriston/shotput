@@ -1,8 +1,8 @@
 import type { ShotputConfig } from "../config";
 import type { DbPluginOptions } from "../db/options";
-import type { ConfigWithCompiled } from "../engine";
 import type { HookSet } from "../hooks";
-import type { SourcePlugin } from "../plugins";
+import type { ConfigWithCompiled } from "../runtime/engine";
+import type { SourcePlugin } from "../sources/plugins";
 import type { OutputMode } from "../types";
 
 export type ShotputOverrides =
@@ -472,3 +472,60 @@ export abstract class ShotputBase<T> {
 		return this._merge({ sqlite: enabled });
 	}
 }
+
+/**
+ * Coverage checklist to keep the fluent builder aligned with ShotputConfig.
+ * If new config keys are added, update this list and decide whether they need
+ * a dedicated chainable method on ShotputBase.
+ */
+export const BUILDER_CONFIG_COVERAGE = [
+	"debug",
+	"debugFile",
+	"template",
+	"templateDir",
+	"templateFile",
+	"responseDir",
+	"maxPromptLength",
+	"maxBucketFiles",
+	"awsS3Url",
+	"cloudflareR2Url",
+	"httpTimeout",
+	"httpStreamThresholdBytes",
+	"maxConcurrency",
+	"maxRetries",
+	"retryDelay",
+	"retryBackoffMultiplier",
+	"enableContentLengthPlanning",
+	"allowedBasePaths",
+	"allowedDomains",
+	"allowHttp",
+	"allowFunctions",
+	"allowedFunctionPaths",
+	"skillsDir",
+	"allowRemoteSkills",
+	"allowedSkillSources",
+	"s3AccessKeyId",
+	"s3SecretAccessKey",
+	"s3SessionToken",
+	"s3Region",
+	"s3Bucket",
+	"s3VirtualHostedStyle",
+	"maxNestingDepth",
+	"customSources",
+	"context",
+	"expressionEngine",
+	"tokenizer",
+	"tokenizerWorker",
+	"hooks",
+	"outputMode",
+	"sectionBudgets",
+	"sectionRoles",
+	"commandsDir",
+	"parseSubagentFrontmatter",
+	"subagentsDir",
+	"redis",
+	"sqlite",
+	"compressor",
+	"templateSyntax",
+	"jinjaAutoescape",
+] as const satisfies ReadonlyArray<keyof ShotputConfig>;

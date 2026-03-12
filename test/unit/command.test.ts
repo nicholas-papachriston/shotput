@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { createCommandPlugin, parseCommandInvocation } from "../../src/command";
 import { createConfig } from "../../src/config";
 import { shotput } from "../../src/index";
-import { interpolation } from "../../src/interpolation";
+import { interpolation } from "../../src/runtime/interpolation";
 
 const commandsDir = "test/fixtures/commands";
 

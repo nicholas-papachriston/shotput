@@ -1,4 +1,4 @@
-import type { ShotputConfig } from "./config";
+import type { ShotputConfig } from "../config";
 
 /**
  * Context passed to SourcePlugin.resolve(). Contains the raw placeholder path,

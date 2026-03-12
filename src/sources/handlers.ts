@@ -1,15 +1,15 @@
-import type { ShotputConfig } from "./config";
-import { handleCustomSource } from "./custom";
-import { handleDirectory } from "./directory";
-import { handleFile } from "./file";
-import { handleFormat } from "./format";
-import { handleFunction } from "./function";
-import { handleGlob } from "./glob";
-import { handleHttp } from "./http";
+import type { ShotputConfig } from "../config";
+import { handleCustomSource } from "../custom";
+import { handleDirectory } from "../directory";
+import { handleFile } from "../file";
+import { handleFormat } from "../format";
+import { handleFunction } from "../function";
+import { handleGlob } from "../glob";
+import { handleHttp } from "../http";
+import { handleS3 } from "../s3";
+import { handleSkill } from "../skill";
+import { TemplateType } from "../types";
 import { getMatchingPlugin } from "./plugins";
-import { handleS3 } from "./s3";
-import { handleSkill } from "./skill";
-import { TemplateType } from "./types";
 
 export interface HandlerResult {
 	operationResults: string;

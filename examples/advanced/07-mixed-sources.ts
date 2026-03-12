@@ -147,7 +147,7 @@ try {
 		debugFile: join(templateDir, "mixed-debug.md"),
 	};
 
-	const result = await shotput(config);
+	const result = await shotput().with(config).run();
 
 	log.info(result.metadata);
 } catch (error) {

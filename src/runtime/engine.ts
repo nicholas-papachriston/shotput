@@ -1,9 +1,6 @@
 import { join } from "node:path";
-import { createCommandPlugin } from "./command";
-import { type Segment, renderSegments } from "./compiledLoop";
-import { type ShotputConfig, createConfig } from "./config";
-import { createDbPlugin } from "./db";
-import { ensureDirectoryExists } from "./directory";
+import { type ShotputConfig, createConfig } from "../config";
+import { ensureDirectoryExists } from "../directory";
 import {
 	HookAbortError,
 	getPostAssemblyHooks,
@@ -12,21 +9,23 @@ import {
 	runPostAssemblyHooks,
 	runPreOutputHooks,
 	runPreResolveHooks,
-} from "./hooks";
-import { interpolationStream } from "./interpolationStream";
-import type { CompiledJinjaRenderer } from "./jinja";
-import { renderJinjaTemplate } from "./jinja";
-import { getLogger } from "./logger";
-import type { RuleContext } from "./ruleConditions";
-import { evaluateRules } from "./rules";
-import { formatMessages, parseOutputSections } from "./sections";
-import { consumeStreamToString } from "./streamUtils";
-import { createSubagentPlugin, parseSubagentFrontmatter } from "./subagent";
+} from "../hooks";
+import type { CompiledJinjaRenderer } from "../language/jinja";
+import { renderJinjaTemplate } from "../language/jinja";
+import { type Segment, renderSegments } from "../language/shotput/compiledLoop";
+import type { RuleContext } from "../language/shotput/ruleConditions";
+import { evaluateRules } from "../language/shotput/rules";
+import { getLogger } from "../logger";
+import { interpolationStream } from "../runtime/interpolationStream";
+import { registerBuiltins } from "../sources/registerBuiltins";
+import { parseSubagentFrontmatter } from "../sources/subagent";
+import { formatMessages, parseOutputSections } from "../support/sections";
+import { consumeStreamToString } from "../support/streamUtils";
 import type {
 	ShotputOutput,
 	ShotputSegmentStreamOutput,
 	ShotputStreamingOutput,
-} from "./types";
+} from "../types";
 
 const log = getLogger("shotput");
 
@@ -44,25 +43,7 @@ export function buildConfig(
 	let config = createConfig(
 		configOverrides as Partial<ShotputConfig> | undefined,
 	) as ConfigWithCompiled;
-	const customPlugins: import("./plugins").SourcePlugin[] = [
-		...(config.customSources ?? []),
-	];
-	if (config.commandsDir) {
-		customPlugins.unshift(createCommandPlugin());
-	}
-	if (config.subagentsDir) {
-		customPlugins.unshift(createSubagentPlugin());
-	}
-	// Auto-inject db plugin when redis or sqlite is configured via first-class API
-	if (config.redis !== undefined || config.sqlite) {
-		const redisOptions =
-			config.redis === undefined
-				? undefined
-				: typeof config.redis === "string"
-					? { redisUrl: config.redis }
-					: config.redis;
-		customPlugins.unshift(createDbPlugin(redisOptions));
-	}
+	const customPlugins = registerBuiltins(config);
 	if (customPlugins.length > 0) {
 		config = { ...config, customSources: customPlugins };
 	}
@@ -193,7 +174,7 @@ async function runFull(
 				{
 					content: processedTemplate,
 					metadata: resultMetadata.map((m) => ({
-						type: m.type as import("./types").TemplateType,
+						type: m.type as import("../types").TemplateType,
 						path: m.path,
 						length: 0,
 						truncated: false,

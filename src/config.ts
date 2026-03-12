@@ -76,7 +76,7 @@ export interface ShotputConfig {
 	s3Bucket?: string;
 	s3VirtualHostedStyle: boolean;
 	maxNestingDepth: number;
-	customSources?: import("./plugins").SourcePlugin[];
+	customSources?: import("./sources/plugins").SourcePlugin[];
 	context?: Record<string, unknown>;
 	expressionEngine?: "js" | "safe";
 	/** When set, maxPromptLength is in tokens and planning/trimming use token count. */

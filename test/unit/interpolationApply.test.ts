@@ -3,7 +3,7 @@ import {
 	getInterpolationMatchesWithIndices,
 	inclusionBasePathFor,
 	interpolationPattern,
-} from "../../src/interpolationApply";
+} from "../../src/runtime/interpolationApply";
 import { TemplateType } from "../../src/types";
 
 describe("interpolationApply", () => {

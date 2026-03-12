@@ -48,16 +48,16 @@ const singleFileTemplate = `# S3 File Example
 const singleFilePath = join(templateDir, "single-file-template.md");
 writeFileSync(singleFilePath, singleFileTemplate);
 
-try {
-	const s3Base = shotput()
-		.templateDir(templateDir)
-		.responseDir(templateDir)
-		.s3AccessKeyId(process.env["S3_ACCESS_KEY_ID"] ?? "")
-		.s3SecretAccessKey(process.env["S3_SECRET_ACCESS_KEY"] ?? "")
-		.s3Region(process.env["S3_REGION"] ?? "us-east-1")
-		.debug(true)
-		.build();
+const s3Base = shotput()
+	.templateDir(templateDir)
+	.responseDir(templateDir)
+	.s3AccessKeyId(process.env["S3_ACCESS_KEY_ID"] ?? "")
+	.s3SecretAccessKey(process.env["S3_SECRET_ACCESS_KEY"] ?? "")
+	.s3Region(process.env["S3_REGION"] ?? "us-east-1")
+	.debug(true)
+	.build();
 
+try {
 	const result = await s3Base
 		.templateFile("single-file-template.md")
 		.debugFile(join(templateDir, "single-file-debug.md"))

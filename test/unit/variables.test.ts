@@ -5,7 +5,7 @@ import {
 	substituteLoopItemVariables,
 	substituteLoopVariables,
 	substituteVariables,
-} from "../../src/variables";
+} from "../../src/language/shotput/variables";
 
 describe("variables", () => {
 	describe("getVariableValue", () => {

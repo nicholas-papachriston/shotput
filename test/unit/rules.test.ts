@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { createConfig } from "../../src/config";
-import { interpolation } from "../../src/interpolation";
-import { evaluateRules } from "../../src/rules";
+import { evaluateRules } from "../../src/language/shotput/rules";
+import { interpolation } from "../../src/runtime/interpolation";
 
 describe("rules", () => {
 	it("should include content when condition is true", () => {

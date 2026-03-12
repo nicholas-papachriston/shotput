@@ -1,4 +1,4 @@
-import type { ShotputConfig } from "./config";
+import type { ShotputConfig } from "../../config";
 
 const CACHE_CAP = 20_000;
 

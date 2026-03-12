@@ -1,7 +1,7 @@
 import { join } from "node:path";
 import { getLogger } from "./logger";
-import type { SourcePlugin } from "./plugins";
 import { validatePath } from "./security";
+import type { SourcePlugin } from "./sources/plugins";
 import { parseYaml } from "./yaml";
 
 const log = getLogger("command");

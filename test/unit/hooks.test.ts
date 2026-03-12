@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { createConfig } from "../../src/config";
 import { shotput } from "../../src/index";
 import type { HookSet, SourceResult } from "../../src/index";
-import { interpolation } from "../../src/interpolation";
+import { interpolation } from "../../src/runtime/interpolation";
 
 describe("hooks", () => {
 	it("should run preResolve and transform template", async () => {
