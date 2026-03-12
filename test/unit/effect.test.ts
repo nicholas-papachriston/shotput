@@ -1,7 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { Effect, Stream, pipe } from "effect";
 import { shotput } from "../../src";
-import type { ShotputOutput, ShotputStreamingOutput } from "../../src/types";
 import type {
 	EffectShotputBuilder,
 	ShotputEffect,
@@ -9,6 +8,7 @@ import type {
 } from "../../src/effect";
 import { classifyError } from "../../src/effect";
 import { HookAbortError } from "../../src/hooks";
+import type { ShotputOutput, ShotputStreamingOutput } from "../../src/types";
 
 describe("effect interop", () => {
 	it("provides type-mapped builder signatures", () => {
@@ -70,7 +70,9 @@ describe("effect interop", () => {
 
 		const [runOutput, streamedOutput] = await Promise.all([
 			Effect.runPromise(runEffect),
-			Effect.runPromise(Stream.runFold(textStream, "", (acc, chunk) => acc + chunk)),
+			Effect.runPromise(
+				Stream.runFold(textStream, "", (acc, chunk) => acc + chunk),
+			),
 		]);
 
 		expect(runOutput.content).toBe("Hello Shotput from Effect tests.");

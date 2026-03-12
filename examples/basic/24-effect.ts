@@ -59,7 +59,9 @@ const textStream = Stream.unwrap(
 
 const [runtimeOutput, streamedOutput] = await Promise.all([
 	Effect.runPromise(runEffect),
-	Effect.runPromise(Stream.runFold(textStream, "", (acc, chunk) => acc + chunk)),
+	Effect.runPromise(
+		Stream.runFold(textStream, "", (acc, chunk) => acc + chunk),
+	),
 ]);
 
 console.log("Typed adapter validated and Effect runtime interop executed.");
