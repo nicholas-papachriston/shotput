@@ -220,14 +220,20 @@ export class ParallelProcessor {
 			start: t.matchIndex,
 			end: t.matchIndex + t.match.length,
 		}));
+		orderedParts.sort((a, b) => a.start - b.start);
 		const completed = new Map<number, { end: number; replacement: string }>();
 		const hookedReplacements = new Map<number, string>();
 		let lastEmittedEnd = 0;
 		let hasError = false;
+		let nextDrainIndex = 0;
 
 		const tryDrain = (): void => {
-			for (const part of orderedParts) {
-				if (part.start < lastEmittedEnd) continue;
+			while (nextDrainIndex < orderedParts.length) {
+				const part = orderedParts[nextDrainIndex];
+				if (part.start < lastEmittedEnd) {
+					nextDrainIndex++;
+					continue;
+				}
 				const done = completed.get(part.start);
 				if (!done) break;
 				if (emit && !hasError) {
@@ -236,6 +242,7 @@ export class ParallelProcessor {
 				}
 				lastEmittedEnd = part.end;
 				completed.delete(part.start);
+				nextDrainIndex++;
 			}
 		};
 
@@ -259,7 +266,11 @@ export class ParallelProcessor {
 					stage: "processing",
 				});
 
-				const result = await this.processSingleTemplate(task, maxLength);
+				const perTaskBudget = Math.max(
+					0,
+					Math.floor(maxLength / Math.max(1, selectedTasks.length)),
+				);
+				const result = await this.processSingleTemplate(task, perTaskBudget);
 				const processed = result.processed;
 
 				if (!hasError) {
@@ -313,7 +324,34 @@ export class ParallelProcessor {
 			}
 		});
 
-		const results = await Promise.all(processingPromises);
+		const settledResults = await Promise.allSettled(processingPromises);
+		const results: Array<{
+			task: TemplateTask;
+			processed: ProcessedContent | null;
+			result: TemplateResult;
+		}> = [];
+		for (let i = 0; i < settledResults.length; i++) {
+			const settled = settledResults[i];
+			if (settled?.status === "fulfilled") {
+				results.push(settled.value);
+				continue;
+			}
+			const task = selectedTasks[i];
+			if (task === undefined) continue;
+			hasError = true;
+			results.push({
+				task,
+				processed: null,
+				result: {
+					type: task.type,
+					path: task.path,
+					length: 0,
+					truncated: false,
+					processingTime: Date.now() - this.startTime,
+					error: `[Error reading ${task.path}]`,
+				},
+			});
+		}
 
 		if (emit && !hasError) {
 			tryDrain();

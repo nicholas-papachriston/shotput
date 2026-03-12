@@ -25,9 +25,16 @@ const FORMAT_PREFIXES = [
 	"md:",
 	"jinja:",
 ] as const;
+export const FORMAT_PATH_PREFIX_REGEX = /^(yaml|json|jsonl|xml|md|jinja):/;
 type FormatKind = (typeof FORMAT_PREFIXES)[number] extends `${infer F}:`
 	? F
 	: never;
+const STRUCTURED_FORMATS = new Set<FormatKind>([
+	"yaml",
+	"json",
+	"jsonl",
+	"xml",
+]);
 
 function parseFormatPath(path: string): {
 	format: FormatKind;
@@ -122,9 +129,17 @@ export const handleFormat = async (
 				throw new Error(`Unsupported format: ${format}`);
 		}
 
-		const used = Math.min(expanded.length, remainingLength);
+		let replacement = expanded;
+		if (
+			remainingLength >= 0 &&
+			expanded.length > remainingLength &&
+			STRUCTURED_FORMATS.has(format)
+		) {
+			replacement = `[Truncated ${format} content: ${expanded.length} chars exceeds budget ${remainingLength}]`;
+		}
+		const used = Math.min(replacement.length, remainingLength);
 		const truncated =
-			used < expanded.length ? expanded.slice(0, used) : expanded;
+			used < replacement.length ? replacement.slice(0, used) : replacement;
 
 		return {
 			operationResults: result.replace(match, truncated),

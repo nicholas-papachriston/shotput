@@ -1,3 +1,4 @@
+import type { EffectShotputBuilder } from "../effect/builder";
 import type {
 	ShotputOutput,
 	ShotputSegmentStreamOutput,
@@ -34,6 +35,14 @@ export class ShotputBuilder extends ShotputBase<ShotputBuilder> {
 	}
 
 	/**
+	 * Return a type-mapped builder for Effect-TS interop.
+	 * This is a type-only adapter; runtime behavior is unchanged.
+	 */
+	effect(): EffectShotputBuilder {
+		return this as unknown as EffectShotputBuilder;
+	}
+
+	/**
 	 * Run the full pipeline (same as this.build().run()).
 	 */
 	run(): Promise<ShotputOutput> {
@@ -45,6 +54,13 @@ export class ShotputBuilder extends ShotputBase<ShotputBuilder> {
 	 */
 	stream(): Promise<ShotputStreamingOutput> {
 		return this.build().stream();
+	}
+
+	/**
+	 * Alias of `.stream()` for stream-first call sites.
+	 */
+	runStream(): Promise<ShotputStreamingOutput> {
+		return this.stream();
 	}
 
 	/**

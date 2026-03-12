@@ -5,9 +5,8 @@ import type { ConfigWithCompiled } from "../runtime/engine";
 import type { SourcePlugin } from "../sources/plugins";
 import type { OutputMode } from "../types";
 
-export type ShotputOverrides =
-	| Partial<ShotputConfig>
-	| Partial<ConfigWithCompiled>;
+export type ShotputOverrides = Partial<ShotputConfig> &
+	Partial<ConfigWithCompiled>;
 
 export function mergeOverrides(
 	base: ShotputOverrides | undefined,

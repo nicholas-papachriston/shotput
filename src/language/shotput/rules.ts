@@ -48,7 +48,7 @@ export function evaluateRules(
 
 	const context = config.context ?? {};
 	const env = typeof process !== "undefined" ? process.env : {};
-	const params = (config as { params?: Record<string, unknown> }).params;
+	const params = config.params;
 	const engine = config.expressionEngine ?? "js";
 	const ctx: RuleContext = { context, env, params };
 

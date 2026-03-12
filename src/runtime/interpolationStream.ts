@@ -108,7 +108,8 @@ export function interpolationStream(
 			duration: number;
 		}>;
 	}> {
-		const emit = (segment: string) => controller.enqueue(segment);
+		const bufferedSegments: string[] = [];
+		const emit = (segment: string) => bufferedSegments.push(segment);
 		let currentMetadata: Array<{
 			path: string;
 			type: string;
@@ -146,10 +147,11 @@ export function interpolationStream(
 		);
 
 		if (currentMetadata.length === 0) {
-			emit(contentAfterVariables);
+			bufferedSegments.push(contentAfterVariables);
 		}
 
 		if (parallelResult.pendingSuffix !== undefined) {
+			const pendingSuffix = parallelResult.pendingSuffix;
 			const moreMatches = processedTemplate.match(interpolationPattern);
 			if (moreMatches && depth < maxDepth && finalRemainingLength > 0) {
 				log.info(
@@ -174,11 +176,7 @@ export function interpolationStream(
 						expandingPaths,
 						resolvedLiteralBox,
 					);
-					// Processor already emitted prefix + replacement; emit only the suffix part (transformed by nested interpolation)
-					const suffixStart =
-						parallelResult.content.length -
-						(parallelResult.pendingSuffix?.length ?? 0);
-					emit(nested.processedTemplate.slice(suffixStart));
+					controller.enqueue(nested.processedTemplate);
 					currentMetadata = [
 						...currentMetadata,
 						...(nested.resultMetadata ?? []),
@@ -190,7 +188,14 @@ export function interpolationStream(
 					}
 				}
 			} else {
-				emit(parallelResult.pendingSuffix);
+				for (const segment of bufferedSegments) {
+					controller.enqueue(segment);
+				}
+				controller.enqueue(pendingSuffix);
+			}
+		} else {
+			for (const segment of bufferedSegments) {
+				controller.enqueue(segment);
 			}
 		}
 

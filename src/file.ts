@@ -1,3 +1,4 @@
+import { relative } from "node:path";
 import type { ShotputConfig } from "./config";
 import { processContent } from "./content";
 import { handleFileStream } from "./fileStream";
@@ -52,7 +53,12 @@ export const handleFile = async (
 			return { ...streamResult, replacement: undefined };
 		}
 
-		const fileContent = `filename:${validatedPath}:\n${await file.text()}`;
+		const relativeToCwd = relative(process.cwd(), validatedPath);
+		const displayPath =
+			relativeToCwd.length > 0 && !relativeToCwd.startsWith("..")
+				? relativeToCwd
+				: validatedPath;
+		const fileContent = `filename:${displayPath}:\n${await file.text()}`;
 		const processed = await processContent(
 			fileContent,
 			remainingLength,

@@ -30,7 +30,7 @@ export function compileShotputTemplate(
 	if (merged.templateSyntax === "jinja2") {
 		const compiledJinja = getCompiledJinjaRenderer(template);
 		return new ShotputProgram({
-			...baseConfig,
+			...merged,
 			template,
 			_compiledJinjaRenderer: compiledJinja,
 		} as Partial<ConfigWithCompiled>);
@@ -39,7 +39,7 @@ export function compileShotputTemplate(
 	const engine = (merged.expressionEngine ?? "js") as "js" | "safe";
 	const compiledRoot = compileLoopBody(template, { engine });
 	return new ShotputProgram({
-		...baseConfig,
+		...merged,
 		template,
 		_compiledRootSegments: compiledRoot,
 	} as Partial<ConfigWithCompiled>);
@@ -71,5 +71,10 @@ export * from "./sources";
 export * from "./support";
 
 if (require.main === module) {
-	shotput().run().catch(console.error);
+	shotput()
+		.run()
+		.catch((error) => {
+			console.error(error);
+			process.exitCode = 1;
+		});
 }

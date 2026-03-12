@@ -63,6 +63,30 @@ interface RunStreamingInternalResult {
 	subagentFrontmatter?: Record<string, unknown>;
 }
 
+function normalizeError(error: unknown): Error {
+	return error instanceof Error ? error : new Error(String(error));
+}
+
+function extractSubagentFrontmatter(
+	content: string,
+	parseFrontmatter: boolean,
+): {
+	body: string;
+	frontmatter?: Record<string, unknown>;
+} {
+	if (!parseFrontmatter) {
+		return { body: content };
+	}
+	const parsed = parseSubagentFrontmatter(content);
+	if (!parsed) {
+		return { body: content };
+	}
+	return {
+		body: parsed.body,
+		frontmatter: parsed.frontmatter as Record<string, unknown>,
+	};
+}
+
 export async function runStreamingInternal(
 	config: ShotputConfig | ConfigWithCompiled,
 ): Promise<RunStreamingInternalResult> {
@@ -73,23 +97,21 @@ export async function runStreamingInternal(
 	let subagentFrontmatter: Record<string, unknown> | undefined;
 	if (cfg.template !== undefined) {
 		templateContent = cfg.template;
-		if (cfg.parseSubagentFrontmatter) {
-			const parsed = parseSubagentFrontmatter(templateContent);
-			if (parsed) {
-				templateContent = parsed.body;
-				subagentFrontmatter = parsed.frontmatter as Record<string, unknown>;
-			}
-		}
+		const extracted = extractSubagentFrontmatter(
+			templateContent,
+			cfg.parseSubagentFrontmatter ?? false,
+		);
+		templateContent = extracted.body;
+		subagentFrontmatter = extracted.frontmatter;
 	} else {
 		const templatePath = join(cfg.templateDir, cfg.templateFile);
 		templateContent = await Bun.file(templatePath).text();
-		if (cfg.parseSubagentFrontmatter) {
-			const parsed = parseSubagentFrontmatter(templateContent);
-			if (parsed) {
-				templateContent = parsed.body;
-				subagentFrontmatter = parsed.frontmatter as Record<string, unknown>;
-			}
-		}
+		const extracted = extractSubagentFrontmatter(
+			templateContent,
+			cfg.parseSubagentFrontmatter ?? false,
+		);
+		templateContent = extracted.body;
+		subagentFrontmatter = extracted.frontmatter;
 	}
 
 	const preResolveHooks = getPreResolveHooks(cfg);
@@ -105,7 +127,7 @@ export async function runStreamingInternal(
 	if (compiledRoot !== undefined) {
 		const context = cfg.context ?? {};
 		const env = typeof process !== "undefined" ? process.env : {};
-		const params = (cfg as { params?: Record<string, unknown> }).params;
+		const params = cfg.params;
 		const ctx: RuleContext = { context, env, params };
 		templateContent = renderSegments(compiledRoot, cfg, ctx, undefined);
 	} else if (
@@ -180,7 +202,10 @@ async function runFull(
 						truncated: false,
 						processingTime: m.duration,
 					})),
-					remainingLength: config.maxPromptLength - processedTemplate.length,
+					remainingLength: Math.max(
+						0,
+						config.maxPromptLength - processedTemplate.length,
+					),
 				},
 				postAssemblyHooks,
 			);
@@ -239,9 +264,10 @@ async function runFull(
 
 		return resultObject;
 	} catch (error) {
-		log.error(`Failed to process template: ${error}`);
+		const normalizedError = normalizeError(error);
+		log.error(`Failed to process template: ${normalizedError}`);
 		return {
-			error: error as Error,
+			error: normalizedError,
 			metadata: { duration: Date.now() - startTime, resultMetadata: [] },
 		};
 	}
@@ -275,7 +301,8 @@ export async function runShotputStreaming(
 			metadata: resolvedMetadata,
 		};
 	} catch (error) {
-		log.error(`Failed to process template: ${error}`);
+		const normalizedError = normalizeError(error);
+		log.error(`Failed to process template: ${normalizedError}`);
 		return {
 			stream: new ReadableStream<string>({
 				start(c) {
@@ -286,7 +313,7 @@ export async function runShotputStreaming(
 				duration: Date.now() - startTime,
 				resultMetadata: [],
 			}),
-			error: error as Error,
+			error: normalizedError,
 		};
 	}
 }
@@ -313,7 +340,8 @@ export async function runShotputStreamingSegments(
 			literalMapPromise,
 		};
 	} catch (error) {
-		log.error(`Failed to process template: ${error}`);
+		const normalizedError = normalizeError(error);
+		log.error(`Failed to process template: ${normalizedError}`);
 		return {
 			stream: new ReadableStream<string>({
 				start(c) {
@@ -324,7 +352,7 @@ export async function runShotputStreamingSegments(
 				duration: Date.now() - startTime,
 				resultMetadata: [],
 			}),
-			error: error as Error,
+			error: normalizedError,
 		};
 	}
 }

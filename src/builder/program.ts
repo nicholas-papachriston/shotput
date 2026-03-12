@@ -1,3 +1,4 @@
+import type { EffectShotputProgram } from "../effect/program";
 import {
 	runShotput,
 	runShotputStreaming,
@@ -32,6 +33,14 @@ export class ShotputProgram extends ShotputBase<ShotputProgram> {
 	}
 
 	/**
+	 * Return a type-mapped program for Effect-TS interop.
+	 * This is a type-only adapter; runtime behavior is unchanged.
+	 */
+	effect(): EffectShotputProgram {
+		return this as unknown as EffectShotputProgram;
+	}
+
+	/**
 	 * Run the full pipeline (postAssembly, preOutput, sectioning). Returns resolved content/sections/messages.
 	 */
 	run(): Promise<ShotputOutput> {
@@ -43,6 +52,13 @@ export class ShotputProgram extends ShotputBase<ShotputProgram> {
 	 */
 	stream(): Promise<ShotputStreamingOutput> {
 		return runShotputStreaming(this.baseOverrides);
+	}
+
+	/**
+	 * Alias of `.stream()` for stream-first call sites.
+	 */
+	runStream(): Promise<ShotputStreamingOutput> {
+		return this.stream();
 	}
 
 	/**

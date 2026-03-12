@@ -16,9 +16,11 @@ const conditionFnCache = new Map<
 		params: Record<string, unknown>,
 	) => boolean
 >();
+const CONDITION_FN_CACHE_CAP = 20_000;
 
 const FLAGS_PATH_REGEX = /^context\.flags\.(\w+)$/;
 const flagsKeyCache = new Map<string, string | null>();
+const FLAGS_KEY_CACHE_CAP = 20_000;
 
 export function evaluateConditionJs(expr: string, ctx: RuleContext): boolean {
 	const trimmed = expr.trim();
@@ -26,6 +28,10 @@ export function evaluateConditionJs(expr: string, ctx: RuleContext): boolean {
 	if (flagsKey === undefined) {
 		const flagsMatch = FLAGS_PATH_REGEX.exec(trimmed);
 		flagsKey = flagsMatch ? (flagsMatch[1] ?? null) : null;
+		if (flagsKeyCache.size >= FLAGS_KEY_CACHE_CAP) {
+			const first = flagsKeyCache.keys().next().value;
+			if (first !== undefined) flagsKeyCache.delete(first);
+		}
 		flagsKeyCache.set(trimmed, flagsKey);
 	}
 	if (flagsKey !== null) {
@@ -50,6 +56,10 @@ export function evaluateConditionJs(expr: string, ctx: RuleContext): boolean {
 				env: NodeJS.ProcessEnv,
 				params: Record<string, unknown>,
 			) => boolean;
+			if (conditionFnCache.size >= CONDITION_FN_CACHE_CAP) {
+				const first = conditionFnCache.keys().next().value;
+				if (first !== undefined) conditionFnCache.delete(first);
+			}
 			conditionFnCache.set(trimmed, fn);
 		}
 		return fn(ctx.context, ctx.env, ctx.params ?? {});
@@ -61,16 +71,34 @@ export function evaluateConditionJs(expr: string, ctx: RuleContext): boolean {
 
 function getSafeValue(path: string, ctx: RuleContext): unknown {
 	if (path.startsWith("context.")) {
-		const key = path.slice(8).trim();
-		return ctx.context[key];
+		const keyPath = path.slice(8).trim();
+		const keys = getValuePathKeys(keyPath);
+		let current: unknown = ctx.context;
+		for (const key of keys) {
+			if (current == null || typeof current !== "object") return undefined;
+			current = (current as Record<string, unknown>)[key];
+		}
+		return current;
 	}
 	if (path.startsWith("env.")) {
-		const key = path.slice(4).trim();
-		return ctx.env[key];
+		const keyPath = path.slice(4).trim();
+		const keys = getValuePathKeys(keyPath);
+		let current: unknown = ctx.env;
+		for (const key of keys) {
+			if (current == null || typeof current !== "object") return undefined;
+			current = (current as Record<string, unknown>)[key];
+		}
+		return current;
 	}
 	if (path.startsWith("params.")) {
-		const key = path.slice(7).trim();
-		return ctx.params?.[key];
+		const keyPath = path.slice(7).trim();
+		const keys = getValuePathKeys(keyPath);
+		let current: unknown = ctx.params;
+		for (const key of keys) {
+			if (current == null || typeof current !== "object") return undefined;
+			current = (current as Record<string, unknown>)[key];
+		}
+		return current;
 	}
 	if (path === "true") return true;
 	if (path === "false") return false;
@@ -140,19 +168,33 @@ export function evaluateConditionSafe(
 ): boolean {
 	const expr = _expr.trim();
 	if (!expr) return false;
-	const parts = expr.split(/\s+(==|!=|&&|\|\|)\s+/);
-	if (parts.length === 1) {
-		const v = getSafeValue(expr.trim(), ctx);
-		return Boolean(v);
-	}
-	if (parts.length === 3) {
-		const [left, op, right] = parts;
-		const l = getSafeValue(left.trim(), ctx);
-		const r = getSafeValue(right.trim(), ctx);
-		if (op === "==") return l === r;
-		if (op === "!=") return l !== r;
-		if (op === "&&") return Boolean(l) && Boolean(r);
-		if (op === "||") return Boolean(l) || Boolean(r);
+
+	const evaluateSimple = (segment: string): boolean => {
+		const parts = segment.trim().split(/\s+(==|!=)\s+/);
+		if (parts.length === 1) {
+			const value = getSafeValue(segment.trim(), ctx);
+			return Boolean(value);
+		}
+		if (parts.length === 3) {
+			const [left, op, right] = parts;
+			const l = getSafeValue(left.trim(), ctx);
+			const r = getSafeValue(right.trim(), ctx);
+			if (op === "==") return l === r;
+			if (op === "!=") return l !== r;
+		}
+		log.warn(`Unsupported safe condition segment "${segment}" in "${expr}"`);
+		return false;
+	};
+
+	const orSegments = expr.split(/\s+\|\|\s+/);
+	for (const orSegment of orSegments) {
+		const andSegments = orSegment.split(/\s+&&\s+/);
+		let andResult = true;
+		for (const andSegment of andSegments) {
+			andResult = andResult && evaluateSimple(andSegment);
+			if (!andResult) break;
+		}
+		if (andResult) return true;
 	}
 	return false;
 }

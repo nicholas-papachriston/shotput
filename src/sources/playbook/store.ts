@@ -1,4 +1,4 @@
-import { join, resolve } from "node:path";
+import { join, resolve, sep } from "node:path";
 import { getLogger } from "../../logger";
 import type { PlaybookPluginOptions } from "./plugin";
 
@@ -14,10 +14,11 @@ export async function updatePlaybook(
 	options?: PlaybookPluginOptions,
 ): Promise<void> {
 	const dir = options?.dir ?? join(process.cwd(), "playbooks");
+	const resolvedDir = `${resolve(dir)}${sep}`;
 	const ext = id.includes(".") ? "" : ".md";
 	const filePath = resolve(dir, `${id}${ext}`);
 
-	if (!filePath.startsWith(resolve(dir))) {
+	if (!filePath.startsWith(resolvedDir)) {
 		throw new Error(`Path traversal detected: ${filePath}`);
 	}
 

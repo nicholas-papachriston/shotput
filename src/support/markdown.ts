@@ -15,7 +15,13 @@ interface BunMarkdown {
 	): string;
 }
 
-const markdownApi = (Bun as unknown as { markdown: BunMarkdown }).markdown;
+const getMarkdownApi = (): BunMarkdown => {
+	const bunWithMarkdown = Bun as unknown as { markdown?: BunMarkdown };
+	if (bunWithMarkdown.markdown === undefined) {
+		throw new Error("Bun.markdown API is unavailable in this runtime");
+	}
+	return bunWithMarkdown.markdown;
+};
 
 /**
  * Convert Markdown to HTML. GFM extensions (tables, strikethrough, task lists) are enabled by default.
@@ -34,7 +40,7 @@ export function markdownToHtml(
 	text: string,
 	options?: Record<string, unknown>,
 ): string {
-	return markdownApi.html(text, options);
+	return getMarkdownApi().html(text, options);
 }
 
 /**
@@ -45,7 +51,7 @@ export function markdownToHtml(
  * @returns Plain text (headings, paragraphs, links etc. as raw text)
  */
 export function markdownToPlaintext(text: string): string {
-	return markdownApi.render(
+	return getMarkdownApi().render(
 		text,
 		{
 			heading: (children) => children,

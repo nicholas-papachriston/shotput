@@ -7,6 +7,8 @@ import { parseYaml } from "./yaml";
 const log = getLogger("command");
 
 export const COMMAND_PREFIX = "command:";
+const escapeRegex = (value: string): string =>
+	value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 export interface CommandFrontmatter {
 	name: string;
@@ -151,10 +153,16 @@ export const createCommandPlugin = (): SourcePlugin => ({
 		const params: Record<string, string> = { ...defaults, ...providedParams };
 
 		let substituted = body;
-		for (const [key, value] of Object.entries(params)) {
+		const paramKeys = Object.keys(params);
+		if (paramKeys.length > 0) {
+			const keyAlternation = paramKeys.map(escapeRegex).join("|");
+			const placeholderPattern = new RegExp(
+				`\\{\\{\\s*\\$(${keyAlternation})\\s*\\}\\}`,
+				"g",
+			);
 			substituted = substituted.replace(
-				new RegExp(`\\{\\{\\s*\\$${key}\\s*\\}\\}`, "g"),
-				value,
+				placeholderPattern,
+				(_match: string, key: string) => params[key] ?? "",
 			);
 		}
 

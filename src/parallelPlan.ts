@@ -1,4 +1,5 @@
 import type { ShotputConfig } from "./config";
+import { FORMAT_PATH_PREFIX_REGEX } from "./format";
 import { getLogger } from "./logger";
 import { resolveTemplatePath } from "./pathResolve";
 import { findTemplateType } from "./template";
@@ -80,12 +81,10 @@ export async function planTemplates(
 
 	const tasks: TemplateTask[] = [];
 
-	const FORMAT_PREFIX = /^(yaml|json|jsonl|xml|md|jinja):/;
-
 	for (let i = 0; i < matchesWithIndex.length; i++) {
 		const { match, index: matchIndex } = matchesWithIndex[i];
 		const rawPath = match.slice(2, -2).trim();
-		const formatMatch = rawPath.match(FORMAT_PREFIX);
+		const formatMatch = rawPath.match(FORMAT_PATH_PREFIX_REGEX);
 
 		if (formatMatch) {
 			const format = formatMatch[1];

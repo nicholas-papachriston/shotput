@@ -97,6 +97,13 @@ export interface ParsedBlock {
 	elseIndex: number;
 }
 
+export interface BlockMatch {
+	0: string;
+	1: string;
+	index: number;
+	input: string;
+}
+
 const PARSE_CACHE_CAP = 100;
 const parseCache = new Map<string, ParsedBlock[]>();
 
@@ -153,17 +160,19 @@ export function parseAllBlocks(content: string): ParsedBlock[] {
 export function findNextBlock(
 	content: string,
 ):
-	| { kind: "if"; match: RegExpExecArray }
-	| { kind: "each"; match: RegExpExecArray }
+	| { kind: "if"; match: BlockMatch }
+	| { kind: "each"; match: BlockMatch }
 	| null {
 	BLOCK_OPEN_REGEX.lastIndex = 0;
 	const m = BLOCK_OPEN_REGEX.exec(content);
 	if (!m) return null;
 	const kind = m[1] as "if" | "each";
 	const expr = m[2] ?? "";
-	// match[1] must be the expression for rules.ts compatibility
-	const fakeExecArray = [m[0], expr] as unknown as RegExpExecArray;
-	(fakeExecArray as { index: number; input: string }).index = m.index;
-	(fakeExecArray as { index: number; input: string }).input = content;
-	return { kind, match: fakeExecArray };
+	const match: BlockMatch = {
+		0: m[0],
+		1: expr,
+		index: m.index,
+		input: content,
+	};
+	return { kind, match };
 }

@@ -21,6 +21,7 @@ import {
 const log = getLogger("interpolation");
 
 const REGEX_ESCAPE = /[.*+?^${}()|[\]\\]/g;
+const SUBSTITUTE_LITERALS_REGEX_CACHE_CAP = 10_000;
 
 /** Cache compiled regex for substituteLiterals keyed by sorted keys (same keys => reuse regex). */
 const substituteLiteralsRegexCache = new Map<string, RegExp>();
@@ -34,6 +35,14 @@ function substituteLiterals(
 	const cacheKey = JSON.stringify(keys);
 	let regex = substituteLiteralsRegexCache.get(cacheKey);
 	if (!regex) {
+		if (
+			substituteLiteralsRegexCache.size >= SUBSTITUTE_LITERALS_REGEX_CACHE_CAP
+		) {
+			const oldestKey = substituteLiteralsRegexCache.keys().next().value;
+			if (oldestKey !== undefined) {
+				substituteLiteralsRegexCache.delete(oldestKey);
+			}
+		}
 		const escaped = keys.map((k) => k.replace(REGEX_ESCAPE, "\\$&"));
 		regex = new RegExp(escaped.join("|"), "g");
 		substituteLiteralsRegexCache.set(cacheKey, regex);
@@ -77,7 +86,7 @@ export const interpolation = async (
 		const out = { processedTemplate: contentAfterVariables, remainingLength };
 		if (depth === 0 && resolvedLiteralBox?.literals.size) {
 			out.processedTemplate = substituteLiterals(
-				content,
+				contentAfterVariables,
 				resolvedLiteralBox.literals,
 			);
 		}

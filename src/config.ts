@@ -1,3 +1,5 @@
+import { getLogger } from "./logger";
+
 /**
  * Configuration for Shotput template resolution.
  *
@@ -78,6 +80,7 @@ export interface ShotputConfig {
 	maxNestingDepth: number;
 	customSources?: import("./sources/plugins").SourcePlugin[];
 	context?: Record<string, unknown>;
+	params?: Record<string, unknown>;
 	expressionEngine?: "js" | "safe";
 	/** When set, maxPromptLength is in tokens and planning/trimming use token count. */
 	tokenizer?: "openai" | "cl100k_base" | ((text: string) => number);
@@ -156,6 +159,42 @@ export const DEFAULT_CONFIG: ShotputConfig = {
 };
 
 const JINJA_TEMPLATE_EXTENSIONS = [".jinja", ".jinja2", ".j2"] as const;
+const log = getLogger("config");
+
+const parseIntEnv = (name: string, fallback: number): number => {
+	const raw = process.env[name];
+	if (raw === undefined) return fallback;
+	const parsed = Number.parseInt(raw, 10);
+	return Number.isNaN(parsed) ? fallback : parsed;
+};
+
+const parseFloatEnv = (name: string, fallback: number): number => {
+	const raw = process.env[name];
+	if (raw === undefined) return fallback;
+	const parsed = Number.parseFloat(raw);
+	return Number.isNaN(parsed) ? fallback : parsed;
+};
+
+const parseBooleanEnv = (name: string, fallback: boolean): boolean => {
+	const raw = process.env[name];
+	return raw !== undefined ? raw === "true" : fallback;
+};
+
+const parseOutputModeEnv = (): "flat" | "sectioned" | "messages" => {
+	const raw = process.env["OUTPUT_MODE"];
+	if (raw === "flat" || raw === "sectioned" || raw === "messages") {
+		return raw as "flat" | "sectioned" | "messages";
+	}
+	return DEFAULT_CONFIG.outputMode ?? "flat";
+};
+
+const parseTemplateSyntaxEnv = (): "shotput" | "jinja2" => {
+	const raw = process.env["TEMPLATE_SYNTAX"];
+	if (raw === "shotput" || raw === "jinja2") {
+		return raw as "shotput" | "jinja2";
+	}
+	return DEFAULT_CONFIG.templateSyntax ?? "shotput";
+};
 
 /**
  * Returns a configuration object populated from environment variables,
@@ -168,32 +207,28 @@ export const getEnvConfig = (): ShotputConfig => ({
 	templateDir: process.env["TEMPLATE_DIR"] ?? DEFAULT_CONFIG.templateDir,
 	templateFile: process.env["TEMPLATE_PATH"] ?? DEFAULT_CONFIG.templateFile,
 	responseDir: process.env["RESPONSE_DIR"] ?? DEFAULT_CONFIG.responseDir,
-	maxPromptLength:
-		Number.parseInt(process.env["MAX_PROMPT_LENGTH"] ?? "") ||
+	maxPromptLength: parseIntEnv(
+		"MAX_PROMPT_LENGTH",
 		DEFAULT_CONFIG.maxPromptLength,
-	maxBucketFiles:
-		Number.parseInt(process.env["MAX_BUCKET_FILES"] ?? "") ||
+	),
+	maxBucketFiles: parseIntEnv(
+		"MAX_BUCKET_FILES",
 		DEFAULT_CONFIG.maxBucketFiles,
+	),
 	awsS3Url: process.env["AWS_S3_URL"] ?? DEFAULT_CONFIG.awsS3Url,
 	cloudflareR2Url: process.env["CLOUDFLARE_R2_URL"],
-	httpTimeout:
-		Number.parseInt(process.env["HTTP_TIMEOUT"] ?? "") ||
-		DEFAULT_CONFIG.httpTimeout,
-	httpStreamThresholdBytes:
-		Number.parseInt(process.env["HTTP_STREAM_THRESHOLD_BYTES"] ?? "") ||
+	httpTimeout: parseIntEnv("HTTP_TIMEOUT", DEFAULT_CONFIG.httpTimeout),
+	httpStreamThresholdBytes: parseIntEnv(
+		"HTTP_STREAM_THRESHOLD_BYTES",
 		DEFAULT_CONFIG.httpStreamThresholdBytes,
-	maxConcurrency:
-		Number.parseInt(process.env["MAX_CONCURRENCY"] ?? "") ||
-		DEFAULT_CONFIG.maxConcurrency,
-	maxRetries:
-		Number.parseInt(process.env["MAX_RETRIES"] ?? "") ||
-		DEFAULT_CONFIG.maxRetries,
-	retryDelay:
-		Number.parseInt(process.env["RETRY_DELAY"] ?? "") ||
-		DEFAULT_CONFIG.retryDelay,
-	retryBackoffMultiplier:
-		Number.parseFloat(process.env["RETRY_BACKOFF_MULTIPLIER"] ?? "") ||
+	),
+	maxConcurrency: parseIntEnv("MAX_CONCURRENCY", DEFAULT_CONFIG.maxConcurrency),
+	maxRetries: parseIntEnv("MAX_RETRIES", DEFAULT_CONFIG.maxRetries),
+	retryDelay: parseIntEnv("RETRY_DELAY", DEFAULT_CONFIG.retryDelay),
+	retryBackoffMultiplier: parseFloatEnv(
+		"RETRY_BACKOFF_MULTIPLIER",
 		DEFAULT_CONFIG.retryBackoffMultiplier,
+	),
 	enableContentLengthPlanning:
 		process.env["ENABLE_CONTENT_LENGTH_PLANNING"] !== "false" &&
 		DEFAULT_CONFIG.enableContentLengthPlanning,
@@ -203,16 +238,19 @@ export const getEnvConfig = (): ShotputConfig => ({
 	allowedDomains: process.env["ALLOWED_DOMAINS"]
 		? process.env["ALLOWED_DOMAINS"].split(",")
 		: [...DEFAULT_CONFIG.allowedDomains],
-	allowHttp: process.env["ALLOW_HTTP"] === "true" || DEFAULT_CONFIG.allowHttp,
-	allowFunctions:
-		process.env["ALLOW_FUNCTIONS"] === "true" || DEFAULT_CONFIG.allowFunctions,
+	allowHttp: parseBooleanEnv("ALLOW_HTTP", DEFAULT_CONFIG.allowHttp),
+	allowFunctions: parseBooleanEnv(
+		"ALLOW_FUNCTIONS",
+		DEFAULT_CONFIG.allowFunctions,
+	),
 	allowedFunctionPaths: process.env["ALLOWED_FUNCTION_PATHS"]
 		? process.env["ALLOWED_FUNCTION_PATHS"].split(",")
 		: [...DEFAULT_CONFIG.allowedFunctionPaths],
 	skillsDir: process.env["SKILLS_DIR"] ?? DEFAULT_CONFIG.skillsDir,
-	allowRemoteSkills:
-		process.env["ALLOW_REMOTE_SKILLS"] === "true" ||
+	allowRemoteSkills: parseBooleanEnv(
+		"ALLOW_REMOTE_SKILLS",
 		DEFAULT_CONFIG.allowRemoteSkills,
+	),
 	allowedSkillSources: process.env["ALLOWED_SKILL_SOURCES"]
 		? process.env["ALLOWED_SKILL_SOURCES"].split(",")
 		: [...DEFAULT_CONFIG.allowedSkillSources],
@@ -236,29 +274,44 @@ export const getEnvConfig = (): ShotputConfig => ({
 		process.env["S3_BUCKET"] ??
 		process.env["AWS_BUCKET"] ??
 		DEFAULT_CONFIG.s3Bucket,
-	s3VirtualHostedStyle:
-		process.env["S3_VIRTUAL_HOSTED_STYLE"] === "true" ||
+	s3VirtualHostedStyle: parseBooleanEnv(
+		"S3_VIRTUAL_HOSTED_STYLE",
 		DEFAULT_CONFIG.s3VirtualHostedStyle,
-	maxNestingDepth:
-		Number.parseInt(process.env["MAX_NESTING_DEPTH"] ?? "") ||
+	),
+	maxNestingDepth: parseIntEnv(
+		"MAX_NESTING_DEPTH",
 		DEFAULT_CONFIG.maxNestingDepth,
+	),
 	context: DEFAULT_CONFIG.context,
 	expressionEngine:
 		(process.env["EXPRESSION_ENGINE"] as "js" | "safe") === "safe"
 			? "safe"
 			: DEFAULT_CONFIG.expressionEngine,
-	outputMode:
-		(process.env["OUTPUT_MODE"] as "flat" | "sectioned" | "messages") ||
-		DEFAULT_CONFIG.outputMode,
-	sectionBudgets: process.env["SECTION_BUDGETS"]
-		? (JSON.parse(process.env["SECTION_BUDGETS"]) as Record<string, number>)
-		: DEFAULT_CONFIG.sectionBudgets,
-	sectionRoles: process.env["SECTION_ROLES"]
-		? (JSON.parse(process.env["SECTION_ROLES"]) as Record<
-				string,
-				"system" | "user" | "assistant"
-			>)
-		: DEFAULT_CONFIG.sectionRoles,
+	outputMode: parseOutputModeEnv(),
+	sectionBudgets: (() => {
+		const raw = process.env["SECTION_BUDGETS"];
+		if (!raw) return DEFAULT_CONFIG.sectionBudgets;
+		try {
+			return JSON.parse(raw) as Record<string, number>;
+		} catch (error) {
+			log.warn(
+				`Invalid SECTION_BUDGETS value, falling back to default: ${error instanceof Error ? error.message : String(error)}`,
+			);
+			return DEFAULT_CONFIG.sectionBudgets;
+		}
+	})(),
+	sectionRoles: (() => {
+		const raw = process.env["SECTION_ROLES"];
+		if (!raw) return DEFAULT_CONFIG.sectionRoles;
+		try {
+			return JSON.parse(raw) as Record<string, "system" | "user" | "assistant">;
+		} catch (error) {
+			log.warn(
+				`Invalid SECTION_ROLES value, falling back to default: ${error instanceof Error ? error.message : String(error)}`,
+			);
+			return DEFAULT_CONFIG.sectionRoles;
+		}
+	})(),
 	commandsDir: process.env["COMMANDS_DIR"] ?? DEFAULT_CONFIG.commandsDir,
 	parseSubagentFrontmatter:
 		process.env["PARSE_SUBAGENT_FRONTMATTER"] === "true",
@@ -267,13 +320,12 @@ export const getEnvConfig = (): ShotputConfig => ({
 		process.env["REDIS_URL"] ??
 		process.env["VALKEY_URL"] ??
 		DEFAULT_CONFIG.redis,
-	sqlite: process.env["SQLITE_ENABLED"] === "true" || DEFAULT_CONFIG.sqlite,
-	templateSyntax:
-		(process.env["TEMPLATE_SYNTAX"] as "shotput" | "jinja2") ??
-		DEFAULT_CONFIG.templateSyntax,
-	jinjaAutoescape:
-		process.env["JINJA_AUTOESCAPE"] === "true" ||
-		DEFAULT_CONFIG.jinjaAutoescape,
+	sqlite: parseBooleanEnv("SQLITE_ENABLED", DEFAULT_CONFIG.sqlite ?? false),
+	templateSyntax: parseTemplateSyntaxEnv(),
+	jinjaAutoescape: parseBooleanEnv(
+		"JINJA_AUTOESCAPE",
+		DEFAULT_CONFIG.jinjaAutoescape ?? false,
+	),
 });
 
 /**

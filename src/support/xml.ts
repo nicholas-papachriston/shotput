@@ -42,7 +42,7 @@ function escapeXmlText(s: string): string {
 }
 
 type Token = {
-	type: "openTag" | "closeTag" | "text" | "attribute";
+	type: "openTag" | "selfClosingTag" | "closeTag" | "text" | "attribute";
 	value: string;
 	name?: string;
 };
@@ -60,6 +60,9 @@ export const createXmlParser = () => {
 				if (xml[i + 1] === "/") {
 					// Closing tag
 					const end = xml.indexOf(">", i);
+					if (end === -1) {
+						break;
+					}
 					tokens.push({
 						type: "closeTag",
 						value: xml.slice(i + 2, end),
@@ -68,18 +71,27 @@ export const createXmlParser = () => {
 				} else {
 					// Opening tag
 					const end = xml.indexOf(">", i);
-					const tagContent = xml.slice(i + 1, end);
+					if (end === -1) {
+						break;
+					}
+					const rawTagContent = xml.slice(i + 1, end).trim();
+					const isSelfClosing = rawTagContent.endsWith("/");
+					const tagContent = isSelfClosing
+						? rawTagContent.slice(0, -1).trim()
+						: rawTagContent;
 					const [tagName, ...attrs] = tagContent.split(" ").filter(Boolean);
 
 					tokens.push({
-						type: "openTag",
+						type: isSelfClosing ? "selfClosingTag" : "openTag",
 						value: tagName,
 					});
 
 					// Parse attributes
 					for (const attr of attrs) {
-						const [name, value] = attr.split("=");
-						if (name && value) {
+						const separatorIndex = attr.indexOf("=");
+						if (separatorIndex > 0) {
+							const name = attr.slice(0, separatorIndex);
+							const value = attr.slice(separatorIndex + 1);
 							tokens.push({
 								type: "attribute",
 								name,
@@ -93,12 +105,16 @@ export const createXmlParser = () => {
 			} else if (char.trim()) {
 				// Text content
 				const end = xml.indexOf("<", i);
-				const text = xml.slice(i, end).trim();
+				const textSliceEnd = end === -1 ? xml.length : end;
+				const text = xml.slice(i, textSliceEnd).trim();
 				if (text) {
 					tokens.push({
 						type: "text",
 						value: text,
 					});
+				}
+				if (end === -1) {
+					break;
 				}
 				i = end;
 			} else {
@@ -135,14 +151,26 @@ export const createXmlParser = () => {
 					attributeTarget = newNode;
 					break;
 				}
+				case "selfClosingTag": {
+					const newNode: XmlNode = {
+						tag: token.value,
+						attributes: {},
+						children: [],
+					};
+					current.children.push(newNode);
+					attributeTarget = newNode;
+					break;
+				}
 				case "closeTag": {
-					stack.pop();
-					current = stack[stack.length - 1];
+					if (stack.length > 1) {
+						stack.pop();
+						current = stack[stack.length - 1];
+					}
 					attributeTarget = null;
 					break;
 				}
 				case "text": {
-					current.text = token.value;
+					current.text = (current.text ?? "") + token.value;
 					break;
 				}
 				case "attribute": {
@@ -154,7 +182,13 @@ export const createXmlParser = () => {
 			}
 		}
 
-		return root.children[0];
+		return (
+			root.children[0] ?? {
+				tag: "",
+				attributes: {},
+				children: [],
+			}
+		);
 	};
 
 	const parse = (xmlString: string): XmlNode => {
@@ -166,25 +200,25 @@ export const createXmlParser = () => {
 	const parseS3ListResponse = (xmlString: string): string[] => {
 		const keys: string[] = [];
 		let isInsideKey = false;
-		let currentKey = "";
+		let keyStart = -1;
 
 		for (let i = 0; i < xmlString.length; i++) {
 			if (xmlString.slice(i, i + 5) === "<Key>") {
 				isInsideKey = true;
+				keyStart = i + 5;
 				i += 4;
 				continue;
 			}
 			if (xmlString.slice(i, i + 6) === "</Key>") {
-				if (currentKey) {
-					keys.push(currentKey);
+				if (isInsideKey && keyStart >= 0) {
+					const key = xmlString.slice(keyStart, i);
+					if (key) {
+						keys.push(key);
+					}
 				}
-				currentKey = "";
+				keyStart = -1;
 				isInsideKey = false;
 				i += 5;
-				continue;
-			}
-			if (isInsideKey) {
-				currentKey += xmlString[i];
 			}
 		}
 

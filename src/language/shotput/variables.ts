@@ -66,7 +66,7 @@ export function getVariableValue(path: string, config: ShotputConfig): string {
 		return value != null ? String(value) : "";
 	}
 	if (resolved.type === "params") {
-		const params = (config as { params?: Record<string, unknown> }).params;
+		const params = config.params;
 		if (!params) return "";
 		const value = getByPath(params, resolved.keyPath);
 		return value != null ? String(value) : "";

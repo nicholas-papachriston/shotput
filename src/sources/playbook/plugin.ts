@@ -1,4 +1,4 @@
-import { join, resolve } from "node:path";
+import { join, resolve, sep } from "node:path";
 import type { ShotputConfig } from "../../config";
 import { getLogger } from "../../logger";
 import type { SourceContext, SourcePlugin, SourceResolution } from "../plugins";
@@ -19,6 +19,7 @@ export function createPlaybookPlugin(
 	options?: PlaybookPluginOptions,
 ): SourcePlugin {
 	const dir = options?.dir ?? join(process.cwd(), "playbooks");
+	const resolvedDir = `${resolve(dir)}${sep}`;
 
 	return {
 		name: "playbook",
@@ -32,7 +33,7 @@ export function createPlaybookPlugin(
 
 			const ext = id.includes(".") ? "" : ".md";
 			const filePath = resolve(dir, `${id}${ext}`);
-			if (!filePath.startsWith(resolve(dir))) {
+			if (!filePath.startsWith(resolvedDir)) {
 				throw new Error(`Path traversal detected: ${filePath}`);
 			}
 
@@ -45,7 +46,13 @@ export function createPlaybookPlugin(
 					log.info(`Playbook not found: ${filePath}, returning empty context.`);
 				}
 			} catch (err) {
-				log.error(`Error reading playbook ${filePath}: ${err}`);
+				const code = (err as NodeJS.ErrnoException).code;
+				if (code === "ENOENT") {
+					log.info(`Playbook not found: ${filePath}, returning empty context.`);
+				} else {
+					log.error(`Error reading playbook ${filePath}: ${err}`);
+					throw err;
+				}
 			}
 
 			const usedLength = Math.min(content.length, ctx.remainingLength);
@@ -67,13 +74,19 @@ export function createPlaybookPlugin(
 			if (!id) return 0;
 			const ext = id.includes(".") ? "" : ".md";
 			const filePath = resolve(dir, `${id}${ext}`);
+			if (!filePath.startsWith(resolvedDir)) {
+				throw new Error(`Path traversal detected: ${filePath}`);
+			}
 			try {
 				const file = Bun.file(filePath);
 				if (await file.exists()) {
 					return file.size;
 				}
-			} catch {
-				// ignore
+			} catch (err) {
+				const code = (err as NodeJS.ErrnoException).code;
+				if (code !== "ENOENT") {
+					throw err;
+				}
 			}
 			return 0;
 		},

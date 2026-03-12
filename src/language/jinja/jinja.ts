@@ -1,5 +1,6 @@
 import { dirname, join } from "node:path";
 import type { ShotputConfig } from "../../config";
+import { getLogger } from "../../logger";
 
 export type CompiledJinjaRenderer = (ctx: Record<string, unknown>) => string;
 
@@ -8,7 +9,9 @@ const compiledTemplateCache = new Map<string, CompiledTemplate>();
 const COMPILED_EXPR_CACHE_CAP = 4096;
 const globalCompiledExprCache = new Map<string, CompiledExpr>();
 const INCLUDE_TAG_RE = /\{%-?\s*include\s+['"]([^'"]+)['"]\s*-?%\}/g;
+const ENDRAW_TAG_RE = /\{%-?\s*endraw\s*-?%\}/g;
 const MAX_INCLUDE_DEPTH = 10;
+const log = getLogger("jinja");
 
 type Node =
 	| { kind: "text"; value: string }
@@ -281,10 +284,13 @@ function compileCallExpr(expr: string): CompiledExpr | null {
 function compareValues(left: unknown, op: CompareOp, right: unknown): boolean {
 	if (op === "==") return left === right;
 	if (op === "!=") return left !== right;
-	if (op === ">=") return (left as never) >= (right as never);
-	if (op === "<=") return (left as never) <= (right as never);
-	if (op === ">") return (left as never) > (right as never);
-	return (left as never) < (right as never);
+	const bothNumbers = typeof left === "number" && typeof right === "number";
+	const bothStrings = typeof left === "string" && typeof right === "string";
+	if (!bothNumbers && !bothStrings) return false;
+	if (op === ">=") return left >= right;
+	if (op === "<=") return left <= right;
+	if (op === ">") return left > right;
+	return left < right;
 }
 
 function compileSimpleExpr(expr: string): CompiledExpr | null {
@@ -460,13 +466,19 @@ function compileJsExpr(expr: string): CompiledExpr {
 		fn = new Function("scope", `with (scope) { return (${jsExpr}); }`) as (
 			scopeObj: ExprScope,
 		) => unknown;
-	} catch {
+	} catch (error) {
+		log.warn(
+			`Failed to compile Jinja expression "${expr}": ${error instanceof Error ? error.message : String(error)}`,
+		);
 		return () => undefined;
 	}
 	return (scope) => {
 		try {
 			return fn(scope);
-		} catch {
+		} catch (error) {
+			log.warn(
+				`Failed to evaluate Jinja expression "${expr}": ${error instanceof Error ? error.message : String(error)}`,
+			);
 			return undefined;
 		}
 	};
@@ -644,7 +656,9 @@ function lexTemplate(template: string): TemplateToken[] {
 			const stmtInner = template.slice(braceIdx + 2, stmtEnd).trim();
 			const { tag, payload } = parseTagAndPayload(stmtInner);
 			if (tag === "raw") {
-				const endRaw = template.indexOf("{% endraw %}", stmtEnd + 2);
+				ENDRAW_TAG_RE.lastIndex = stmtEnd + 2;
+				const endRawMatch = ENDRAW_TAG_RE.exec(template);
+				const endRaw = endRawMatch?.index ?? -1;
 				if (endRaw === -1) {
 					tokens.push({ type: "text", value: template.slice(stmtEnd + 2) });
 					return tokens;
@@ -653,7 +667,7 @@ function lexTemplate(template: string): TemplateToken[] {
 					type: "text",
 					value: template.slice(stmtEnd + 2, endRaw),
 				});
-				cursor = endRaw + 12;
+				cursor = endRaw + (endRawMatch?.[0].length ?? 0);
 				textStart = cursor;
 			} else {
 				tokens.push({ type: "statement", tag, payload });
@@ -1037,7 +1051,10 @@ function compileToAot(ast: Node[]): CompiledJinjaRenderer | null {
 	const parts: string[] = ["var __out='';"];
 	try {
 		emitNodes(ast, parts);
-	} catch {
+	} catch (error) {
+		log.warn(
+			`Failed to compile Jinja AOT nodes: ${error instanceof Error ? error.message : String(error)}`,
+		);
 		return null;
 	}
 	parts.push("return __out;");
@@ -1062,7 +1079,10 @@ function compileToAot(ast: Node[]): CompiledJinjaRenderer | null {
 			for (const k in ctx) scope[k] = ctx[k];
 			return fn(isTruthy, toArray, applyFilter, applyTest, scope);
 		};
-	} catch {
+	} catch (error) {
+		log.warn(
+			`Failed to build Jinja AOT renderer: ${error instanceof Error ? error.message : String(error)}`,
+		);
 		return null;
 	}
 }
@@ -1103,7 +1123,7 @@ export function buildJinjaContext(
 	config: ShotputConfig,
 ): Record<string, unknown> {
 	const context = config.context ?? {};
-	const params = (config as { params?: Record<string, unknown> }).params ?? {};
+	const params = config.params ?? {};
 	const env = typeof process !== "undefined" ? process.env : {};
 	return {
 		context,

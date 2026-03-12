@@ -19,7 +19,13 @@ interface BunJSONL {
 	): JsonlParseChunkResult;
 }
 
-const jsonlApi = (Bun as unknown as { JSONL: BunJSONL }).JSONL;
+const getJsonlApi = (): BunJSONL => {
+	const bunWithJsonl = Bun as unknown as { JSONL?: BunJSONL };
+	if (bunWithJsonl.JSONL === undefined) {
+		throw new Error("Bun.JSONL API is unavailable in this runtime");
+	}
+	return bunWithJsonl.JSONL;
+};
 
 /**
  * Parse a complete JSONL input and return an array of all parsed values.
@@ -36,7 +42,7 @@ const jsonlApi = (Bun as unknown as { JSONL: BunJSONL }).JSONL;
  * ```
  */
 export function parseJsonl(input: string | Uint8Array): unknown[] {
-	return jsonlApi.parse(input);
+	return getJsonlApi().parse(input);
 }
 
 /**
@@ -64,6 +70,7 @@ export function parseJsonlChunk(
 	start?: number,
 	end?: number,
 ): JsonlParseChunkResult {
+	const jsonlApi = getJsonlApi();
 	if (typeof input === "string") {
 		return jsonlApi.parseChunk(input);
 	}

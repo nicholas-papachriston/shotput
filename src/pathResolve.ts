@@ -1,5 +1,6 @@
 import { isAbsolute, resolve } from "node:path";
 import type { ShotputConfig } from "./config";
+import { FUNCTION_TEMPLATE } from "./function";
 import { getMatchingPlugin } from "./sources/plugins";
 
 /**
@@ -8,7 +9,7 @@ import { getMatchingPlugin } from "./sources/plugins";
  */
 export const SPECIAL_PREFIXES = [
 	"skill:",
-	"TemplateType.Function:",
+	FUNCTION_TEMPLATE,
 	"http://",
 	"https://",
 	"s3://",

@@ -58,7 +58,10 @@ export const parseSubagentFrontmatter = (
 			return null;
 		}
 		return { frontmatter: parsed as SubagentConfig, body };
-	} catch {
+	} catch (error) {
+		log.warn(
+			`Invalid subagent frontmatter YAML ignored: ${error instanceof Error ? error.message : String(error)}`,
+		);
 		return null;
 	}
 };

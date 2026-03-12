@@ -61,6 +61,7 @@ These examples demonstrate fundamental features:
 21. **[Format references (all)](./basic/21-format-references.ts)** - `{{yaml:path}}`, `{{json:path}}`, `{{jsonl:path}}`, `{{xml:path}}`, `{{md:path}}` in one template
 22. **[Jinja2 (native)](./basic/22-jinja2.ts)** - `templateSyntax("jinja2")` with `set`, `if/else`, `for/else`, macros, filters
 23. **[Jinja includes + jinja: format](./basic/23-jinja-includes-and-format.ts)** - Auto-detect `.jinja` templates, `{% include %}`, and `{{jinja:path}}`
+24. **[Effect type mapping](./basic/24-effect.ts)** - `.effect()` type adapter with stream-first `runStream()` signatures while runtime remains Promise-based
 
 ### Advanced Examples
 

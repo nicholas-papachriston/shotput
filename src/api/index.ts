@@ -1,6 +1,16 @@
 export type { ShotputConfig } from "../config";
 export { ShotputBuilder, ShotputProgram } from "../builder";
 export {
+	type EffectShotputBuilder,
+	type EffectShotputProgram,
+	type ShotputConfigError,
+	type ShotputEffectError,
+	type ShotputHookAbortError,
+	type ShotputSourceError,
+	type ShotputTemplateError,
+	classifyError,
+} from "../effect";
+export {
 	HookAbortError,
 	type AssemblyContext,
 	type HookSet,

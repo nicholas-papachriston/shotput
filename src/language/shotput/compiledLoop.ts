@@ -107,7 +107,6 @@ export function compileLoopBody(
 			segments.push(...parseLiteralRange(content, pos, block.openStart));
 		}
 		const blockContent = content.slice(block.openEnd, block.closeIndex);
-		const blockContentBlocks = parseAllBlocks(blockContent);
 		if (block.kind === "if") {
 			const elseIdx = block.elseIndex;
 			const consequentContent =
@@ -128,6 +127,7 @@ export function compileLoopBody(
 				engine,
 			});
 		} else {
+			const blockContentBlocks = parseAllBlocks(blockContent);
 			segments.push({
 				kind: "each",
 				expr: block.expr,
@@ -236,8 +236,7 @@ export function renderSegments(
 ): string {
 	const parts: string[] = [];
 	const context = ctx.context ?? {};
-	const engine =
-		(config as { expressionEngine?: "js" | "safe" }).expressionEngine ?? "js";
+	const engine = config.expressionEngine ?? "js";
 	for (const seg of segments) {
 		if (seg.kind === "literal") {
 			parts.push(seg.value);

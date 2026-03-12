@@ -15,6 +15,7 @@ const regexIndicators = [
 ];
 
 const statCache = new Map<string, { isFile: boolean; isDirectory: boolean }>();
+const STAT_CACHE_CAP = 10_000;
 
 export function clearStatCache(): void {
 	statCache.clear();
@@ -34,9 +35,16 @@ export const findTemplateType = async (
 					isFile: stats.isFile(),
 					isDirectory: stats.isDirectory(),
 				};
+				if (statCache.size >= STAT_CACHE_CAP) {
+					const first = statCache.keys().next().value;
+					if (first !== undefined) statCache.delete(first);
+				}
 				statCache.set(path, statResult);
-			} catch {
-				// Ignore stat errors
+			} catch (error) {
+				const code = (error as NodeJS.ErrnoException).code;
+				if (code !== "ENOENT" && code !== "ENOTDIR") {
+					throw error;
+				}
 			}
 		}
 		if (statResult) {
@@ -98,6 +106,10 @@ export const findTemplateType = async (
 
 		return TemplateType.String;
 	} catch (error) {
+		const errno = error as NodeJS.ErrnoException;
+		if (errno.code !== "ENOENT" && errno.code !== "ENOTDIR") {
+			throw error;
+		}
 		return TemplateType.String;
 	}
 };
