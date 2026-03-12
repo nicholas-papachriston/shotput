@@ -8,7 +8,7 @@
 	"files": {
 		"ignoreUnknown": false,
 		"include": ["src", "test", "examples", "./build.ts", "./*.json"],
-		"ignore": ["dist", "github"]
+		"ignore": ["dist", "github", ".cursor", "test/conformance/expected.json"]
 	},
 	"formatter": {
 		"enabled": true,
