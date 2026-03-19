@@ -1,6 +1,6 @@
 {
 	"name": "@agent_oxide/shotput",
-	"version": "1.3.0",
+	"version": "1.4.0",
 	"description": "Zero dependency plug-and-play templating for Bun",
 	"type": "module",
 	"main": "dist/index.js",

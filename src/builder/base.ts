@@ -174,6 +174,22 @@ export abstract class ShotputBase<T> {
 	}
 
 	/**
+	 * Permit `{{shell:...}}` placeholder execution via shell command execution.
+	 * Default: `false`.
+	 */
+	allowShell(value: boolean): T {
+		return this._merge({ allowShell: value });
+	}
+
+	/**
+	 * Timeout in milliseconds for `{{shell:...}}` placeholder execution.
+	 * Default: `10000`.
+	 */
+	shellTimeoutMs(value: number): T {
+		return this._merge({ shellTimeoutMs: value });
+	}
+
+	/**
 	 * Directories from which function scripts may be loaded when `allowFunctions` is
 	 * `true`. Paths outside this list are rejected.
 	 */
@@ -499,6 +515,8 @@ export const BUILDER_CONFIG_COVERAGE = [
 	"allowedDomains",
 	"allowHttp",
 	"allowFunctions",
+	"allowShell",
+	"shellTimeoutMs",
 	"allowedFunctionPaths",
 	"skillsDir",
 	"allowRemoteSkills",

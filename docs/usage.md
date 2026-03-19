@@ -13,6 +13,9 @@ In the text file format of your choice, include any combination of the following
 # Functions
 {{TemplateType.Function:/path/to/function.js}}
 
+# Shell
+{{shell:printf "hello"}}
+
 # Glob patterns
 {{/usr/local/app/*.ts}}
 
@@ -77,6 +80,7 @@ Inject context, params, and env directly into the template body, and use conditi
 - **Variables:** `{{context.x}}`, `{{params.x}}`, `{{env.X}}` (nested paths like `{{context.project.name}}` supported). Missing keys become empty string.
 - **Conditionals:** `{{#if expr}}...{{else}}...{{/if}}`. Use `expressionEngine: "safe"` to restrict to simple comparisons and `context`/`env`/`params` paths.
 - **Loops:** `{{#each context.list}}...{{/each}}`. Inside the block, `{{context.__loop.item}}` is the current element and `{{context.__loop.index}}` is the zero-based index. Non-arrays are treated as single-element; empty/missing as empty.
+- **Shell:** `{{shell:...}}` executes in a system shell and interpolates stdout. Enable with `.allowShell(true)` (or `ALLOW_SHELL=true`). Optional timeout via `.shellTimeoutMs(ms)` / `SHELL_TIMEOUT_MS`.
 
 ## Inline template content
 

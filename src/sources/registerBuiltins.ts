@@ -1,6 +1,7 @@
 import { createCommandPlugin } from "../command";
 import type { ShotputConfig } from "../config";
 import { createDbPlugin } from "../db";
+import { createShellPlugin } from "../shell";
 import type { SourcePlugin } from "./plugins";
 import { createSubagentPlugin } from "./subagent";
 
@@ -13,6 +14,9 @@ export function registerBuiltins(config: ShotputConfig): SourcePlugin[] {
 
 	if (config.commandsDir) {
 		customPlugins.unshift(createCommandPlugin());
+	}
+	if (config.allowShell) {
+		customPlugins.unshift(createShellPlugin());
 	}
 	if (config.subagentsDir) {
 		customPlugins.unshift(createSubagentPlugin());

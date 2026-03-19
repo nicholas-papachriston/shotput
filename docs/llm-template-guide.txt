@@ -18,6 +18,7 @@
 | Redis | {{redis:///get:key}}, {{redis://host:port/get:key}}, {{redis:///keys:*}} | Requires .redis(url) on builder; empty host uses configured URL |
 | Skill | {{skill:name}} or {{skill:name:full}} | Local or {{skill:github:org/repo}} |
 | Function | {{TemplateType.Function:/path/fn.js}} | allowFunctions required |
+| Shell | {{shell:printf "hello"}} | allowShell required |
 | Variable | {{context.x}}, {{params.y}}, {{env.Z}} | Nested paths: {{context.project.name}} |
 | Conditional | {{#if expr}}...{{else}}...{{/if}} | expr: context/params/env paths, ==, !=, &&, \|\| |
 | Loop | {{#each context.list}}...{{/each}} | Inside: {{context.__loop.item}}, {{context.__loop.index}} |

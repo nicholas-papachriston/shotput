@@ -28,6 +28,8 @@ import { getLogger } from "./logger";
  * @prop allowedDomains - Allowed HTTP domains (empty = all). Comma-separated
  * @prop allowHttp - Allow HTTP/HTTPS requests. Default: true
  * @prop allowFunctions - Allow {{TemplateType.Function:/path}}. Default: false
+ * @prop allowShell - Allow {{shell:...}} command execution. Default: false
+ * @prop shellTimeoutMs - Timeout for shell command execution in ms. Default: 10000
  * @prop allowedFunctionPaths - Paths allowed for function execution
  * @prop maxNestingDepth - Max nested {{file}} depth. Default: 3
  * @prop customSources - Custom SourcePlugin array for extensible source types
@@ -67,6 +69,8 @@ export interface ShotputConfig {
 	allowedDomains: string[];
 	allowHttp: boolean;
 	allowFunctions: boolean;
+	allowShell: boolean;
+	shellTimeoutMs: number;
 	allowedFunctionPaths: string[];
 	skillsDir: string;
 	allowRemoteSkills: boolean;
@@ -131,6 +135,8 @@ export const DEFAULT_CONFIG: ShotputConfig = {
 	allowedDomains: [],
 	allowHttp: true,
 	allowFunctions: false,
+	allowShell: false,
+	shellTimeoutMs: 10000,
 	allowedFunctionPaths: [],
 	skillsDir: "./skills",
 	allowRemoteSkills: false,
@@ -242,6 +248,11 @@ export const getEnvConfig = (): ShotputConfig => ({
 	allowFunctions: parseBooleanEnv(
 		"ALLOW_FUNCTIONS",
 		DEFAULT_CONFIG.allowFunctions,
+	),
+	allowShell: parseBooleanEnv("ALLOW_SHELL", DEFAULT_CONFIG.allowShell),
+	shellTimeoutMs: parseIntEnv(
+		"SHELL_TIMEOUT_MS",
+		DEFAULT_CONFIG.shellTimeoutMs,
 	),
 	allowedFunctionPaths: process.env["ALLOWED_FUNCTION_PATHS"]
 		? process.env["ALLOWED_FUNCTION_PATHS"].split(",")

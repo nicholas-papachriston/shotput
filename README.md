@@ -28,6 +28,7 @@ Shotput is a programmatic templating library for managing personas, system promp
 - **Lifecycle hooks:** preResolve, postResolveSource, postAssembly, preOutput
 - **Output modes:** flat, sectioned, or messages (system/user/assistant)
 - **Commands and subagents:** `{{command:name}}`, `{{subagent:name}}`
+- **Embedded shell execution:** `{{shell:printf 'hello'}}` (requires `allowShell: true`)
 - **Format utilities:** in-template `{{yaml:path}}`, `{{json:path}}`, `{{jsonl:path}}`, `{{xml:path}}`, `{{md:path}}`, `{{jinja:path}}`; programmatic Markdown, JSONL, XML helpers
 
 **Template authoring for LLMs:** [llms.txt](./llms.txt) links to the [template guide](docs/llm-template-guide.txt) (syntax, patterns, pitfalls).
