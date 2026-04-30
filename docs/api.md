@@ -173,7 +173,7 @@ Load a subagent definition file (path via `subagentFile`), parse YAML frontmatte
 
 ## Examples
 
-Comprehensive examples are in [examples/](../examples/):
+Runnable examples are in [examples/](../examples/):
 
 ### Basic
 

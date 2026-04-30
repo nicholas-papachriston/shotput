@@ -1,6 +1,6 @@
 ---
 name: demo-skill
-description: A comprehensive demo skill showcasing the Anthropic Skills format for Shotput templates
+description: Demo skill showing the Anthropic Skills format for Shotput templates
 version: 1.0.0
 author: Shotput Examples
 tags: [demo, example, documentation]
@@ -233,7 +233,7 @@ Access with `:full` suffix to include references:
 
 ## Summary
 
-Skills provide a powerful way to package and reuse knowledge, instructions, and context in your templates. They enable:
+Skills package reusable knowledge, instructions, and context in your templates. They enable:
 
 - ✅ Consistent prompt engineering
 - ✅ Reusable documentation

@@ -5,7 +5,8 @@ This file contains practical examples demonstrating the concepts and patterns de
 ## Example 1: API Client Implementation
 
 ### Context
-Building a robust API client that follows best practices for error handling, retry logic, and type safety.
+
+Building an API client with error handling, retry logic, and type safety.
 
 ### Implementation
 
@@ -16,7 +17,7 @@ interface ApiClientConfig {
   retryAttempts: number;
 }
 
-class RobustApiClient {
+class ApiClient {
   private config: ApiClientConfig;
   
   constructor(config: ApiClientConfig) {
@@ -59,7 +60,7 @@ class RobustApiClient {
 ### Usage
 
 ```typescript
-const client = new RobustApiClient({
+const client = new ApiClient({
   baseUrl: 'https://api.example.com',
   timeout: 5000,
   retryAttempts: 3,
@@ -69,6 +70,7 @@ const data = await client.get('/users/123');
 ```
 
 ### Key Points
+
 - ✅ Type-safe with generics
 - ✅ Configurable retry logic with exponential backoff
 - ✅ Timeout support
@@ -78,6 +80,7 @@ const data = await client.get('/users/123');
 ## Example 2: Data Validation Pattern
 
 ### Context
+
 Validating user input with clear error messages and type safety.
 
 ### Implementation
@@ -178,6 +181,7 @@ if (result.valid) {
 ## Example 3: State Management Pattern
 
 ### Context
+
 Managing application state with clear update patterns and type safety.
 
 ### Implementation
@@ -260,7 +264,8 @@ unsubscribe();
 ## Example 4: Error Handling Strategy
 
 ### Context
-Comprehensive error handling with custom error types and recovery strategies.
+
+Error handling with custom error types and recovery strategies.
 
 ### Implementation
 
@@ -357,6 +362,7 @@ async function main() {
 ## Example 5: Configuration Management
 
 ### Context
+
 Managing application configuration with validation and environment-specific overrides.
 
 ### Implementation
@@ -458,6 +464,7 @@ console.log('Database host:', dbConfig.host);
 ## Example 6: Logging Pattern
 
 ### Context
+
 Structured logging with different levels and contexts.
 
 ### Implementation
@@ -569,18 +576,3 @@ try {
 const requestLogger = logger.child({ requestId: 'abc-123' });
 requestLogger.info('Processing request');
 ```
-
-## Summary
-
-These examples demonstrate:
-
-- ✅ Type-safe implementations
-- ✅ Error handling patterns
-- ✅ Configuration management
-- ✅ State management
-- ✅ Validation strategies
-- ✅ Logging best practices
-- ✅ Clean code principles
-- ✅ Reusable patterns
-
-Use these as templates for building robust, maintainable applications!

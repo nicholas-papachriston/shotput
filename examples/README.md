@@ -1,6 +1,6 @@
 # Shotput Examples
 
-This directory contains comprehensive examples demonstrating all features of Shotput. Each example is self-contained and runnable.
+This directory contains runnable Shotput examples. Each example is self-contained.
 
 ## Quick Start
 

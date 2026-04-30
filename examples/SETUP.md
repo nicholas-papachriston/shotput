@@ -101,7 +101,7 @@ Archive bucket for older data. Contains:
 Directory buckets (AWS S3 Express One Zone) must be created manually through AWS Console or CLI:
 
 #### `logs--use1-az4--x-s3`
-High-performance logging bucket in `use1-az4` availability zone.
+Logging bucket in `use1-az4` availability zone.
 
 ```bash
 aws s3control create-bucket \
@@ -110,7 +110,7 @@ aws s3control create-bucket \
 ```
 
 #### `events--use1-az4--x-s3`
-High-performance events bucket in `use1-az4` availability zone.
+Events bucket in `use1-az4` availability zone.
 
 ```bash
 aws s3control create-bucket \
