@@ -265,7 +265,7 @@ Before enabling function execution, consider:
 ```typescript
 // BAD: Hardcoded credentials
 shotput()
-  .s3AccessKeyId("AKIAIOSFODNN7EXAMPLE")
+  .s3AccessKeyId("AWS_ACCESS_KEY_ID_EXAMPLE")
   .s3SecretAccessKey("wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY")
 
 // GOOD: Use environment variables
