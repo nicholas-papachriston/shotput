@@ -22,3 +22,7 @@ fonts
 *.zip
 github
 .cursor/hooks/state
+
+# Nix
+.direnv/
+result
