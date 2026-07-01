@@ -26,6 +26,7 @@
 		"conformance:generate": "uv run test/conformance/jinja2_render.py",
 		"fix": "bunx biome check --fix --unsafe .",
 		"lint": "bunx biome check .",
+		"audit": "bun audit",
 		"typecheck": "tsc --noEmit",
 		"prepublishOnly": "bun run build && bun run test"
 	},
