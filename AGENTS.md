@@ -143,6 +143,18 @@ Configuration can be set programmatically on the builder or via environment vari
 
 Copy `env.example` to `.env` for local runs. `.env` is gitignored.
 
+
+## CI/CD
+
+**GitHub Actions exception:** This repo keeps native workflows (`.github/workflows/ci.yml`, `publish.yml`) — it does **not** use the shared ci-cd engine on GitHub. Match the workflow locally before push:
+
+```bash
+bun install --frozen-lockfile
+bun run lint && bun run typecheck && bun run build && bun test
+```
+
+Other workspace repos use [`~/dev/ci-cd`](https://github.com/nicholas-papachriston/dev/tree/main/ci-cd) instead of push/PR GitHub Actions.
+
 ## Documentation
 
 This repo follows the [`~/dev` meta-repo OKF policy](../okf-conventions.md).
