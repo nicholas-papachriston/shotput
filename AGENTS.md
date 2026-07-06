@@ -152,6 +152,7 @@ This repo follows the [`~/dev` meta-repo OKF policy](../okf-conventions.md).
 | `AGENTS.md` | Agent playbook — build gates, conventions, env (this file) |
 | `CLAUDE.md` | Pointer to `AGENTS.md` |
 | `README.md` | Human setup and contributor guide |
+| Research | No git research corpus yet; see [`~/dev/research-conventions.md`](../research-conventions.md) |
 
 Read this file before editing code. Per-project `AGENTS.md` files are agent playbooks, not workspace OKF concepts unless promoted to the meta-repo root.
 
