@@ -143,6 +143,18 @@ Configuration can be set programmatically on the builder or via environment vari
 
 Copy `env.example` to `.env` for local runs. `.env` is gitignored.
 
+## Documentation
+
+This repo follows the [`~/dev` meta-repo OKF policy](../okf-conventions.md).
+
+| File | Role |
+| --- | --- |
+| `AGENTS.md` | Agent playbook — build gates, conventions, env (this file) |
+| `CLAUDE.md` | Pointer to `AGENTS.md` |
+| `README.md` | Human setup and contributor guide |
+
+Read this file before editing code. Per-project `AGENTS.md` files are agent playbooks, not workspace OKF concepts unless promoted to the meta-repo root.
+
 ## Notes
 
 - **Zero runtime dependencies:** The published package ships only `dist/`; devDependencies include benchmark engines (EJS, Handlebars, etc.) and tooling.
