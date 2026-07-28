@@ -148,6 +148,8 @@ export class ParallelProcessor {
 					processingTime: Date.now() - startTime,
 					content: replacement,
 					error: isError ? replacement : undefined,
+					okf: result.okf,
+					okfDocuments: result.okfDocuments,
 				},
 			};
 		};

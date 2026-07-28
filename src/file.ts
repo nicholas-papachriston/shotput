@@ -4,6 +4,7 @@ import { processContent } from "./content";
 import { handleFileStream } from "./fileStream";
 import { handlerErrorResult } from "./handlerResult";
 import { getLogger } from "./logger";
+import { type OkfFrontmatter, preferOkfDocument } from "./okf";
 import { SecurityError, validatePath } from "./security";
 
 // Files larger than 1MB will use streaming to avoid memory issues
@@ -25,6 +26,7 @@ export const handleFile = async (
 	operationResults: string;
 	combinedRemainingCount: number;
 	replacement?: string;
+	okf?: OkfFrontmatter;
 }> => {
 	log.info(`Handling file: ${path}`);
 
@@ -58,7 +60,12 @@ export const handleFile = async (
 			relativeToCwd.length > 0 && !relativeToCwd.startsWith("..")
 				? relativeToCwd
 				: validatedPath;
-		const fileContent = `filename:${displayPath}:\n${await file.text()}`;
+		const preferred = preferOkfDocument(
+			await file.text(),
+			config.parseOkf === true,
+			validatedPath,
+		);
+		const fileContent = `filename:${displayPath}:\n${preferred.content}`;
 		const processed = await processContent(
 			fileContent,
 			remainingLength,
@@ -73,6 +80,7 @@ export const handleFile = async (
 			operationResults: result.replace(match, processed.content),
 			combinedRemainingCount: processed.remainingLength,
 			replacement: processed.content,
+			okf: preferred.okf,
 		};
 	} catch (error) {
 		if (error instanceof SecurityError) {

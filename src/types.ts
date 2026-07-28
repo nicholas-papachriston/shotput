@@ -1,3 +1,5 @@
+import type { OkfDocumentRef, OkfFrontmatter } from "./okf";
+
 export enum TemplateType {
 	String = "string",
 	File = "file",
@@ -11,6 +13,20 @@ export enum TemplateType {
 	Custom = "custom",
 	/** Parsed format (yaml:, json:, jsonl:, xml:, md:) — expand as object/string in template. */
 	Format = "format",
+}
+
+/**
+ * Per-source resolution metadata. When `parseOkf` is enabled and the source is an
+ * OKF concept, `okf` (or `okfDocuments` for aggregates) is the preferred document metadata.
+ */
+export interface ResultMetadataEntry {
+	path: string;
+	type: string;
+	duration: number;
+	/** Preferred document metadata when the source is a single OKF concept */
+	okf?: OkfFrontmatter;
+	/** OKF concepts discovered inside a directory/glob aggregate */
+	okfDocuments?: OkfDocumentRef[];
 }
 
 export interface FileResult {
@@ -28,6 +44,10 @@ export interface TemplateResult {
 	processingTime: number;
 	content?: string;
 	error?: string;
+	/** Preferred document metadata when the source is a single OKF concept */
+	okf?: OkfFrontmatter;
+	/** OKF concepts discovered inside a directory/glob aggregate */
+	okfDocuments?: OkfDocumentRef[];
 }
 
 export interface ProcessingProgress {
@@ -107,8 +127,8 @@ export interface Section {
 	stable: boolean;
 	/** SHA-256 hash of content for cache keying */
 	contentHash: string;
-	/** Per-source metadata (path, type, duration) */
-	metadata: Array<{ path: string; type: string; duration: number }>;
+	/** Per-source metadata (path, type, duration, optional OKF) */
+	metadata: ResultMetadataEntry[];
 }
 
 /**
@@ -133,7 +153,17 @@ export interface ShotputOutput {
 	sections?: Section[];
 	/** Formatted messages when outputMode is "messages" */
 	messages?: MessageOutput[];
-	/** Parsed YAML frontmatter when parseSubagentFrontmatter is true */
+	/**
+	 * Preferred document metadata when the root template is an OKF concept
+	 * (`type` present). Set when `parseOkf` or `parseSubagentFrontmatter` is true
+	 * and frontmatter qualifies as OKF.
+	 */
+	okf?: OkfFrontmatter;
+	/**
+	 * Parsed YAML frontmatter when `parseSubagentFrontmatter` is true, or when
+	 * `parseOkf` detects an OKF concept (mirrored for compatibility). Prefer `okf`
+	 * when both are present.
+	 */
 	frontmatter?: Record<string, unknown>;
 	/** Set when processing threw */
 	error?: Error;
@@ -141,7 +171,7 @@ export interface ShotputOutput {
 	metadata: {
 		duration: number;
 		outputMode?: OutputMode;
-		resultMetadata?: Array<{ path: string; type: string; duration: number }>;
+		resultMetadata?: ResultMetadataEntry[];
 	};
 }
 

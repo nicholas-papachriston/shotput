@@ -24,6 +24,8 @@ See the project root [env.example](../env.example) for a complete `.env` referen
 | `MAX_NESTING_DEPTH` | `number` | `3` | Maximum depth for nested template interpolation |
 | `TEMPLATE_SYNTAX` | `"shotput"` \| `"jinja2"` | `"shotput"` | Template syntax mode. If not set, `.jinja`, `.jinja2`, and `.j2` template files auto-select Jinja mode. |
 | `JINJA_AUTOESCAPE` | `boolean` | `false` | Jinja autoescape flag (reserved for compatibility). |
+| `PARSE_OKF` | `boolean` | `false` | Prefer OKF as document metadata (`output.okf`, strip from file/custom sources) |
+| `PARSE_SUBAGENT_FRONTMATTER` | `boolean` | `false` | Strip root YAML frontmatter into `output.frontmatter` (also sets `okf` when OKF) |
 
 ## Security Configuration
 

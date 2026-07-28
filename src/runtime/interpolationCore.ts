@@ -1,17 +1,13 @@
 import type { ShotputConfig } from "../config";
 import { evaluateRules } from "../language/shotput/rules";
 import { substituteVariables } from "../language/shotput/variables";
-import type { TemplateType } from "../types";
+import type { ResultMetadataEntry, TemplateType } from "../types";
 import {
 	inclusionBasePathFor,
 	interpolationPattern,
 } from "./interpolationApply";
 
-export interface InterpolationMetaEntry {
-	path: string;
-	type: string;
-	duration: number;
-}
+export type InterpolationMetaEntry = ResultMetadataEntry;
 
 export function createEffectiveConfig(
 	config: ShotputConfig,
@@ -49,12 +45,20 @@ export function evaluateInterpolationContent(
 }
 
 export function mapInterpolationMetadata(
-	metadata: Array<{ path: string; type: string; processingTime: number }>,
+	metadata: Array<{
+		path: string;
+		type: string;
+		processingTime: number;
+		okf?: ResultMetadataEntry["okf"];
+		okfDocuments?: ResultMetadataEntry["okfDocuments"];
+	}>,
 ): InterpolationMetaEntry[] {
 	return metadata.map((entry) => ({
 		path: entry.path,
 		type: entry.type,
 		duration: entry.processingTime,
+		okf: entry.okf,
+		okfDocuments: entry.okfDocuments,
 	}));
 }
 

@@ -428,8 +428,22 @@ export abstract class ShotputBase<T> {
 	}
 
 	/**
-	 * Strip YAML frontmatter from the resolved output and expose it as
-	 * `result.metadata.frontmatter`. Default: `false`.
+	 * Prefer Open Knowledge Format (OKF) as document metadata. When `true`:
+	 * - Root templates with OKF frontmatter (`type` required) set `output.okf`
+	 *   (mirrored to `output.frontmatter` for compatibility)
+	 * - File/custom markdown sources strip OKF frontmatter from inserted content
+	 *   and attach `okf` / `okfDocuments` on `metadata.resultMetadata`
+	 *
+	 * Default: `false`.
+	 */
+	parseOkf(value: boolean): T {
+		return this._merge({ parseOkf: value });
+	}
+
+	/**
+	 * Strip YAML frontmatter from the root template and expose it as
+	 * `output.frontmatter`. When frontmatter is OKF (`type` present), also sets
+	 * `output.okf` (preferred). Default: `false`.
 	 */
 	parseSubagentFrontmatter(value: boolean): T {
 		return this._merge({ parseSubagentFrontmatter: value });
@@ -538,6 +552,7 @@ export const BUILDER_CONFIG_COVERAGE = [
 	"sectionBudgets",
 	"sectionRoles",
 	"commandsDir",
+	"parseOkf",
 	"parseSubagentFrontmatter",
 	"subagentsDir",
 	"redis",

@@ -3,7 +3,7 @@ import { getLogger } from "../logger";
 import { ParallelProcessor } from "../parallelProcessor";
 import { clearStatCache } from "../template";
 import { getCountFnAsync } from "../tokens";
-import type { ShotputOutput } from "../types";
+import type { ResultMetadataEntry, ShotputOutput } from "../types";
 import { interpolation } from "./interpolation";
 import {
 	getInterpolationMatchesWithIndices,
@@ -102,19 +102,11 @@ export function interpolationStream(
 	async function innerRun(
 		controller: ReadableStreamDefaultController<string>,
 	): Promise<{
-		currentMetadata: Array<{
-			path: string;
-			type: string;
-			duration: number;
-		}>;
+		currentMetadata: ResultMetadataEntry[];
 	}> {
 		const bufferedSegments: string[] = [];
 		const emit = (segment: string) => bufferedSegments.push(segment);
-		let currentMetadata: Array<{
-			path: string;
-			type: string;
-			duration: number;
-		}>;
+		let currentMetadata: ResultMetadataEntry[];
 		let finalRemainingLength: number;
 
 		log.info(`Streaming (depth ${depth}/${maxDepth})`);
@@ -213,6 +205,8 @@ export function interpolationStream(
 								path: m.path,
 								type: m.type,
 								duration: m.duration,
+								okf: m.okf,
+								okfDocuments: m.okfDocuments,
 							})),
 						});
 						resolveLiteralMap(resolvedLiteralBox?.literals);

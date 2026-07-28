@@ -16,9 +16,13 @@ import { type Segment, renderSegments } from "../language/shotput/compiledLoop";
 import type { RuleContext } from "../language/shotput/ruleConditions";
 import { evaluateRules } from "../language/shotput/rules";
 import { getLogger } from "../logger";
+import {
+	type OkfFrontmatter,
+	asOkfFrontmatter,
+	parseYamlFrontmatterObject,
+} from "../okf";
 import { interpolationStream } from "../runtime/interpolationStream";
 import { registerBuiltins } from "../sources/registerBuiltins";
-import { parseSubagentFrontmatter } from "../sources/subagent";
 import { formatMessages, parseOutputSections } from "../support/sections";
 import { consumeStreamToString } from "../support/streamUtils";
 import type {
@@ -60,31 +64,51 @@ interface RunStreamingInternalResult {
 	metadata: Promise<ShotputOutput["metadata"]>;
 	literalMap?: Map<string, string>;
 	literalMapPromise?: Promise<Map<string, string> | undefined>;
-	subagentFrontmatter?: Record<string, unknown>;
+	documentFrontmatter?: Record<string, unknown>;
+	documentOkf?: OkfFrontmatter;
 }
 
 function normalizeError(error: unknown): Error {
 	return error instanceof Error ? error : new Error(String(error));
 }
 
-function extractSubagentFrontmatter(
+/**
+ * Extract root-document frontmatter. OKF (`type` present) is preferred metadata
+ * when parseOkf or parseSubagentFrontmatter is enabled.
+ */
+function extractDocumentMetadata(
 	content: string,
-	parseFrontmatter: boolean,
+	config: ShotputConfig,
 ): {
 	body: string;
 	frontmatter?: Record<string, unknown>;
+	okf?: OkfFrontmatter;
 } {
-	if (!parseFrontmatter) {
+	const parseOkf = config.parseOkf === true;
+	const parseAnyFrontmatter = config.parseSubagentFrontmatter === true;
+	if (!parseOkf && !parseAnyFrontmatter) {
 		return { body: content };
 	}
-	const parsed = parseSubagentFrontmatter(content);
+	const parsed = parseYamlFrontmatterObject(content);
 	if (!parsed) {
 		return { body: content };
 	}
-	return {
-		body: parsed.body,
-		frontmatter: parsed.frontmatter as Record<string, unknown>,
-	};
+	const okf = asOkfFrontmatter(parsed.frontmatter);
+	if (okf) {
+		return {
+			body: parsed.body,
+			frontmatter: parsed.frontmatter,
+			okf,
+		};
+	}
+	if (parseAnyFrontmatter) {
+		return {
+			body: parsed.body,
+			frontmatter: parsed.frontmatter,
+		};
+	}
+	// parseOkf only: leave non-OKF frontmatter in the template body
+	return { body: content };
 }
 
 export async function runStreamingInternal(
@@ -94,24 +118,21 @@ export async function runStreamingInternal(
 	await ensureDirectoryExists(cfg.responseDir, cfg.templateDir);
 
 	let templateContent: string;
-	let subagentFrontmatter: Record<string, unknown> | undefined;
+	let documentFrontmatter: Record<string, unknown> | undefined;
+	let documentOkf: OkfFrontmatter | undefined;
 	if (cfg.template !== undefined) {
 		templateContent = cfg.template;
-		const extracted = extractSubagentFrontmatter(
-			templateContent,
-			cfg.parseSubagentFrontmatter ?? false,
-		);
+		const extracted = extractDocumentMetadata(templateContent, cfg);
 		templateContent = extracted.body;
-		subagentFrontmatter = extracted.frontmatter;
+		documentFrontmatter = extracted.frontmatter;
+		documentOkf = extracted.okf;
 	} else {
 		const templatePath = join(cfg.templateDir, cfg.templateFile);
 		templateContent = await Bun.file(templatePath).text();
-		const extracted = extractSubagentFrontmatter(
-			templateContent,
-			cfg.parseSubagentFrontmatter ?? false,
-		);
+		const extracted = extractDocumentMetadata(templateContent, cfg);
 		templateContent = extracted.body;
-		subagentFrontmatter = extracted.frontmatter;
+		documentFrontmatter = extracted.frontmatter;
+		documentOkf = extracted.okf;
 	}
 
 	const preResolveHooks = getPreResolveHooks(cfg);
@@ -166,7 +187,8 @@ export async function runStreamingInternal(
 		metadata: streamResult.metadata,
 		literalMap: streamResult.literalMap,
 		literalMapPromise: streamResult.literalMapPromise,
-		subagentFrontmatter,
+		documentFrontmatter,
+		documentOkf,
 	};
 }
 
@@ -175,7 +197,7 @@ async function runFull(
 ): Promise<ShotputOutput> {
 	const startTime = Date.now();
 	try {
-		const { stream, metadata, subagentFrontmatter } =
+		const { stream, metadata, documentFrontmatter, documentOkf } =
 			await runStreamingInternal(config);
 		const processedTemplate = await consumeStreamToString(stream);
 		const resolvedMetadata = await metadata;
@@ -186,8 +208,14 @@ async function runFull(
 			content: processedTemplate,
 			metadata: { duration, resultMetadata, outputMode },
 		};
-		if (subagentFrontmatter !== undefined) {
-			resultObject = { ...resultObject, frontmatter: subagentFrontmatter };
+		if (documentOkf !== undefined) {
+			resultObject = {
+				...resultObject,
+				okf: documentOkf,
+				frontmatter: documentFrontmatter ?? documentOkf,
+			};
+		} else if (documentFrontmatter !== undefined) {
+			resultObject = { ...resultObject, frontmatter: documentFrontmatter };
 		}
 
 		const postAssemblyHooks = getPostAssemblyHooks(config);

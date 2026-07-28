@@ -2,6 +2,11 @@ import type { ShotputConfig } from "./config";
 import { processContent } from "./content";
 import { handlerErrorResult } from "./handlerResult";
 import { getLogger } from "./logger";
+import {
+	type OkfFrontmatter,
+	isOkfFrontmatter,
+	preferOkfDocument,
+} from "./okf";
 import type { SourcePlugin } from "./sources/plugins";
 
 const log = getLogger("custom");
@@ -19,6 +24,7 @@ export const handleCustomSource = async (
 	combinedRemainingCount: number;
 	replacement?: string;
 	mergeContext?: Record<string, unknown>;
+	okf?: OkfFrontmatter;
 }> => {
 	log.info(`Handling custom source [${plugin.name}]: ${path}`);
 
@@ -32,8 +38,16 @@ export const handleCustomSource = async (
 			basePath,
 		};
 		const resolution = await plugin.resolve(ctx);
-		const processed = await processContent(
+		const preferred = preferOkfDocument(
 			resolution.content,
+			config.parseOkf === true,
+			path,
+		);
+		const metaOkf = resolution.metadata?.["okf"];
+		const okf =
+			preferred.okf ?? (isOkfFrontmatter(metaOkf) ? metaOkf : undefined);
+		const processed = await processContent(
+			preferred.content,
 			remainingLength,
 			config,
 		);
@@ -49,6 +63,7 @@ export const handleCustomSource = async (
 			combinedRemainingCount: processed.remainingLength,
 			replacement: processed.content,
 			mergeContext: resolution.mergeContext,
+			okf,
 		};
 	} catch (error) {
 		log.error(

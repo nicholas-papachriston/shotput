@@ -7,6 +7,7 @@ import { getLogger } from "../logger";
 import { ParallelProcessor } from "../parallelProcessor";
 import { clearStatCache } from "../template";
 import { getCountFnAsync } from "../tokens";
+import type { ResultMetadataEntry } from "../types";
 import {
 	getInterpolationMatchesWithIndices,
 	interpolationPattern,
@@ -52,7 +53,7 @@ function substituteLiterals(
 
 export interface InterpolationResults {
 	processedTemplate: string;
-	resultMetadata?: Array<{ path: string; type: string; duration: number }>;
+	resultMetadata?: ResultMetadataEntry[];
 	remainingLength: number;
 }
 
@@ -96,8 +97,7 @@ export const interpolation = async (
 	const maxDepth = config.maxNestingDepth;
 
 	let processedTemplate: string;
-	let currentMetadata: Array<{ path: string; type: string; duration: number }> =
-		[];
+	let currentMetadata: ResultMetadataEntry[] = [];
 	let finalRemainingLength = remainingLength;
 
 	log.info(`Processing (depth ${depth}/${maxDepth})`);
