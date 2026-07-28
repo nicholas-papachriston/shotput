@@ -4,6 +4,7 @@ import type { ShotputConfig } from "./config";
 import { handleFile } from "./file";
 import { handlerErrorResult } from "./handlerResult";
 import { getLogger } from "./logger";
+import { type OkfDocumentRef, conceptIdFromPath } from "./okf";
 import { validatePath } from "./security";
 
 const log = getLogger("directory");
@@ -37,6 +38,7 @@ export const handleDirectory = async (
 	operationResults: string;
 	combinedRemainingCount: number;
 	replacement?: string;
+	okfDocuments?: OkfDocumentRef[];
 }> => {
 	log.info(`Processing directory: ${path}`);
 
@@ -47,6 +49,7 @@ export const handleDirectory = async (
 		const entries = await readdir(validatedPath);
 		let currentRemaining = remainingLength;
 		const chunks: string[] = [];
+		const okfDocuments: OkfDocumentRef[] = [];
 
 		for (const entry of entries) {
 			if (currentRemaining <= 0) {
@@ -69,6 +72,9 @@ export const handleDirectory = async (
 				);
 				chunks.push(subDirResult.operationResults);
 				currentRemaining = subDirResult.combinedRemainingCount;
+				if (subDirResult.okfDocuments) {
+					okfDocuments.push(...subDirResult.okfDocuments);
+				}
 			} else {
 				// Handle file
 				// Use a placeholder to extract only the file content
@@ -82,6 +88,13 @@ export const handleDirectory = async (
 				);
 				chunks.push(fileResult.operationResults);
 				currentRemaining = fileResult.combinedRemainingCount;
+				if (fileResult.okf) {
+					okfDocuments.push({
+						path: entryPath,
+						okf: fileResult.okf,
+						conceptId: conceptIdFromPath(entryPath),
+					});
+				}
 			}
 		}
 
@@ -97,6 +110,7 @@ export const handleDirectory = async (
 			operationResults,
 			combinedRemainingCount: currentRemaining,
 			replacement: directoryContent,
+			okfDocuments: okfDocuments.length > 0 ? okfDocuments : undefined,
 		};
 	} catch (error) {
 		log.error(`Failed to process directory ${path}: ${error}`);

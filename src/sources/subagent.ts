@@ -1,11 +1,11 @@
 import { join } from "node:path";
 import { type ShotputConfig, createConfig } from "../config";
 import { getLogger } from "../logger";
+import { parseYamlFrontmatterObject } from "../okf";
 import { interpolationStream } from "../runtime/interpolationStream";
 import { validatePath } from "../security";
 import { consumeStreamToString } from "../streamUtils";
 import type { ShotputOutput } from "../types";
-import { parseYaml } from "../yaml";
 import type { SourcePlugin } from "./plugins";
 
 const log = getLogger("subagent");
@@ -47,23 +47,12 @@ export interface ResolvedSubagent {
 export const parseSubagentFrontmatter = (
 	content: string,
 ): { frontmatter: SubagentConfig; body: string } | null => {
-	const match = content.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
-	if (!match) return null;
-
-	const yamlContent = match[1];
-	const body = match[2].trim();
-	try {
-		const parsed = parseYaml(yamlContent);
-		if (parsed == null || typeof parsed !== "object" || Array.isArray(parsed)) {
-			return null;
-		}
-		return { frontmatter: parsed as SubagentConfig, body };
-	} catch (error) {
-		log.warn(
-			`Invalid subagent frontmatter YAML ignored: ${error instanceof Error ? error.message : String(error)}`,
-		);
-		return null;
-	}
+	const parsed = parseYamlFrontmatterObject(content);
+	if (!parsed) return null;
+	return {
+		frontmatter: parsed.frontmatter as SubagentConfig,
+		body: parsed.body,
+	};
 };
 
 /**

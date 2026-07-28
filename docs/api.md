@@ -61,7 +61,8 @@ Each setter returns a new instance:
 | `.sectionRoles(v)` | `Record<string, "system" \| "user" \| "assistant">` | `undefined` | Section to role mapping (messages mode) |
 | `.commandsDir(v)` | `string` | `"./commands"` | Directory for command templates |
 | `.subagentsDir(v)` | `string` | `"./.agents"` | Directory for subagent definitions |
-| `.parseSubagentFrontmatter(v)` | `boolean` | `false` | Strip YAML frontmatter and set `output.frontmatter` |
+| `.parseOkf(v)` | `boolean` | `false` | Prefer OKF as document metadata (`output.okf`, strip from sources) |
+| `.parseSubagentFrontmatter(v)` | `boolean` | `false` | Strip YAML frontmatter and set `output.frontmatter` (also sets `output.okf` when OKF) |
 | `.customSources(v)` | `SourcePlugin[]` | `undefined` | Custom source plugins |
 | `.sqlite(v?)` | `boolean` | `false` | Enable `{{sqlite://path/query:SQL}}` placeholder support |
 | `.redis(v)` | `string \| DbPluginOptions` | `undefined` | Configure Redis connection and enable `{{redis://...}}` placeholders |
@@ -75,12 +76,13 @@ interface ShotputOutput {
   content?: string;           // Processed template content (flat mode)
   sections?: Section[];       // Parsed sections (sectioned mode)
   messages?: MessageOutput[]; // System/user/assistant (messages mode)
-  frontmatter?: Record<string, unknown>; // When parseSubagentFrontmatter and frontmatter present
+  okf?: OkfFrontmatter;       // Preferred when root template is an OKF concept (parseOkf / parseSubagentFrontmatter)
+  frontmatter?: Record<string, unknown>; // YAML frontmatter (prefer okf when both present)
   error?: Error;              // Set when processing threw
   metadata: {
     duration: number;         // Processing time in ms
     outputMode?: OutputMode;
-    resultMetadata?: Array<{ path: string; type: string; duration: number }>;
+    resultMetadata?: ResultMetadataEntry[]; // path, type, duration, optional okf / okfDocuments
   };
 }
 ```
@@ -157,6 +159,20 @@ Re-exported for use on resolved content or external data:
 
 Command, subagent, and skill frontmatter are parsed with Bun's YAML API internally.
 
+### Open Knowledge Format (OKF)
+
+First-class OKF parsing (zero extra deps; uses Bun.YAML). Enable with `.parseOkf(true)` or `PARSE_OKF=true`.
+
+| Export | Description |
+|--------|-------------|
+| `parseOkfDocument(content, options?)` | Parse an OKF concept (`type` required); returns `{ okf, body, conceptId? }` or `null` |
+| `preferOkfDocument(content, enabled, path?)` | When enabled and OKF, return body + structured `okf` |
+| `isOkfFrontmatter(value)` / `asOkfFrontmatter(fm)` | Type guard / narrower for OKF frontmatter |
+| `okfTimestamp(okf)` | Prefer `generated.at` (v0.2) then `timestamp` (v0.1) |
+| `OKF_VERSION` | `"0.1"` (tolerates common v0.2 fields) |
+
+When `parseOkf` is on, OKF is the **preferred** document metadata: `output.okf` for the root template, and `resultMetadata[].okf` / `okfDocuments` for included markdown sources (YAML stripped from the assembled prompt).
+
 ## `compileShotputTemplate(template, baseConfig?): ShotputProgram`
 
 Pre-compiles a template string and returns a `ShotputProgram`. Use when rendering the same template many times with varying context; the block parse cache is warmed once. Chain config setters (e.g. `.context(...)`) then call `.run()` or `.stream()` to execute.
@@ -200,6 +216,9 @@ Runnable examples are in [examples/](../examples/):
 - [21-format-references.ts](../examples/basic/21-format-references.ts) - All format references
 - [22-jinja2.ts](../examples/basic/22-jinja2.ts) - Native Jinja template syntax
 - [23-jinja-includes-and-format.ts](../examples/basic/23-jinja-includes-and-format.ts) - Jinja include and `jinja:` format reference
+- [24-effect.ts](../examples/basic/24-effect.ts) - Effect-TS builder
+- [25-shell.ts](../examples/basic/25-shell.ts) - Shell source
+- [26-okf.ts](../examples/basic/26-okf.ts) - Open Knowledge Format (OKF) metadata
 
 ### Advanced
 

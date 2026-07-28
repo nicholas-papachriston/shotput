@@ -2,6 +2,7 @@ import { dirname } from "node:path";
 import type { ShotputConfig } from "../config";
 import { getPostResolveSourceHooks, runPostResolveSourceHooks } from "../hooks";
 import { evaluateRules } from "../language/shotput/rules";
+import type { OkfDocumentRef, OkfFrontmatter } from "../okf";
 import { TemplateType } from "../types";
 
 export const interpolationPattern = /\{\{([^}]+)\}\}/g;
@@ -34,6 +35,8 @@ export type InterpolationResultMeta = {
 	path: string;
 	type: string;
 	duration: number;
+	okf?: OkfFrontmatter;
+	okfDocuments?: OkfDocumentRef[];
 };
 
 export interface ApplyInterpolationResult {
@@ -68,6 +71,8 @@ export interface HandlerResultForApply {
 	combinedRemainingCount: number;
 	replacement?: string;
 	mergeContext?: Record<string, unknown>;
+	okf?: OkfFrontmatter;
+	okfDocuments?: OkfDocumentRef[];
 }
 
 function replaceAt(
@@ -112,6 +117,8 @@ export async function applyReplacement(
 		path: p,
 		type: templateType,
 		duration: Date.now() - start,
+		okf: handlerResult.okf,
+		okfDocuments: handlerResult.okfDocuments,
 	};
 	const doReplace = (content: string, repl: string) =>
 		matchIndices != null

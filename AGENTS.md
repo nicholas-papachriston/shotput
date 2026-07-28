@@ -25,6 +25,7 @@ shotput/
 │   ├── db/                 # Redis and SQLite placeholder resolution
 │   ├── support/            # Format helpers (markdown, jsonl, xml), sections, stream utils
 │   ├── worker/             # Tokenizer worker for async token counting
+│   ├── okf.ts              # Open Knowledge Format (OKF) parse/prefer helpers
 │   └── *.ts                # Top-level modules: security, hooks, s3, http, glob, tokens, etc.
 ├── test/
 │   ├── unit/               # Unit tests per module (28 files)
@@ -138,6 +139,8 @@ Configuration can be set programmatically on the builder or via environment vari
 **S3/R2:** `S3_*` or `AWS_*` credentials, `AWS_S3_URL`, `CLOUDFLARE_R2_URL`, `S3_VIRTUAL_HOSTED_STYLE`.
 
 **Skills:** `SKILLS_DIR`, `ALLOW_REMOTE_SKILLS`, `ALLOWED_SKILL_SOURCES`.
+
+**OKF / frontmatter:** `PARSE_OKF`, `PARSE_SUBAGENT_FRONTMATTER`.
 
 **Database:** `REDIS_URL` / `VALKEY_URL`, `SQLITE_ENABLED`.
 

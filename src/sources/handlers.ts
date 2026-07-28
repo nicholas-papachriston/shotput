@@ -6,6 +6,7 @@ import { handleFormat } from "../format";
 import { handleFunction } from "../function";
 import { handleGlob } from "../glob";
 import { handleHttp } from "../http";
+import type { OkfDocumentRef, OkfFrontmatter } from "../okf";
 import { handleS3 } from "../s3";
 import { handleSkill } from "../skill";
 import { TemplateType } from "../types";
@@ -16,6 +17,10 @@ export interface HandlerResult {
 	combinedRemainingCount: number;
 	replacement?: string;
 	mergeContext?: Record<string, unknown>;
+	/** Preferred OKF metadata when the resolved source is a single OKF concept */
+	okf?: OkfFrontmatter;
+	/** OKF concepts discovered while resolving a multi-file source */
+	okfDocuments?: OkfDocumentRef[];
 }
 
 export type TemplateHandler = (

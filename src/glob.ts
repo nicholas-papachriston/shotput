@@ -4,6 +4,11 @@ import type { ShotputConfig } from "./config";
 import { processContent } from "./content";
 import { handlerErrorResult } from "./handlerResult";
 import { getLogger } from "./logger";
+import {
+	type OkfDocumentRef,
+	type OkfFrontmatter,
+	preferOkfDocument,
+} from "./okf";
 import { SecurityError, validatePath } from "./security";
 
 const log = getLogger("glob");
@@ -23,6 +28,8 @@ export const handleGlob = async (
 	operationResults: string;
 	combinedRemainingCount: number;
 	replacement?: string;
+	okf?: OkfFrontmatter;
+	okfDocuments?: OkfDocumentRef[];
 }> => {
 	log.info(`Handling glob: ${path}`);
 
@@ -44,10 +51,14 @@ export const handleGlob = async (
 			const exists = await fileHandle.exists();
 
 			if (exists) {
-				const content = await fileHandle.text();
+				const preferred = preferOkfDocument(
+					await fileHandle.text(),
+					config.parseOkf === true,
+					validatedFilePath,
+				);
 				const fileHeader = `filename:${validatedFilePath}:\n`;
 				const processed = await processContent(
-					fileHeader + content,
+					fileHeader + preferred.content,
 					remainingLength,
 				);
 
@@ -61,6 +72,7 @@ export const handleGlob = async (
 					operationResults: result.replace(match, processed.content),
 					combinedRemainingCount: processed.remainingLength,
 					replacement: processed.content,
+					okf: preferred.okf,
 				};
 			}
 
@@ -74,6 +86,7 @@ export const handleGlob = async (
 		const glob = new Glob(path);
 		const chunks: string[] = [];
 		let currentRemaining = remainingLength;
+		const okfDocuments: OkfDocumentRef[] = [];
 
 		// Scan for matching files
 		for await (const file of glob.scan({ onlyFiles: true })) {
@@ -90,11 +103,15 @@ export const handleGlob = async (
 				const exists = await fileHandle.exists();
 				if (!exists) continue;
 
-				const content = await fileHandle.text();
+				const preferred = preferOkfDocument(
+					await fileHandle.text(),
+					config.parseOkf === true,
+					validatedFilePath,
+				);
 				const fileHeader = `filename:${validatedFilePath}:\n`;
 
 				const processed = await processContent(
-					fileHeader + content,
+					fileHeader + preferred.content,
 					currentRemaining,
 				);
 
@@ -106,6 +123,13 @@ export const handleGlob = async (
 
 				chunks.push(processed.content);
 				currentRemaining = processed.remainingLength;
+				if (preferred.okf) {
+					okfDocuments.push({
+						path: validatedFilePath,
+						okf: preferred.okf,
+						conceptId: preferred.conceptId,
+					});
+				}
 			} catch (error) {
 				if (error instanceof SecurityError) {
 					log.error(`Security error for file ${file}: ${error.message}`);
@@ -120,6 +144,7 @@ export const handleGlob = async (
 			operationResults: result.replace(match, combinedContent),
 			combinedRemainingCount: currentRemaining,
 			replacement: combinedContent,
+			okfDocuments: okfDocuments.length > 0 ? okfDocuments : undefined,
 		};
 	} catch (error) {
 		if (error instanceof SecurityError) {

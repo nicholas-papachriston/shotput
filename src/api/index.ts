@@ -23,8 +23,28 @@ export {
 export type {
 	MessageOutput,
 	OutputMode,
+	ResultMetadataEntry,
 	Section,
 	ShotputOutput,
 	ShotputSegmentStreamOutput,
 	ShotputStreamingOutput,
 } from "../types";
+export {
+	OKF_RESERVED_FILENAMES,
+	OKF_VERSION,
+	asOkfFrontmatter,
+	conceptIdFromPath,
+	isOkfFrontmatter,
+	isOkfReservedFilename,
+	okfTimestamp,
+	parseOkfDocument,
+	parseYamlFrontmatterObject,
+	preferOkfDocument,
+	splitYamlFrontmatter,
+} from "../okf";
+export type {
+	OkfDocumentRef,
+	OkfFrontmatter,
+	OkfGenerated,
+	ParsedOkfDocument,
+} from "../okf";

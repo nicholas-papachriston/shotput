@@ -42,7 +42,8 @@ import { getLogger } from "./logger";
  * @prop sectionBudgets - Per-section max length: { sectionName: chars }
  * @prop sectionRoles - Map section names to roles for messages mode: { sectionName: "system"|"user"|"assistant" }
  * @prop commandsDir - Directory for {{command:name}} templates. Default: "./commands"
- * @prop parseSubagentFrontmatter - Strip YAML frontmatter and set output.frontmatter. Default: false
+ * @prop parseOkf - Prefer Open Knowledge Format (OKF) as document metadata: strip OKF frontmatter from the root template and file/custom sources, set output.okf / resultMetadata.okf. Default: false
+ * @prop parseSubagentFrontmatter - Strip YAML frontmatter and set output.frontmatter (also sets output.okf when frontmatter is OKF). Default: false
  * @prop subagentsDir - Directory for {{subagent:name}} definitions. Default: "./.agents"
  * @prop redis - Redis connection: URL string (e.g. "redis://localhost:6379") or options object with url/username/password. Automatically enables {{redis://...}} placeholder support.
  * @prop sqlite - Enable {{sqlite://path/query:SQL}} placeholder support. Default: false
@@ -95,6 +96,13 @@ export interface ShotputConfig {
 	sectionBudgets?: Record<string, number>;
 	sectionRoles?: Record<string, "system" | "user" | "assistant">;
 	commandsDir?: string;
+	/**
+	 * Prefer OKF as document metadata. When true:
+	 * - Root templates with OKF frontmatter (`type` required) set `output.okf` (and `frontmatter`)
+	 * - File/custom markdown sources strip OKF frontmatter from inserted content and attach
+	 *   `okf` / `okfDocuments` on `metadata.resultMetadata`
+	 */
+	parseOkf?: boolean;
 	parseSubagentFrontmatter?: boolean;
 	subagentsDir?: string;
 	/** Redis connection: URL string or options object (url, username, password, passwordHash). Enables {{redis://...}} placeholder support. */
@@ -155,6 +163,7 @@ export const DEFAULT_CONFIG: ShotputConfig = {
 	sectionBudgets: undefined,
 	sectionRoles: undefined,
 	commandsDir: "./commands",
+	parseOkf: false,
 	parseSubagentFrontmatter: false,
 	subagentsDir: "./.agents",
 	redis: undefined,
@@ -324,6 +333,7 @@ export const getEnvConfig = (): ShotputConfig => ({
 		}
 	})(),
 	commandsDir: process.env["COMMANDS_DIR"] ?? DEFAULT_CONFIG.commandsDir,
+	parseOkf: parseBooleanEnv("PARSE_OKF", DEFAULT_CONFIG.parseOkf ?? false),
 	parseSubagentFrontmatter:
 		process.env["PARSE_SUBAGENT_FRONTMATTER"] === "true",
 	subagentsDir: process.env["SUBAGENTS_DIR"] ?? DEFAULT_CONFIG.subagentsDir,
