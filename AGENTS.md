@@ -157,20 +157,15 @@ bun install --frozen-lockfile
 bun run lint && bun run typecheck && bun run build && bun test
 ```
 
-Other workspace repos use [`~/dev/ci-cd`](https://github.com/nicholas-papachriston/dev/tree/main/ci-cd) instead of push/PR GitHub Actions.
-
 ## Documentation
-
-This repo follows the [`~/dev` meta-repo OKF policy](../okf-conventions.md).
 
 | File | Role |
 | --- | --- |
 | `AGENTS.md` | Agent playbook — build gates, conventions, env (this file) |
 | `CLAUDE.md` | Pointer to `AGENTS.md` |
 | `README.md` | Human setup and contributor guide |
-| Research | No git research corpus yet; see [`~/dev/research-conventions.md`](../research-conventions.md) |
 
-Read this file before editing code. Per-project `AGENTS.md` files are agent playbooks, not workspace OKF concepts unless promoted to the meta-repo root.
+Read this file before editing code.
 
 ## Notes
 
@@ -182,4 +177,4 @@ Read this file before editing code. Per-project `AGENTS.md` files are agent play
 - **Publish CI** (`.github/workflows/publish.yml`): npm publish with provenance on GitHub release.
 - **Ignored/generated paths:** `dist/`, `responses/`, `examples/output/`, `test-temp*/`, `templates/` (local), `node_modules/`.
 - **LLM template authoring:** `llms.txt` links to `docs/llm-template-guide.txt` for syntax guidance when generating templates.
-- **Downstream usage:** Used by `admin.papachriston.com` for Shotput-based prompt assembly in `templates/`.
+- **Downstream usage:** Consumed by Agent Oxide for prompt/template assembly.
