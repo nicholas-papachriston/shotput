@@ -13,6 +13,29 @@ const log = getLogger("subagent");
 export const SUBAGENT_PREFIX = "subagent:";
 
 /**
+ * Directories searched for `{{subagent:name}}` definitions, in order.
+ *
+ * `./.agents` is the Shotput layout. `./.agent-oxide/agents` is where Agent Oxide keeps
+ * project agent profiles, so one repository can hold a single set of definitions that both
+ * tools read.
+ */
+export const DEFAULT_SUBAGENT_DIRS = [
+	"./.agents",
+	"./.agent-oxide/agents",
+] as const;
+
+/**
+ * Search order for one lookup: the configured directory first, then the shared defaults.
+ */
+export const subagentSearchDirs = (configured?: string): string[] => {
+	const dirs = configured ? [configured] : [];
+	for (const dir of DEFAULT_SUBAGENT_DIRS) {
+		if (!dirs.includes(dir)) dirs.push(dir);
+	}
+	return dirs;
+};
+
+/**
  * Agent config parsed from YAML frontmatter in subagent definition files.
  * Common fields: model, temperature, tools, permissions, description, mode.
  * Supports additional unknown fields for extensibility.
@@ -70,18 +93,25 @@ export const createSubagentPlugin = (): SourcePlugin => ({
 			throw new Error(`Invalid subagent path: ${rawPath}`);
 		}
 		const name = rawPath.slice(SUBAGENT_PREFIX.length).trim();
-		const subagentsDir = config.subagentsDir ?? "./.agents";
 		const base = config.allowedBasePaths?.[0] ?? process.cwd();
-		const agentPath = join(base, subagentsDir, `${name}.md`);
-		const validatedPath = validatePath(config, agentPath, base);
 
-		const file = Bun.file(validatedPath);
-		const exists = await file.exists();
-		if (!exists) {
+		let found: string | undefined;
+		for (const dir of subagentSearchDirs(config.subagentsDir)) {
+			const validatedPath = validatePath(
+				config,
+				join(base, dir, `${name}.md`),
+				base,
+			);
+			if (await Bun.file(validatedPath).exists()) {
+				found = validatedPath;
+				break;
+			}
+		}
+		if (!found) {
 			throw new Error(`Subagent not found: ${name}`);
 		}
 
-		const content = await file.text();
+		const content = await Bun.file(found).text();
 		const parsed = parseSubagentFrontmatter(content);
 		const body = parsed ? parsed.body : content;
 

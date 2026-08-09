@@ -60,7 +60,7 @@ Each setter returns a new instance:
 | `.sectionBudgets(v)` | `Record<string, number>` | `undefined` | Per-section length limits (sectioned mode) |
 | `.sectionRoles(v)` | `Record<string, "system" \| "user" \| "assistant">` | `undefined` | Section to role mapping (messages mode) |
 | `.commandsDir(v)` | `string` | `"./commands"` | Directory for command templates |
-| `.subagentsDir(v)` | `string` | `"./.agents"` | Directory for subagent definitions |
+| `.subagentsDir(v)` | `string` | `"./.agents"` | Directory searched first for subagent definitions; a miss also tries `./.agent-oxide/agents` |
 | `.parseOkf(v)` | `boolean` | `false` | Prefer OKF as document metadata (`output.okf`, strip from sources) |
 | `.parseSubagentFrontmatter(v)` | `boolean` | `false` | Strip YAML frontmatter and set `output.frontmatter` (also sets `output.okf` when OKF) |
 | `.customSources(v)` | `SourcePlugin[]` | `undefined` | Custom source plugins |
