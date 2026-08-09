@@ -44,7 +44,7 @@ import { getLogger } from "./logger";
  * @prop commandsDir - Directory for {{command:name}} templates. Default: "./commands"
  * @prop parseOkf - Prefer Open Knowledge Format (OKF) as document metadata: strip OKF frontmatter from the root template and file/custom sources, set output.okf / resultMetadata.okf. Default: false
  * @prop parseSubagentFrontmatter - Strip YAML frontmatter and set output.frontmatter (also sets output.okf when frontmatter is OKF). Default: false
- * @prop subagentsDir - Directory for {{subagent:name}} definitions. Default: "./.agents"
+ * @prop subagentsDir - Directory searched first for {{subagent:name}} definitions. Default: "./.agents". Lookups fall back to "./.agent-oxide/agents" so Agent Oxide agent profiles resolve too.
  * @prop redis - Redis connection: URL string (e.g. "redis://localhost:6379") or options object with url/username/password. Automatically enables {{redis://...}} placeholder support.
  * @prop sqlite - Enable {{sqlite://path/query:SQL}} placeholder support. Default: false
  */

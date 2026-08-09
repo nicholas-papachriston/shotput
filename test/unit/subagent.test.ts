@@ -1,10 +1,12 @@
 import { describe, expect, it } from "bun:test";
+import { join } from "node:path";
 import { createConfig } from "../../src/config";
 import { resolveSubagent, shotput } from "../../src/index";
 import { interpolation } from "../../src/runtime/interpolation";
 import {
 	createSubagentPlugin,
 	parseSubagentFrontmatter,
+	subagentSearchDirs,
 } from "../../src/sources/subagent";
 
 const agentsDir = "test/fixtures/agents";
@@ -165,5 +167,39 @@ describe("{{subagent:name}} resolution", () => {
 		const result = await interpolation(template, baseConfig);
 		expect(result.processedTemplate).toContain("[Error reading");
 		expect(result.processedTemplate).toContain("subagent:nonexistent");
+	});
+
+	it("should fall back to the Agent Oxide agents directory", async () => {
+		const config = createConfig({
+			allowedBasePaths: [join(process.cwd(), "test/fixtures/ao-workspace")],
+			customSources: [createSubagentPlugin()],
+			templateDir: join(process.cwd(), "test/fixtures/ao-workspace"),
+			allowHttp: false,
+			maxConcurrency: 1,
+		});
+		const result = await interpolation("{{subagent:ao-reviewer}}", config);
+		expect(result.processedTemplate).toContain("# Agent Oxide Reviewer");
+		expect(result.processedTemplate).not.toContain("ao-model");
+	});
+});
+
+describe("subagentSearchDirs", () => {
+	it("should put the configured directory first and keep the shared defaults", () => {
+		expect(subagentSearchDirs("./custom")).toEqual([
+			"./custom",
+			"./.agents",
+			"./.agent-oxide/agents",
+		]);
+	});
+
+	it("should not repeat a configured directory that is already a default", () => {
+		expect(subagentSearchDirs("./.agents")).toEqual([
+			"./.agents",
+			"./.agent-oxide/agents",
+		]);
+		expect(subagentSearchDirs()).toEqual([
+			"./.agents",
+			"./.agent-oxide/agents",
+		]);
 	});
 });
