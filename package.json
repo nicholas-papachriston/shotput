@@ -56,6 +56,7 @@
 		"@types/node": "latest",
 		"@types/nunjucks": "latest",
 		"binja": "latest",
+		"bun-types": "1.4.0",
 		"dts-bundle-generator": "latest",
 		"ejs": "latest",
 		"effect": "latest",
@@ -64,5 +65,8 @@
 		"mustache": "latest",
 		"nunjucks": "latest",
 		"typescript": "latest"
+	},
+	"engines": {
+		"bun": ">=1.4.0"
 	}
 }
