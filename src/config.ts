@@ -195,6 +195,33 @@ const parseBooleanEnv = (name: string, fallback: boolean): boolean => {
 	return raw !== undefined ? raw === "true" : fallback;
 };
 
+const parseCsvEnv = (name: string, fallback: string[]): string[] => {
+	const raw = process.env[name];
+	if (!raw) return [...fallback];
+	return raw.split(",");
+};
+
+const firstEnv = (...names: string[]): string | undefined => {
+	for (const name of names) {
+		const value = process.env[name];
+		if (value !== undefined) return value;
+	}
+	return undefined;
+};
+
+const parseJsonEnv = <T>(name: string, fallback: T): T => {
+	const raw = process.env[name];
+	if (!raw) return fallback;
+	try {
+		return JSON.parse(raw) as T;
+	} catch (error) {
+		log.warn(
+			`Invalid ${name} value, falling back to default: ${error instanceof Error ? error.message : String(error)}`,
+		);
+		return fallback;
+	}
+};
+
 const parseOutputModeEnv = (): "flat" | "sectioned" | "messages" => {
 	const raw = process.env["OUTPUT_MODE"];
 	if (raw === "flat" || raw === "sectioned" || raw === "messages") {
@@ -210,6 +237,76 @@ const parseTemplateSyntaxEnv = (): "shotput" | "jinja2" => {
 	}
 	return DEFAULT_CONFIG.templateSyntax ?? "shotput";
 };
+
+const parseExpressionEngineEnv = (): "js" | "safe" | undefined => {
+	if (process.env["EXPRESSION_ENGINE"] === "safe") return "safe";
+	return DEFAULT_CONFIG.expressionEngine;
+};
+
+const parseEnableContentLengthPlanning = (): boolean =>
+	process.env["ENABLE_CONTENT_LENGTH_PLANNING"] !== "false" &&
+	DEFAULT_CONFIG.enableContentLengthPlanning;
+
+const envS3Config = (): Pick<
+	ShotputConfig,
+	| "awsS3Url"
+	| "cloudflareR2Url"
+	| "s3AccessKeyId"
+	| "s3SecretAccessKey"
+	| "s3SessionToken"
+	| "s3Region"
+	| "s3Bucket"
+	| "s3VirtualHostedStyle"
+> => ({
+	awsS3Url: firstEnv("AWS_S3_URL") ?? DEFAULT_CONFIG.awsS3Url,
+	cloudflareR2Url: process.env["CLOUDFLARE_R2_URL"],
+	s3AccessKeyId:
+		firstEnv("S3_ACCESS_KEY_ID", "AWS_ACCESS_KEY_ID") ??
+		DEFAULT_CONFIG.s3AccessKeyId,
+	s3SecretAccessKey:
+		firstEnv("S3_SECRET_ACCESS_KEY", "AWS_SECRET_ACCESS_KEY") ??
+		DEFAULT_CONFIG.s3SecretAccessKey,
+	s3SessionToken:
+		firstEnv("S3_SESSION_TOKEN", "AWS_SESSION_TOKEN") ??
+		DEFAULT_CONFIG.s3SessionToken,
+	s3Region: firstEnv("S3_REGION", "AWS_REGION") ?? DEFAULT_CONFIG.s3Region,
+	s3Bucket: firstEnv("S3_BUCKET", "AWS_BUCKET") ?? DEFAULT_CONFIG.s3Bucket,
+	s3VirtualHostedStyle: parseBooleanEnv(
+		"S3_VIRTUAL_HOSTED_STYLE",
+		DEFAULT_CONFIG.s3VirtualHostedStyle,
+	),
+});
+
+const envSecurityConfig = (): Pick<
+	ShotputConfig,
+	| "allowedBasePaths"
+	| "allowedDomains"
+	| "allowHttp"
+	| "allowFunctions"
+	| "allowShell"
+	| "shellTimeoutMs"
+	| "allowedFunctionPaths"
+> => ({
+	allowedBasePaths: parseCsvEnv(
+		"ALLOWED_BASE_PATHS",
+		DEFAULT_CONFIG.allowedBasePaths,
+	),
+	allowedDomains: parseCsvEnv("ALLOWED_DOMAINS", DEFAULT_CONFIG.allowedDomains),
+	allowHttp: parseBooleanEnv("ALLOW_HTTP", DEFAULT_CONFIG.allowHttp),
+	allowFunctions: parseBooleanEnv(
+		"ALLOW_FUNCTIONS",
+		DEFAULT_CONFIG.allowFunctions,
+	),
+	allowShell: parseBooleanEnv("ALLOW_SHELL", DEFAULT_CONFIG.allowShell),
+	shellTimeoutMs: parseIntEnv(
+		"SHELL_TIMEOUT_MS",
+		DEFAULT_CONFIG.shellTimeoutMs,
+	),
+	allowedFunctionPaths: parseCsvEnv(
+		"ALLOWED_FUNCTION_PATHS",
+		DEFAULT_CONFIG.allowedFunctionPaths,
+	),
+});
 
 /**
  * Returns a configuration object populated from environment variables,
@@ -230,8 +327,6 @@ export const getEnvConfig = (): ShotputConfig => ({
 		"MAX_BUCKET_FILES",
 		DEFAULT_CONFIG.maxBucketFiles,
 	),
-	awsS3Url: process.env["AWS_S3_URL"] ?? DEFAULT_CONFIG.awsS3Url,
-	cloudflareR2Url: process.env["CLOUDFLARE_R2_URL"],
 	httpTimeout: parseIntEnv("HTTP_TIMEOUT", DEFAULT_CONFIG.httpTimeout),
 	httpStreamThresholdBytes: parseIntEnv(
 		"HTTP_STREAM_THRESHOLD_BYTES",
@@ -244,103 +339,36 @@ export const getEnvConfig = (): ShotputConfig => ({
 		"RETRY_BACKOFF_MULTIPLIER",
 		DEFAULT_CONFIG.retryBackoffMultiplier,
 	),
-	enableContentLengthPlanning:
-		process.env["ENABLE_CONTENT_LENGTH_PLANNING"] !== "false" &&
-		DEFAULT_CONFIG.enableContentLengthPlanning,
-	allowedBasePaths: process.env["ALLOWED_BASE_PATHS"]
-		? process.env["ALLOWED_BASE_PATHS"].split(",")
-		: [...DEFAULT_CONFIG.allowedBasePaths],
-	allowedDomains: process.env["ALLOWED_DOMAINS"]
-		? process.env["ALLOWED_DOMAINS"].split(",")
-		: [...DEFAULT_CONFIG.allowedDomains],
-	allowHttp: parseBooleanEnv("ALLOW_HTTP", DEFAULT_CONFIG.allowHttp),
-	allowFunctions: parseBooleanEnv(
-		"ALLOW_FUNCTIONS",
-		DEFAULT_CONFIG.allowFunctions,
-	),
-	allowShell: parseBooleanEnv("ALLOW_SHELL", DEFAULT_CONFIG.allowShell),
-	shellTimeoutMs: parseIntEnv(
-		"SHELL_TIMEOUT_MS",
-		DEFAULT_CONFIG.shellTimeoutMs,
-	),
-	allowedFunctionPaths: process.env["ALLOWED_FUNCTION_PATHS"]
-		? process.env["ALLOWED_FUNCTION_PATHS"].split(",")
-		: [...DEFAULT_CONFIG.allowedFunctionPaths],
+	enableContentLengthPlanning: parseEnableContentLengthPlanning(),
+	...envSecurityConfig(),
 	skillsDir: process.env["SKILLS_DIR"] ?? DEFAULT_CONFIG.skillsDir,
 	allowRemoteSkills: parseBooleanEnv(
 		"ALLOW_REMOTE_SKILLS",
 		DEFAULT_CONFIG.allowRemoteSkills,
 	),
-	allowedSkillSources: process.env["ALLOWED_SKILL_SOURCES"]
-		? process.env["ALLOWED_SKILL_SOURCES"].split(",")
-		: [...DEFAULT_CONFIG.allowedSkillSources],
-	s3AccessKeyId:
-		process.env["S3_ACCESS_KEY_ID"] ??
-		process.env["AWS_ACCESS_KEY_ID"] ??
-		DEFAULT_CONFIG.s3AccessKeyId,
-	s3SecretAccessKey:
-		process.env["S3_SECRET_ACCESS_KEY"] ??
-		process.env["AWS_SECRET_ACCESS_KEY"] ??
-		DEFAULT_CONFIG.s3SecretAccessKey,
-	s3SessionToken:
-		process.env["S3_SESSION_TOKEN"] ??
-		process.env["AWS_SESSION_TOKEN"] ??
-		DEFAULT_CONFIG.s3SessionToken,
-	s3Region:
-		process.env["S3_REGION"] ??
-		process.env["AWS_REGION"] ??
-		DEFAULT_CONFIG.s3Region,
-	s3Bucket:
-		process.env["S3_BUCKET"] ??
-		process.env["AWS_BUCKET"] ??
-		DEFAULT_CONFIG.s3Bucket,
-	s3VirtualHostedStyle: parseBooleanEnv(
-		"S3_VIRTUAL_HOSTED_STYLE",
-		DEFAULT_CONFIG.s3VirtualHostedStyle,
+	allowedSkillSources: parseCsvEnv(
+		"ALLOWED_SKILL_SOURCES",
+		DEFAULT_CONFIG.allowedSkillSources,
 	),
+	...envS3Config(),
 	maxNestingDepth: parseIntEnv(
 		"MAX_NESTING_DEPTH",
 		DEFAULT_CONFIG.maxNestingDepth,
 	),
 	context: DEFAULT_CONFIG.context,
-	expressionEngine:
-		(process.env["EXPRESSION_ENGINE"] as "js" | "safe") === "safe"
-			? "safe"
-			: DEFAULT_CONFIG.expressionEngine,
+	expressionEngine: parseExpressionEngineEnv(),
 	outputMode: parseOutputModeEnv(),
-	sectionBudgets: (() => {
-		const raw = process.env["SECTION_BUDGETS"];
-		if (!raw) return DEFAULT_CONFIG.sectionBudgets;
-		try {
-			return JSON.parse(raw) as Record<string, number>;
-		} catch (error) {
-			log.warn(
-				`Invalid SECTION_BUDGETS value, falling back to default: ${error instanceof Error ? error.message : String(error)}`,
-			);
-			return DEFAULT_CONFIG.sectionBudgets;
-		}
-	})(),
-	sectionRoles: (() => {
-		const raw = process.env["SECTION_ROLES"];
-		if (!raw) return DEFAULT_CONFIG.sectionRoles;
-		try {
-			return JSON.parse(raw) as Record<string, "system" | "user" | "assistant">;
-		} catch (error) {
-			log.warn(
-				`Invalid SECTION_ROLES value, falling back to default: ${error instanceof Error ? error.message : String(error)}`,
-			);
-			return DEFAULT_CONFIG.sectionRoles;
-		}
-	})(),
+	sectionBudgets: parseJsonEnv(
+		"SECTION_BUDGETS",
+		DEFAULT_CONFIG.sectionBudgets,
+	),
+	sectionRoles: parseJsonEnv("SECTION_ROLES", DEFAULT_CONFIG.sectionRoles),
 	commandsDir: process.env["COMMANDS_DIR"] ?? DEFAULT_CONFIG.commandsDir,
 	parseOkf: parseBooleanEnv("PARSE_OKF", DEFAULT_CONFIG.parseOkf ?? false),
 	parseSubagentFrontmatter:
 		process.env["PARSE_SUBAGENT_FRONTMATTER"] === "true",
 	subagentsDir: process.env["SUBAGENTS_DIR"] ?? DEFAULT_CONFIG.subagentsDir,
-	redis:
-		process.env["REDIS_URL"] ??
-		process.env["VALKEY_URL"] ??
-		DEFAULT_CONFIG.redis,
+	redis: firstEnv("REDIS_URL", "VALKEY_URL") ?? DEFAULT_CONFIG.redis,
 	sqlite: parseBooleanEnv("SQLITE_ENABLED", DEFAULT_CONFIG.sqlite ?? false),
 	templateSyntax: parseTemplateSyntaxEnv(),
 	jinjaAutoescape: parseBooleanEnv(

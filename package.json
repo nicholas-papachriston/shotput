@@ -25,7 +25,7 @@
 		"benchmark": "bun run examples/benchmark/run-all.ts",
 		"conformance:generate": "uv run test/conformance/jinja2_render.py",
 		"fix": "bunx biome check --fix --unsafe .",
-		"lint": "bunx biome check .",
+		"lint": "bunx biome check . && bunx oxlint .",
 		"audit": "bun audit",
 		"typecheck": "tsc --noEmit",
 		"prepublishOnly": "bun run build && bun run test"
@@ -58,12 +58,13 @@
 		"binja": "latest",
 		"bun-types": "1.4.0",
 		"dts-bundle-generator": "latest",
-		"ejs": "latest",
 		"effect": "latest",
+		"ejs": "latest",
 		"fast-check": "latest",
 		"handlebars": "latest",
 		"mustache": "latest",
 		"nunjucks": "latest",
+		"oxlint": "1.80.0",
 		"typescript": "latest"
 	},
 	"engines": {

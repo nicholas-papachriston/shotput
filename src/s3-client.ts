@@ -88,37 +88,39 @@ export const getS3Endpoint = (
 	return undefined;
 };
 
-/**
- * Create an S3Client instance with credentials
- */
-export const createS3Client = (
+function firstCredential(
+	override: string | undefined,
+	fromConfig: string | undefined,
+): string | undefined {
+	if (override) return override;
+	if (fromConfig) return fromConfig;
+	return undefined;
+}
+
+function resolveS3Credentials(
 	bucketInfo: S3BucketInfo,
 	config: ShotputConfig,
 	overrideCredentials?: Partial<S3Credentials>,
-): S3Client => {
-	const credentials: S3Credentials = {
-		accessKeyId:
-			overrideCredentials?.accessKeyId || config.s3AccessKeyId || undefined,
-		secretAccessKey:
-			overrideCredentials?.secretAccessKey ||
-			config.s3SecretAccessKey ||
-			undefined,
-		sessionToken:
-			overrideCredentials?.sessionToken || config.s3SessionToken || undefined,
-		region: overrideCredentials?.region || config.s3Region || undefined,
+): S3Credentials {
+	const override = overrideCredentials ?? {};
+	return {
+		accessKeyId: firstCredential(override.accessKeyId, config.s3AccessKeyId),
+		secretAccessKey: firstCredential(
+			override.secretAccessKey,
+			config.s3SecretAccessKey,
+		),
+		sessionToken: firstCredential(override.sessionToken, config.s3SessionToken),
+		region: firstCredential(override.region, config.s3Region),
 		bucket: bucketInfo.bucket,
 		virtualHostedStyle:
-			overrideCredentials?.virtualHostedStyle ?? config.s3VirtualHostedStyle,
-		endpoint:
-			overrideCredentials?.endpoint ||
-			getS3Endpoint(bucketInfo, overrideCredentials || {}, config),
+			override.virtualHostedStyle ?? config.s3VirtualHostedStyle,
+		endpoint: override.endpoint || getS3Endpoint(bucketInfo, override, config),
 	};
+}
 
-	log.info(
-		`Creating S3Client for bucket: ${bucketInfo.bucket}${bucketInfo.isDirectoryBucket ? " (directory bucket)" : ""}`,
-	);
-
-	// Filter out undefined values
+function s3ClientOptions(
+	credentials: S3Credentials,
+): Record<string, string | boolean> {
 	const clientConfig: Record<string, string | boolean> = {};
 	if (credentials.accessKeyId)
 		clientConfig["accessKeyId"] = credentials.accessKeyId;
@@ -131,8 +133,28 @@ export const createS3Client = (
 	if (credentials.endpoint) clientConfig["endpoint"] = credentials.endpoint;
 	if (credentials.virtualHostedStyle !== undefined)
 		clientConfig["virtualHostedStyle"] = credentials.virtualHostedStyle;
+	return clientConfig;
+}
 
-	return new S3Client(clientConfig);
+/**
+ * Create an S3Client instance with credentials
+ */
+export const createS3Client = (
+	bucketInfo: S3BucketInfo,
+	config: ShotputConfig,
+	overrideCredentials?: Partial<S3Credentials>,
+): S3Client => {
+	const credentials = resolveS3Credentials(
+		bucketInfo,
+		config,
+		overrideCredentials,
+	);
+
+	log.info(
+		`Creating S3Client for bucket: ${bucketInfo.bucket}${bucketInfo.isDirectoryBucket ? " (directory bucket)" : ""}`,
+	);
+
+	return new S3Client(s3ClientOptions(credentials));
 };
 
 /**

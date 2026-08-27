@@ -1,0 +1,16 @@
+{
+	"$schema": "./node_modules/oxlint/configuration_schema.json",
+	"ignorePatterns": ["**/node_modules/**", "**/dist/**", "**/test-temp*"],
+	"categories": {
+		"correctness": "off",
+		"suspicious": "off",
+		"pedantic": "off",
+		"perf": "off",
+		"style": "off",
+		"restriction": "off",
+		"nursery": "off"
+	},
+	"rules": {
+		"complexity": ["error", { "max": 20, "variant": "classic" }]
+	}
+}

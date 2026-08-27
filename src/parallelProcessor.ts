@@ -15,6 +15,15 @@ import { TemplateType } from "./types";
 
 const LITERAL_PLACEHOLDER_PREFIX = "__SHOTPUT_LITERAL_";
 
+const RULE_VAR_MARKERS = [
+	"{{#",
+	"{{/",
+	"{{else",
+	"{{context.",
+	"{{params.",
+	"{{env.",
+] as const;
+
 const log = getLogger("parallelProcessor");
 
 export type SegmentSink = (segment: string) => void;
@@ -29,6 +38,52 @@ interface RetryConfig {
 	maxRetries: number;
 	initialDelay: number;
 	backoffMultiplier: number;
+}
+
+interface TaskProcessOutcome {
+	task: TemplateTask;
+	processed: ProcessedContent | null;
+	result: TemplateResult;
+}
+
+interface ReplacementPart {
+	start: number;
+	end: number;
+	replacement: string;
+}
+
+function replacementNeedsRulesAndVars(replacement: string): boolean {
+	if (!replacement.includes("{{")) return false;
+	for (const marker of RULE_VAR_MARKERS) {
+		if (replacement.includes(marker)) return true;
+	}
+	return false;
+}
+
+function formatTaskError(error: string, path: string): string {
+	if (error.startsWith("[")) return error;
+	return `[Error reading ${path}]`;
+}
+
+function fallbackReplacement(
+	task: TemplateTask,
+	processed: ProcessedContent | null,
+	result: TemplateResult,
+): string {
+	if (result.error) return formatTaskError(result.error, task.path);
+	return processed?.replacement ?? "";
+}
+
+function stitchContent(content: string, parts: ReplacementPart[]): string {
+	const segments: string[] = [];
+	let lastEnd = 0;
+	for (const part of parts) {
+		segments.push(content.slice(lastEnd, part.start));
+		segments.push(part.replacement);
+		lastEnd = part.end;
+	}
+	segments.push(content.slice(lastEnd));
+	return segments.join("");
 }
 
 export class ParallelProcessor {
@@ -172,6 +227,205 @@ export class ParallelProcessor {
 		}
 	}
 
+	private async prepareTaskReplacement(
+		task: TemplateTask,
+		templateResult: TemplateResult,
+		processed: ProcessedContent,
+		maxLength: number,
+		literalBox?: { literals: Map<string, string> },
+	): Promise<string> {
+		let replacement = processed.replacement;
+		if (task.type === TemplateType.Custom && literalBox) {
+			const plugin = getMatchingPlugin(this.config, task.path);
+			if (plugin && !plugin.canContainTemplates && replacement) {
+				const key = `${LITERAL_PLACEHOLDER_PREFIX}${literalBox.literals.size}__`;
+				literalBox.literals.set(key, replacement);
+				replacement = key;
+			}
+		}
+		const postSourceHooks = getPostResolveSourceHooks(this.config);
+		if (postSourceHooks.length > 0) {
+			const sourceResult = {
+				type: templateResult.type,
+				path: templateResult.path,
+				content: replacement,
+				remainingLength: maxLength - processed.length,
+				metadata: templateResult,
+			};
+			const afterHook = await runPostResolveSourceHooks(
+				sourceResult,
+				postSourceHooks,
+			);
+			replacement = afterHook.content;
+		}
+		return replacement;
+	}
+
+	private settleTaskOutcomes(
+		settledResults: PromiseSettledResult<TaskProcessOutcome>[],
+		selectedTasks: TemplateTask[],
+	): { results: TaskProcessOutcome[]; hasError: boolean } {
+		const results: TaskProcessOutcome[] = [];
+		let hasError = false;
+		for (let i = 0; i < settledResults.length; i++) {
+			const settled = settledResults[i];
+			if (settled?.status === "fulfilled") {
+				results.push(settled.value);
+				continue;
+			}
+			const task = selectedTasks[i];
+			if (task === undefined) continue;
+			hasError = true;
+			results.push({
+				task,
+				processed: null,
+				result: {
+					type: task.type,
+					path: task.path,
+					length: 0,
+					truncated: false,
+					processingTime: Date.now() - this.startTime,
+					error: `[Error reading ${task.path}]`,
+				},
+			});
+		}
+		return { results, hasError };
+	}
+
+	private collectReplacementParts(
+		results: TaskProcessOutcome[],
+		hookedReplacements: Map<number, string>,
+	): { parts: ReplacementPart[]; replacementsNeedRulesAndVars: boolean } {
+		const parts: ReplacementPart[] = [];
+		let replacementsNeedRulesAndVars = false;
+		for (const { task, processed, result } of results) {
+			this.processedTemplates.push(result);
+			const hooked = hookedReplacements.get(task.matchIndex);
+			const replacement =
+				hooked ?? fallbackReplacement(task, processed, result);
+			if ((!result.error && processed) || result.error) {
+				parts.push({
+					start: task.matchIndex,
+					end: task.matchIndex + task.match.length,
+					replacement,
+				});
+				if (replacementNeedsRulesAndVars(replacement)) {
+					replacementsNeedRulesAndVars = true;
+				}
+			}
+		}
+		return { parts, replacementsNeedRulesAndVars };
+	}
+
+	private async runParallelTasks(
+		selectedTasks: TemplateTask[],
+		content: string,
+		maxLength: number,
+		onProgress: ((progress: ProcessingProgress) => void) | undefined,
+		emit: SegmentSink | undefined,
+		literalBox: { literals: Map<string, string> } | undefined,
+	): Promise<{
+		hookedReplacements: Map<number, string>;
+		lastEmittedEnd: number;
+		hasError: boolean;
+		results: TaskProcessOutcome[];
+	}> {
+		const orderedParts = selectedTasks.map((task) => ({
+			start: task.matchIndex,
+			end: task.matchIndex + task.match.length,
+		}));
+		orderedParts.sort((a, b) => a.start - b.start);
+		const completed = new Map<number, { end: number; replacement: string }>();
+		const hookedReplacements = new Map<number, string>();
+		let lastEmittedEnd = 0;
+		let hasError = false;
+		let nextDrainIndex = 0;
+
+		const tryDrain = (): void => {
+			while (nextDrainIndex < orderedParts.length) {
+				const part = orderedParts[nextDrainIndex];
+				if (part.start < lastEmittedEnd) {
+					nextDrainIndex++;
+					continue;
+				}
+				const done = completed.get(part.start);
+				if (!done) break;
+				if (emit && !hasError) {
+					emit(content.slice(lastEmittedEnd, part.start));
+					emit(done.replacement);
+				}
+				lastEmittedEnd = part.end;
+				completed.delete(part.start);
+				nextDrainIndex++;
+			}
+		};
+
+		const processingPromises = selectedTasks.map(async (task, index) => {
+			await this.semaphore.acquire();
+
+			try {
+				onProgress?.({
+					current: index,
+					total: selectedTasks.length,
+					currentTemplate: task.path,
+					stage: "processing",
+				});
+
+				const perTaskBudget = Math.max(
+					0,
+					Math.floor(maxLength / Math.max(1, selectedTasks.length)),
+				);
+				const result = await this.processSingleTemplate(task, perTaskBudget);
+				const processed = result.processed;
+
+				if (!hasError) {
+					const templateResult = result.result;
+					let replacement: string;
+					if (!templateResult.error && processed) {
+						replacement = await this.prepareTaskReplacement(
+							task,
+							templateResult,
+							processed,
+							maxLength,
+							literalBox,
+						);
+						hookedReplacements.set(task.matchIndex, replacement);
+					} else if (templateResult.error) {
+						replacement = formatTaskError(templateResult.error, task.path);
+						hookedReplacements.set(task.matchIndex, replacement);
+					} else {
+						replacement = "";
+					}
+
+					const end = task.matchIndex + task.match.length;
+					completed.set(task.matchIndex, { end, replacement });
+					tryDrain();
+				}
+				return result;
+			} catch (err) {
+				hasError = true;
+				throw err;
+			} finally {
+				this.semaphore.release();
+			}
+		});
+
+		const settledResults = await Promise.allSettled(processingPromises);
+		const settled = this.settleTaskOutcomes(settledResults, selectedTasks);
+		if (settled.hasError) hasError = true;
+
+		if (emit && !hasError) {
+			tryDrain();
+		}
+
+		return {
+			hookedReplacements,
+			lastEmittedEnd,
+			hasError,
+			results: settled.results,
+		};
+	}
+
 	async processTemplatesWithPlanning(
 		content: string,
 		basePath: string,
@@ -218,201 +472,25 @@ export class ParallelProcessor {
 			`Step 4: Processing ${selectedTasks.length} templates in parallel...`,
 		);
 
-		const orderedParts = selectedTasks.map((t) => ({
-			start: t.matchIndex,
-			end: t.matchIndex + t.match.length,
-		}));
-		orderedParts.sort((a, b) => a.start - b.start);
-		const completed = new Map<number, { end: number; replacement: string }>();
-		const hookedReplacements = new Map<number, string>();
-		let lastEmittedEnd = 0;
-		let hasError = false;
-		let nextDrainIndex = 0;
+		const parallel = await this.runParallelTasks(
+			selectedTasks,
+			content,
+			maxLength,
+			onProgress,
+			emit,
+			literalBox,
+		);
+		parallel.results.sort((a, b) => a.task.matchIndex - b.task.matchIndex);
 
-		const tryDrain = (): void => {
-			while (nextDrainIndex < orderedParts.length) {
-				const part = orderedParts[nextDrainIndex];
-				if (part.start < lastEmittedEnd) {
-					nextDrainIndex++;
-					continue;
-				}
-				const done = completed.get(part.start);
-				if (!done) break;
-				if (emit && !hasError) {
-					emit(content.slice(lastEmittedEnd, part.start));
-					emit(done.replacement);
-				}
-				lastEmittedEnd = part.end;
-				completed.delete(part.start);
-				nextDrainIndex++;
-			}
-		};
-
-		const RULE_VAR_MARKERS = [
-			"{{#",
-			"{{/",
-			"{{else",
-			"{{context.",
-			"{{params.",
-			"{{env.",
-		];
-
-		const processingPromises = selectedTasks.map(async (task, index) => {
-			await this.semaphore.acquire();
-
-			try {
-				onProgress?.({
-					current: index,
-					total: selectedTasks.length,
-					currentTemplate: task.path,
-					stage: "processing",
-				});
-
-				const perTaskBudget = Math.max(
-					0,
-					Math.floor(maxLength / Math.max(1, selectedTasks.length)),
-				);
-				const result = await this.processSingleTemplate(task, perTaskBudget);
-				const processed = result.processed;
-
-				if (!hasError) {
-					const templateResult = result.result;
-					let replacement: string;
-					if (!templateResult.error && processed) {
-						replacement = processed.replacement;
-						if (task.type === TemplateType.Custom && literalBox) {
-							const plugin = getMatchingPlugin(this.config, task.path);
-							if (plugin && !plugin.canContainTemplates && replacement) {
-								const key = `${LITERAL_PLACEHOLDER_PREFIX}${literalBox.literals.size}__`;
-								literalBox.literals.set(key, replacement);
-								replacement = key;
-							}
-						}
-						const postSourceHooks = getPostResolveSourceHooks(this.config);
-						if (postSourceHooks.length > 0) {
-							const sourceResult = {
-								type: templateResult.type,
-								path: templateResult.path,
-								content: replacement,
-								remainingLength: maxLength - processed.length,
-								metadata: templateResult,
-							};
-							const afterHook = await runPostResolveSourceHooks(
-								sourceResult,
-								postSourceHooks,
-							);
-							replacement = afterHook.content;
-						}
-						hookedReplacements.set(task.matchIndex, replacement);
-					} else if (templateResult.error) {
-						replacement = templateResult.error.startsWith("[")
-							? templateResult.error
-							: `[Error reading ${task.path}]`;
-						hookedReplacements.set(task.matchIndex, replacement);
-					} else {
-						replacement = "";
-					}
-
-					const end = task.matchIndex + task.match.length;
-					completed.set(task.matchIndex, { end, replacement });
-					tryDrain();
-				}
-				return result;
-			} catch (err) {
-				hasError = true;
-				throw err;
-			} finally {
-				this.semaphore.release();
-			}
-		});
-
-		const settledResults = await Promise.allSettled(processingPromises);
-		const results: Array<{
-			task: TemplateTask;
-			processed: ProcessedContent | null;
-			result: TemplateResult;
-		}> = [];
-		for (let i = 0; i < settledResults.length; i++) {
-			const settled = settledResults[i];
-			if (settled?.status === "fulfilled") {
-				results.push(settled.value);
-				continue;
-			}
-			const task = selectedTasks[i];
-			if (task === undefined) continue;
-			hasError = true;
-			results.push({
-				task,
-				processed: null,
-				result: {
-					type: task.type,
-					path: task.path,
-					length: 0,
-					truncated: false,
-					processingTime: Date.now() - this.startTime,
-					error: `[Error reading ${task.path}]`,
-				},
-			});
-		}
-
-		if (emit && !hasError) {
-			tryDrain();
-		}
-
-		results.sort((a, b) => a.task.matchIndex - b.task.matchIndex);
-
-		const parts: { start: number; end: number; replacement: string }[] = [];
-		let remainingLength = maxLength;
-		let replacementsNeedRulesAndVars = false;
-
-		for (const { task, processed, result } of results) {
-			this.processedTemplates.push(result);
-
-			const start = task.matchIndex;
-			const end = task.matchIndex + task.match.length;
-			const replacement =
-				hookedReplacements.get(task.matchIndex) ??
-				(result.error
-					? result.error.startsWith("[")
-						? result.error
-						: `[Error reading ${task.path}]`
-					: (processed?.replacement ?? ""));
-
-			if (!result.error && processed) {
-				parts.push({ start, end, replacement });
-				if (replacement.includes("{{")) {
-					for (const m of RULE_VAR_MARKERS) {
-						if (replacement.includes(m)) {
-							replacementsNeedRulesAndVars = true;
-							break;
-						}
-					}
-				}
-				remainingLength -= processed.length;
-			} else if (result.error) {
-				parts.push({ start, end, replacement });
-				if (replacement.includes("{{")) {
-					for (const m of RULE_VAR_MARKERS) {
-						if (replacement.includes(m)) {
-							replacementsNeedRulesAndVars = true;
-							break;
-						}
-					}
-				}
-			}
-		}
-
-		const segments: string[] = [];
-		let lastEnd = 0;
-		for (const part of parts) {
-			segments.push(content.slice(lastEnd, part.start));
-			segments.push(part.replacement);
-			lastEnd = part.end;
-		}
-		segments.push(content.slice(lastEnd));
-		const resultContent = segments.join("");
-
-		const pendingSuffix = emit ? content.slice(lastEmittedEnd) : undefined;
+		const { parts, replacementsNeedRulesAndVars } =
+			this.collectReplacementParts(
+				parallel.results,
+				parallel.hookedReplacements,
+			);
+		const resultContent = stitchContent(content, parts);
+		const pendingSuffix = emit
+			? content.slice(parallel.lastEmittedEnd)
+			: undefined;
 
 		onProgress?.({
 			current: selectedTasks.length,

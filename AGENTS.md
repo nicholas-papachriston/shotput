@@ -4,7 +4,7 @@
 
 Shotput (`@agent_oxide/shotput`) is a zero-dependency programmatic templating library for Bun, designed for Gen AI applications — system prompts, personas, context engineering, and multi-source prompt assembly. It resolves templates from files, directories, globs, HTTP, S3/R2, functions, Anthropic Skills, SQLite, Redis, and custom source plugins, with optional streaming for large content, security validation, token-aware budgeting, and lifecycle hooks.
 
-**Tech stack:** TypeScript (strict), Bun runtime and test runner, Biome for lint/format. Published to npm as a bundled `dist/` package with no runtime dependencies. Optional native Jinja2 syntax mode is validated against CPython Jinja2 via a Python conformance harness.
+**Tech stack:** TypeScript (strict), Bun runtime and test runner, Biome for lint/format, oxlint complexity (classic McCabe CCN) max 20 as a lint deny. Published to npm as a bundled `dist/` package with no runtime dependencies. Optional native Jinja2 syntax mode is validated against CPython Jinja2 via a Python conformance harness.
 
 **Primary API:** `shotput()` returns a fluent builder; chain config setters (`.templateDir()`, `.context()`, `.allowedBasePaths()`, etc.), then call `.run()`, `.stream()`, `.streamSegments()`, or `.build()` for a reusable `ShotputProgram`. Use `compileShotputTemplate()` to pre-compile templates for repeated renders.
 
@@ -61,7 +61,7 @@ shotput/
 | `bun install` | Install dependencies |
 | `bun run build` | Bundle `src/index.ts` → `dist/index.js` + generate `dist/index.d.ts` |
 | `bun run typecheck` | `tsc --noEmit` |
-| `bun run lint` | Biome check |
+| `bun run lint` | Biome check, then oxlint McCabe CCN 20 |
 | `bun run fix` | Biome check with auto-fix (`--unsafe`) |
 | `bun run examples` | Run all examples (`examples/index.ts`) |
 | `bun run benchmark` | Run benchmark suite (`examples/benchmark/run-all.ts`) |

@@ -57,6 +57,94 @@ export interface InterpolationResults {
 	remainingLength: number;
 }
 
+type LiteralBox = { literals: Map<string, string> };
+
+function applyRootLiterals(
+	text: string,
+	depth: number,
+	literalBox: LiteralBox | undefined,
+): string {
+	if (depth !== 0) return text;
+	if (literalBox === undefined) return text;
+	if (literalBox.literals.size === 0) return text;
+	return substituteLiterals(text, literalBox.literals);
+}
+
+function emptyMatchResult(
+	contentAfterVariables: string,
+	remainingLength: number,
+	depth: number,
+	literalBox: LiteralBox | undefined,
+): InterpolationResults {
+	return {
+		processedTemplate: applyRootLiterals(
+			contentAfterVariables,
+			depth,
+			literalBox,
+		),
+		remainingLength,
+	};
+}
+
+function resolveLiteralBox(
+	literalBox: LiteralBox | undefined,
+	depth: number,
+): LiteralBox | undefined {
+	if (literalBox !== undefined) return literalBox;
+	if (depth === 0) return { literals: new Map<string, string>() };
+	return undefined;
+}
+
+async function interpolateNested(
+	processedTemplate: string,
+	config: ShotputConfig,
+	currentMetadata: ResultMetadataEntry[],
+	basePath: string,
+	depth: number,
+	finalRemainingLength: number,
+	expandingPaths: Set<string>,
+	resolvedLiteralBox: LiteralBox | undefined,
+): Promise<InterpolationResults> {
+	log.info(
+		`Found nested templates, recursing to depth ${depth + 1}/${config.maxNestingDepth}`,
+	);
+	for (const entry of currentMetadata) {
+		expandingPaths.add(entry.path);
+	}
+	const inclusionBase = resolveNestedInclusionBase(
+		processedTemplate,
+		currentMetadata,
+		basePath,
+	);
+	try {
+		const nestedResults = await interpolation(
+			processedTemplate,
+			config,
+			inclusionBase,
+			depth + 1,
+			finalRemainingLength,
+			expandingPaths,
+			resolvedLiteralBox,
+		);
+		return {
+			processedTemplate: applyRootLiterals(
+				nestedResults.processedTemplate,
+				depth,
+				resolvedLiteralBox,
+			),
+			resultMetadata: [
+				...currentMetadata,
+				...(nestedResults.resultMetadata ?? []),
+			],
+			remainingLength: nestedResults.remainingLength,
+		};
+	} finally {
+		for (const entry of currentMetadata) {
+			expandingPaths.delete(entry.path);
+		}
+	}
+}
+
 export const interpolation = async (
 	content: string,
 	config: ShotputConfig,
@@ -64,7 +152,7 @@ export const interpolation = async (
 	depth = 0,
 	remainingLength: number = config.maxPromptLength,
 	expandingPaths: Set<string> = new Set(),
-	literalBox?: { literals: Map<string, string> },
+	literalBox?: LiteralBox,
 	mergeContext?: Record<string, unknown>,
 ): Promise<InterpolationResults> => {
 	if (depth === 0) {
@@ -79,26 +167,18 @@ export const interpolation = async (
 	const matchEntries = getInterpolationMatchesWithIndices(
 		contentAfterVariables,
 	);
-	const resolvedLiteralBox =
-		literalBox ??
-		(depth === 0 ? { literals: new Map<string, string>() } : undefined);
+	const resolvedLiteralBox = resolveLiteralBox(literalBox, depth);
 
 	if (matchEntries.length === 0) {
-		const out = { processedTemplate: contentAfterVariables, remainingLength };
-		if (depth === 0 && resolvedLiteralBox?.literals.size) {
-			out.processedTemplate = substituteLiterals(
-				contentAfterVariables,
-				resolvedLiteralBox.literals,
-			);
-		}
-		return out;
+		return emptyMatchResult(
+			contentAfterVariables,
+			remainingLength,
+			depth,
+			resolvedLiteralBox,
+		);
 	}
 
 	const maxDepth = config.maxNestingDepth;
-
-	let processedTemplate: string;
-	let currentMetadata: ResultMetadataEntry[] = [];
-	let finalRemainingLength = remainingLength;
 
 	log.info(`Processing (depth ${depth}/${maxDepth})`);
 	const processor = new ParallelProcessor(config);
@@ -116,24 +196,24 @@ export const interpolation = async (
 		resolvedLiteralBox,
 	);
 
-	processedTemplate =
+	const processedTemplate =
 		replacementsNeedRulesAndVars === false
 			? processedContent
 			: evaluateInterpolationContent(processedContent, effectiveConfig, depth);
-	currentMetadata = mapInterpolationMetadata(metadata);
+	const currentMetadata = mapInterpolationMetadata(metadata);
 
 	const usedLength = config.tokenizer
 		? await getCountFnAsync(config)(processedTemplate)
 		: processedTemplate.length;
-	finalRemainingLength = Math.max(0, config.maxPromptLength - usedLength);
+	const finalRemainingLength = Math.max(0, config.maxPromptLength - usedLength);
 
 	if (processedTemplate === contentAfterVariables) {
-		let out = processedTemplate.trim();
-		if (depth === 0 && resolvedLiteralBox?.literals.size) {
-			out = substituteLiterals(out, resolvedLiteralBox.literals);
-		}
 		return {
-			processedTemplate: out,
+			processedTemplate: applyRootLiterals(
+				processedTemplate.trim(),
+				depth,
+				resolvedLiteralBox,
+			),
 			resultMetadata: currentMetadata,
 			remainingLength: finalRemainingLength,
 		};
@@ -141,55 +221,24 @@ export const interpolation = async (
 
 	const moreMatches = processedTemplate.match(interpolationPattern);
 	if (moreMatches && depth < maxDepth && finalRemainingLength > 0) {
-		log.info(
-			`Found nested templates, recursing to depth ${depth + 1}/${maxDepth}`,
-		);
-		for (const m of currentMetadata) {
-			expandingPaths.add(m.path);
-		}
-		// Use inclusion base only when nested paths are file-relative (./x, ../x, bare).
-		// Project-relative paths (e.g. test/fixtures/x) use basePath (cwd).
-		const inclusionBase = resolveNestedInclusionBase(
+		return interpolateNested(
 			processedTemplate,
+			config,
 			currentMetadata,
 			basePath,
+			depth,
+			finalRemainingLength,
+			expandingPaths,
+			resolvedLiteralBox,
 		);
-		try {
-			const nestedResults = await interpolation(
-				processedTemplate,
-				config,
-				inclusionBase,
-				depth + 1,
-				finalRemainingLength,
-				expandingPaths,
-				resolvedLiteralBox,
-			);
-
-			let out = nestedResults.processedTemplate;
-			if (depth === 0 && resolvedLiteralBox?.literals.size) {
-				out = substituteLiterals(out, resolvedLiteralBox.literals);
-			}
-			return {
-				processedTemplate: out,
-				resultMetadata: [
-					...currentMetadata,
-					...(nestedResults.resultMetadata ?? []),
-				],
-				remainingLength: nestedResults.remainingLength,
-			};
-		} finally {
-			for (const m of currentMetadata) {
-				expandingPaths.delete(m.path);
-			}
-		}
 	}
 
-	let out = processedTemplate.trim();
-	if (depth === 0 && resolvedLiteralBox?.literals.size) {
-		out = substituteLiterals(out, resolvedLiteralBox.literals);
-	}
 	return {
-		processedTemplate: out,
+		processedTemplate: applyRootLiterals(
+			processedTemplate.trim(),
+			depth,
+			resolvedLiteralBox,
+		),
 		resultMetadata: currentMetadata,
 		remainingLength: finalRemainingLength,
 	};

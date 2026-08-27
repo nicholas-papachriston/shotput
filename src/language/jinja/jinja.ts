@@ -126,71 +126,88 @@ function getByPath(scope: ExprScope, path: string): unknown {
 	return current;
 }
 
+type NestDepth = {
+	paren: number;
+	bracket: number;
+	brace: number;
+};
+
+function closingQuoteClears(
+	ch: number,
+	quote: "'" | '"',
+	prev: number,
+): boolean {
+	const matches = (ch === 39 && quote === "'") || (ch === 34 && quote === '"');
+	return matches && prev !== 92;
+}
+
+function openingQuote(ch: number): "'" | '"' | null {
+	if (ch === 39) return "'";
+	if (ch === 34) return '"';
+	return null;
+}
+
+function updateNestDepth(ch: number, depth: NestDepth): void {
+	if (ch === 40) depth.paren++;
+	else if (ch === 41) depth.paren--;
+	else if (ch === 91) depth.bracket++;
+	else if (ch === 93) depth.bracket--;
+	else if (ch === 123) depth.brace++;
+	else if (ch === 125) depth.brace--;
+}
+
+function compareOpAt(
+	expr: string,
+	i: number,
+	ch: number,
+): { op: CompareOp; opLen: number } | null {
+	if (ch === 61 && expr.charCodeAt(i + 1) === 61) {
+		return { op: "==", opLen: 2 };
+	}
+	if (ch === 33 && expr.charCodeAt(i + 1) === 61) {
+		return { op: "!=", opLen: 2 };
+	}
+	if (ch === 62) {
+		if (expr.charCodeAt(i + 1) === 61) {
+			return { op: ">=", opLen: 2 };
+		}
+		return { op: ">", opLen: 1 };
+	}
+	if (ch === 60) {
+		if (expr.charCodeAt(i + 1) === 61) {
+			return { op: "<=", opLen: 2 };
+		}
+		return { op: "<", opLen: 1 };
+	}
+	return null;
+}
+
 function parseSimpleCompare(expr: string): {
 	left: string;
 	op: CompareOp;
 	right: string;
 } | null {
-	let depthParen = 0;
-	let depthBracket = 0;
-	let depthBrace = 0;
+	const depth: NestDepth = { paren: 0, bracket: 0, brace: 0 };
 	let quote: "'" | '"' | null = null;
 	for (let i = 0; i < expr.length; i++) {
 		const ch = expr.charCodeAt(i);
 		if (quote !== null) {
-			if (
-				((ch === 39 && quote === "'") || (ch === 34 && quote === '"')) &&
-				expr.charCodeAt(i - 1) !== 92
-			)
-				quote = null;
+			if (closingQuoteClears(ch, quote, expr.charCodeAt(i - 1))) quote = null;
 			continue;
 		}
-		if (ch === 39) {
-			quote = "'";
+		const opened = openingQuote(ch);
+		if (opened !== null) {
+			quote = opened;
 			continue;
 		}
-		if (ch === 34) {
-			quote = '"';
-			continue;
-		}
-		if (ch === 40) depthParen++;
-		else if (ch === 41) depthParen--;
-		else if (ch === 91) depthBracket++;
-		else if (ch === 93) depthBracket--;
-		else if (ch === 123) depthBrace++;
-		else if (ch === 125) depthBrace--;
-		if (depthParen !== 0 || depthBracket !== 0 || depthBrace !== 0) continue;
-		let op: CompareOp | null = null;
-		let opLen = 0;
-		if (ch === 61 && expr.charCodeAt(i + 1) === 61) {
-			op = "==";
-			opLen = 2;
-		} else if (ch === 33 && expr.charCodeAt(i + 1) === 61) {
-			op = "!=";
-			opLen = 2;
-		} else if (ch === 62) {
-			if (expr.charCodeAt(i + 1) === 61) {
-				op = ">=";
-				opLen = 2;
-			} else {
-				op = ">";
-				opLen = 1;
-			}
-		} else if (ch === 60) {
-			if (expr.charCodeAt(i + 1) === 61) {
-				op = "<=";
-				opLen = 2;
-			} else {
-				op = "<";
-				opLen = 1;
-			}
-		}
-		if (op !== null) {
-			const left = expr.slice(0, i).trim();
-			const right = expr.slice(i + opLen).trim();
-			if (left.length === 0 || right.length === 0) return null;
-			return { left, op, right };
-		}
+		updateNestDepth(ch, depth);
+		if (depth.paren !== 0 || depth.bracket !== 0 || depth.brace !== 0) continue;
+		const found = compareOpAt(expr, i, ch);
+		if (found === null) continue;
+		const left = expr.slice(0, i).trim();
+		const right = expr.slice(i + found.opLen).trim();
+		if (left.length === 0 || right.length === 0) return null;
+		return { left, op: found.op, right };
 	}
 	return null;
 }
