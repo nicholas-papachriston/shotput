@@ -21,11 +21,10 @@ export type ShotputEffectStream<A, E = ShotputEffectError> = Stream.Stream<
 	never
 >;
 
-export interface EffectShotputProgram
-	extends Omit<
-		ShotputProgram,
-		"with" | "run" | "stream" | "runStream" | "streamSegments" | "effect"
-	> {
+export interface EffectShotputProgram extends Omit<
+	ShotputProgram,
+	"with" | "run" | "stream" | "runStream" | "streamSegments" | "effect"
+> {
 	with(overrides: ShotputOverrides): EffectShotputProgram;
 	run(): ShotputEffect<ShotputOutput>;
 	stream(): ShotputEffect<ShotputStreamingOutput>;
