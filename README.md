@@ -55,10 +55,10 @@ The benchmark includes:
 import { shotput } from "@agent_oxide/shotput";
 
 const result = await shotput()
-  .templateDir("./templates")
-  .templateFile("prompt.md")
-  .allowedBasePaths(["./data"])
-  .run();
+	.templateDir("./templates")
+	.templateFile("prompt.md")
+	.allowedBasePaths(["./data"])
+	.run();
 
 console.log(result.content);
 ```
@@ -74,15 +74,15 @@ console.log(result.content);
 
 ## Scripts
 
-| Command | Description |
-| --------- | ----------- |
-| `bun run build` | Build dist (Bun bundle + single `index.d.ts` via dts-bundle-generator) |
-| `bun test` | Run all tests |
-| `bun run test:conformance` | Strict Jinja2 parity test against live CPython Jinja2 output |
-| `bun run conformance:generate` | Generate CPython Jinja2 snapshots (`test/conformance/expected.json`) |
-| `bun run examples` | Run all examples |
-| `bun run lint` | Run Biome check |
-| `bun run typecheck` | TypeScript check |
+| Command                        | Description                                                            |
+| ------------------------------ | ---------------------------------------------------------------------- |
+| `bun run build`                | Build dist (Bun bundle + single `index.d.ts` via dts-bundle-generator) |
+| `bun test`                     | Run all tests                                                          |
+| `bun run test:conformance`     | Strict Jinja2 parity test against live CPython Jinja2 output           |
+| `bun run conformance:generate` | Generate CPython Jinja2 snapshots (`test/conformance/expected.json`)   |
+| `bun run examples`             | Run all examples                                                       |
+| `bun run lint`                 | oxfmt + oxlint (writes fixes, then fails on leftovers)                 |
+| `bun run typecheck`            | TypeScript check                                                       |
 
 ## Prerequisites
 

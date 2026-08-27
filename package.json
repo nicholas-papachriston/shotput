@@ -2,15 +2,35 @@
 	"name": "@agent_oxide/shotput",
 	"version": "1.5.0",
 	"description": "Zero dependency plug-and-play templating for Bun",
+	"keywords": [
+		"bun",
+		"context engineering",
+		"jinja2",
+		"llm",
+		"node",
+		"prompt engineering",
+		"templating"
+	],
+	"license": "MIT",
+	"author": "https://github.com/nicholas-papachriston",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/nicholas-papachriston/shotput.git"
+	},
+	"files": [
+		"dist"
+	],
 	"type": "module",
 	"main": "dist/index.js",
 	"types": "dist/index.d.ts",
-	"files": ["dist"],
 	"exports": {
 		".": {
 			"import": "./dist/index.js",
 			"types": "./dist/index.d.ts"
 		}
+	},
+	"publishConfig": {
+		"access": "public"
 	},
 	"scripts": {
 		"build": "bun build.ts && bunx dts-bundle-generator --config dts-bundle-generator.config.json",
@@ -24,32 +44,13 @@
 		"examples": "bun run examples/index.ts",
 		"benchmark": "bun run examples/benchmark/run-all.ts",
 		"conformance:generate": "uv run test/conformance/jinja2_render.py",
-		"fix": "bunx biome check --fix --unsafe .",
-		"lint": "bunx biome check . && bunx oxlint .",
+		"fix": "oxfmt && oxlint --fix .",
+		"lint": "oxfmt && oxlint --fix . && oxfmt --check && oxlint .",
 		"audit": "bun audit",
 		"typecheck": "tsc --noEmit",
 		"prepublishOnly": "bun run build && bun run test"
 	},
-	"keywords": [
-		"bun",
-		"node",
-		"context engineering",
-		"templating",
-		"llm",
-		"prompt engineering",
-		"jinja2"
-	],
-	"author": "https://github.com/nicholas-papachriston",
-	"license": "MIT",
-	"repository": {
-		"type": "git",
-		"url": "git+https://github.com/nicholas-papachriston/shotput.git"
-	},
-	"publishConfig": {
-		"access": "public"
-	},
 	"devDependencies": {
-		"@biomejs/biome": "latest",
 		"@types/bun": "latest",
 		"@types/ejs": "latest",
 		"@types/mustache": "latest",
@@ -64,6 +65,7 @@
 		"handlebars": "latest",
 		"mustache": "latest",
 		"nunjucks": "latest",
+		"oxfmt": "0.65.0",
 		"oxlint": "1.80.0",
 		"typescript": "latest"
 	},

@@ -4,7 +4,7 @@
 
 Shotput (`@agent_oxide/shotput`) is a zero-dependency programmatic templating library for Bun, designed for Gen AI applications — system prompts, personas, context engineering, and multi-source prompt assembly. It resolves templates from files, directories, globs, HTTP, S3/R2, functions, Anthropic Skills, SQLite, Redis, and custom source plugins, with optional streaming for large content, security validation, token-aware budgeting, and lifecycle hooks.
 
-**Tech stack:** TypeScript (strict), Bun runtime and test runner, Biome for lint/format, oxlint complexity (classic McCabe CCN) max 20 as a lint deny. Published to npm as a bundled `dist/` package with no runtime dependencies. Optional native Jinja2 syntax mode is validated against CPython Jinja2 via a Python conformance harness.
+**Tech stack:** TypeScript (strict), Bun runtime and test runner, oxfmt for format, oxlint for lint and McCabe CCN 20 as a lint deny. Published to npm as a bundled `dist/` package with no runtime dependencies. Optional native Jinja2 syntax mode is validated against CPython Jinja2 via a Python conformance harness.
 
 **Primary API:** `shotput()` returns a fluent builder; chain config setters (`.templateDir()`, `.context()`, `.allowedBasePaths()`, etc.), then call `.run()`, `.stream()`, `.streamSegments()`, or `.build()` for a reusable `ShotputProgram`. Use `compileShotputTemplate()` to pre-compile templates for repeated renders.
 
@@ -45,7 +45,8 @@ shotput/
 │   └── llm-template-guide.txt
 ├── build.ts                # Bun.build entry → dist/index.js
 ├── dts-bundle-generator.config.json  # Single dist/index.d.ts
-├── biome.json              # Lint and format config
+├── .oxfmtrc.json           # oxfmt format config
+├── .oxlintrc.json          # oxlint McCabe CCN 20 gate
 ├── tsconfig.json           # Strict TypeScript (noEmit; declarations via dts-bundle-generator)
 ├── bunfig.toml             # Test coverage enabled by default
 ├── env.example             # Sample .env for local development
@@ -56,15 +57,15 @@ shotput/
 
 ## Build Commands
 
-| Command | Description |
-|---------|-------------|
-| `bun install` | Install dependencies |
-| `bun run build` | Bundle `src/index.ts` → `dist/index.js` + generate `dist/index.d.ts` |
-| `bun run typecheck` | `tsc --noEmit` |
-| `bun run lint` | Biome check, then oxlint McCabe CCN 20 |
-| `bun run fix` | Biome check with auto-fix (`--unsafe`) |
-| `bun run examples` | Run all examples (`examples/index.ts`) |
-| `bun run benchmark` | Run benchmark suite (`examples/benchmark/run-all.ts`) |
+| Command                        | Description                                                            |
+| ------------------------------ | ---------------------------------------------------------------------- |
+| `bun install`                  | Install dependencies                                                   |
+| `bun run build`                | Bundle `src/index.ts` → `dist/index.js` + generate `dist/index.d.ts`   |
+| `bun run typecheck`            | `tsc --noEmit`                                                         |
+| `bun run lint`                 | oxfmt + oxlint `--fix`, then fail on leftovers                         |
+| `bun run fix`                  | oxfmt + oxlint `--fix`                                                 |
+| `bun run examples`             | Run all examples (`examples/index.ts`)                                 |
+| `bun run benchmark`            | Run benchmark suite (`examples/benchmark/run-all.ts`)                  |
 | `bun run conformance:generate` | Regenerate CPython Jinja2 snapshots (`test/conformance/expected.json`) |
 
 **Run locally (from repo root):**
@@ -84,8 +85,8 @@ bun run examples/basic/01-simple-file.ts
 ## Code Conventions
 
 - **Language:** TypeScript with `strict: true`, `verbatimModuleSyntax`, `noUnusedLocals`, `noUnusedParameters`, `noFallthroughCasesInSwitch`, `noPropertyAccessFromIndexSignature`.
-- **Formatting:** Tabs for indentation, double quotes for strings (Biome).
-- **Imports:** Top-level only; organize imports enabled in Biome.
+- **Formatting:** Tabs for indentation, double quotes for strings (oxfmt).
+- **Imports:** Top-level only.
 - **Modules:** ESM (`"type": "module"`); public API exported from `src/index.ts` and `src/api/`.
 - **Patterns:**
   - Fluent builder (`ShotputBuilder`) with immutable overrides merged via `_merge()` / `with()`.
@@ -95,18 +96,18 @@ bun run examples/basic/01-simple-file.ts
   - Lifecycle hooks: `preResolve`, `postResolveSource`, `postAssembly`, `preOutput`.
   - Use exhaustive `never` checks in switch default branches over discriminated unions.
 - **Bun APIs:** `Bun.build`, `Bun.test`, `Bun.$`, `Bun.write`, native S3/HTTP where applicable.
-- **Biome scope:** `src`, `test`, `examples`, `build.ts`, root `*.json`; ignores `dist`, `github`, `test/conformance/expected.json`.
+- **Lint/format scope:** `src`, `test`, `examples`, `build.ts`, root `*.json`; ignores `dist`, `github`, `test/conformance/expected.json`. `bun run lint` writes oxfmt + oxlint `--fix` then fails on leftovers.
 
 ## Testing
 
-| Command | Description |
-|---------|-------------|
-| `bun test` | All tests; cleans `test-temp-*` dirs afterward |
-| `bun run test:unit` | `test/unit/` only |
-| `bun run test:integration` | `test/integration/` only |
-| `bun run test:watch` | Watch mode |
-| `bun run test:coverage` | Coverage report (`bunfig.toml` enables coverage by default) |
-| `bun run test:conformance` | Strict Jinja2 parity (`SHOTPUT_CONFORMANCE_STRICT=1`) |
+| Command                    | Description                                                 |
+| -------------------------- | ----------------------------------------------------------- |
+| `bun test`                 | All tests; cleans `test-temp-*` dirs afterward              |
+| `bun run test:unit`        | `test/unit/` only                                           |
+| `bun run test:integration` | `test/integration/` only                                    |
+| `bun run test:watch`       | Watch mode                                                  |
+| `bun run test:coverage`    | Coverage report (`bunfig.toml` enables coverage by default) |
+| `bun run test:conformance` | Strict Jinja2 parity (`SHOTPUT_CONFORMANCE_STRICT=1`)       |
 
 Tests use `bun:test` (`describe`, `it`, `expect`, `beforeEach`, `afterEach`). Integration tests create ephemeral `test-temp-*` directories. Fuzz tests use `fast-check` in `test/unit/fuzz.test.ts`.
 
@@ -146,8 +147,6 @@ Configuration can be set programmatically on the builder or via environment vari
 
 Copy `env.example` to `.env` for local runs. `.env` is gitignored.
 
-
-
 ## CI/CD
 
 **GitHub Actions exception:** This repo keeps native workflows (`.github/workflows/ci.yml`, `publish.yml`) — it does **not** use the shared ci-cd engine on GitHub. Match the workflow locally before push:
@@ -159,11 +158,11 @@ bun run lint && bun run typecheck && bun run build && bun test
 
 ## Documentation
 
-| File | Role |
-| --- | --- |
+| File        | Role                                                       |
+| ----------- | ---------------------------------------------------------- |
 | `AGENTS.md` | Agent playbook — build gates, conventions, env (this file) |
-| `CLAUDE.md` | Pointer to `AGENTS.md` |
-| `README.md` | Human setup and contributor guide |
+| `CLAUDE.md` | Pointer to `AGENTS.md`                                     |
+| `README.md` | Human setup and contributor guide                          |
 
 Read this file before editing code.
 

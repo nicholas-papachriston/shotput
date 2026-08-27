@@ -23,7 +23,12 @@
 		{
 			"name": "tuple_unpack",
 			"template": "{% for k, v in items %}{{ k }}={{ v }};{% endfor %}",
-			"context": { "items": [["a", 1], ["b", 2]] }
+			"context": {
+				"items": [
+					["a", 1],
+					["b", 2]
+				]
+			}
 		},
 		{
 			"name": "set_expression",

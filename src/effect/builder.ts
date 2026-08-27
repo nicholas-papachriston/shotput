@@ -8,17 +8,16 @@ import type {
 import type { ShotputEffect } from "./program";
 import type { EffectShotputProgram } from "./program";
 
-export interface EffectShotputBuilder
-	extends Omit<
-		ShotputBuilder,
-		| "with"
-		| "build"
-		| "run"
-		| "stream"
-		| "runStream"
-		| "streamSegments"
-		| "effect"
-	> {
+export interface EffectShotputBuilder extends Omit<
+	ShotputBuilder,
+	| "with"
+	| "build"
+	| "run"
+	| "stream"
+	| "runStream"
+	| "streamSegments"
+	| "effect"
+> {
 	with(overrides: ShotputOverrides): EffectShotputBuilder;
 	build(): EffectShotputProgram;
 	run(): ShotputEffect<ShotputOutput>;
