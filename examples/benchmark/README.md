@@ -12,7 +12,7 @@ Same large input (template + context) across engines; each run is timed. The wor
 
 - **Measured samples:** 20 measured runs after 3 warmup runs for each engine.
 - **Process isolation:** each engine benchmark runs in its own subprocess to avoid heap/GC cross-contamination.
-- **Variance reporting:** output includes median, mean, stddev, p95, and 95% confidence interval.
+- **Variance reporting:** output includes median, mean, stddev, p95, and 95% confidence interval. <!-- benchmarks:ignore -->
 - **Memory reporting:** reports per-run heap delta (post-GC minus pre-GC) with avg and p95.
 - **Execution-model grouping:** results are printed in two tables:
   - Runtime (parse + render per call)

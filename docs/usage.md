@@ -218,7 +218,7 @@ await shotput()
 
 **Performance benefits:**
 
-- 4-8 concurrent operations: typical 40-60% speedup
+- 4-8 concurrent operations: the usual sweet spot; measure your workload with `examples/benchmark`
 - Network-bound operations (HTTP, S3): greatest improvement
 - Local files: modest improvement due to I/O parallelization
 
