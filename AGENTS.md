@@ -158,11 +158,10 @@ bun run lint && bun run typecheck && bun run build && bun test
 
 ## Documentation
 
-| File        | Role                                                       |
-| ----------- | ---------------------------------------------------------- |
-| `AGENTS.md` | Agent playbook — build gates, conventions, env (this file) |
-| `CLAUDE.md` | Pointer to `AGENTS.md`                                     |
-| `README.md` | Human setup and contributor guide                          |
+| File        | Role                                                                        |
+| ----------- | --------------------------------------------------------------------------- |
+| `AGENTS.md` | Instruction source of truth — build gates, conventions, env (this file)    |
+| `README.md` | Human setup and contributor guide                                           |
 
 Read this file before editing code.
 
