@@ -51,15 +51,15 @@
 		"prepublishOnly": "bun run build && bun run test"
 	},
 	"devDependencies": {
-		"@types/bun": "latest",
+		"@types/bun": "1.4.2",
 		"@types/ejs": "latest",
 		"@types/mustache": "latest",
 		"@types/node": "latest",
 		"@types/nunjucks": "latest",
 		"binja": "latest",
-		"bun-types": "1.4.0",
+		"bun-types": "1.4.2",
 		"dts-bundle-generator": "latest",
-		"effect": "latest",
+		"effect": "4.0.0",
 		"ejs": "latest",
 		"fast-check": "latest",
 		"handlebars": "latest",
@@ -70,6 +70,6 @@
 		"typescript": "latest"
 	},
 	"engines": {
-		"bun": ">=1.4.0"
+		"bun": ">=1.4.2"
 	}
 }
