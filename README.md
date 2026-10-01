@@ -86,7 +86,7 @@ console.log(result.content);
 
 ## Prerequisites
 
-- [Bun](https://bun.sh)
+- [Bun](https://bun.sh) >= 1.4.2
 - [uv](https://docs.astral.sh/uv/)
 - [Python 3](https://www.python.org/)
 - [jinja2](https://pypi.org/project/Jinja2/) package for conformance harness (`uv add jinja2` or `pip install jinja2`)

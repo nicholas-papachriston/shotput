@@ -1,5 +1,5 @@
 // bun run examples/basic/24-effect.ts
-import { Effect, Stream, pipe } from "effect";
+import { Effect, Match, Stream, pipe } from "effect";
 import { shotput } from "../../src";
 import type {
 	EffectShotputBuilder,
@@ -24,16 +24,20 @@ const _typedStreamAsEffect: ShotputEffect<
 	ShotputEffectError
 > = typedRunStream;
 
+const succeedUnlessOutputError = <A extends { readonly error?: unknown }>(
+	output: A,
+) =>
+	Match.value(output.error).pipe(
+		Match.when(Match.undefined, () => Effect.succeed(output)),
+		Match.orElse((error) => Effect.fail(classifyError(error))),
+	);
+
 const runEffect = pipe(
 	Effect.tryPromise({
 		try: () => base.run(),
 		catch: classifyError,
 	}),
-	Effect.flatMap((output) =>
-		output.error !== undefined
-			? Effect.fail(classifyError(output.error))
-			: Effect.succeed(output),
-	),
+	Effect.flatMap(succeedUnlessOutputError),
 );
 
 const runStreamEffect = pipe(
@@ -41,18 +45,17 @@ const runStreamEffect = pipe(
 		try: () => base.runStream(),
 		catch: classifyError,
 	}),
-	Effect.flatMap((output) =>
-		output.error !== undefined
-			? Effect.fail(classifyError(output.error))
-			: Effect.succeed(output),
-	),
+	Effect.flatMap(succeedUnlessOutputError),
 );
 
 const textStream = Stream.unwrap(
 	pipe(
 		runStreamEffect,
 		Effect.map((output) =>
-			Stream.fromReadableStream(() => output.stream, classifyError),
+			Stream.fromReadableStream({
+				evaluate: () => output.stream,
+				onError: classifyError,
+			}),
 		),
 	),
 );
@@ -60,7 +63,11 @@ const textStream = Stream.unwrap(
 const [runtimeOutput, streamedOutput] = await Promise.all([
 	Effect.runPromise(runEffect),
 	Effect.runPromise(
-		Stream.runFold(textStream, "", (acc, chunk) => acc + chunk),
+		Stream.runFold(
+			textStream,
+			() => "",
+			(acc, chunk) => acc + chunk,
+		),
 	),
 ]);
 
