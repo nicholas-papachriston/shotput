@@ -452,7 +452,7 @@ export abstract class ShotputBase<T> {
 	/**
 	 * Directory searched first for `{{subagent:name}}` definition files.
 	 * Default: `"./.agents"`. A lookup that misses also tries
-	 * `"./.agent-oxide/agents"`, so Agent Oxide agent profiles resolve unchanged.
+	 * `"./.agent-oxide/agents"`, so legacy agent profiles resolve unchanged.
 	 */
 	subagentsDir(value: string): T {
 		return this._merge({ subagentsDir: value });

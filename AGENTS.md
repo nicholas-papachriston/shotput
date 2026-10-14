@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-Shotput (`@agent_oxide/shotput`) is a zero-dependency programmatic templating library for Bun, designed for Gen AI applications — system prompts, personas, context engineering, and multi-source prompt assembly. It resolves templates from files, directories, globs, HTTP, S3/R2, functions, Anthropic Skills, SQLite, Redis, and custom source plugins, with optional streaming for large content, security validation, token-aware budgeting, and lifecycle hooks.
+Shotput (`shotput`) is a zero-dependency programmatic templating library for Bun, designed for Gen AI applications — system prompts, personas, context engineering, and multi-source prompt assembly. It resolves templates from files, directories, globs, HTTP, S3/R2, functions, Anthropic Skills, SQLite, Redis, and custom source plugins, with optional streaming for large content, security validation, token-aware budgeting, and lifecycle hooks.
 
 **Tech stack:** TypeScript (strict), Bun runtime and test runner, oxfmt for format, oxlint for lint and McCabe CCN 20 as a lint deny. Published to npm as a bundled `dist/` package with no runtime dependencies. Optional native Jinja2 syntax mode is validated against CPython Jinja2 via a Python conformance harness.
 
@@ -175,4 +175,4 @@ Read this file before editing code.
 - **Publish CI** (`.github/workflows/publish.yml`): npm publish with provenance on GitHub release.
 - **Ignored/generated paths:** `dist/`, `responses/`, `examples/output/`, `test-temp*/`, `templates/` (local), `node_modules/`.
 - **LLM template authoring:** `llms.txt` links to `docs/llm-template-guide.txt` for syntax guidance when generating templates.
-- **Downstream usage:** Consumed by Agent Oxide for prompt/template assembly.
+- **Downstream usage:** Used by agent frameworks for prompt/template assembly.

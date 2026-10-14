@@ -169,17 +169,17 @@ describe("{{subagent:name}} resolution", () => {
 		expect(result.processedTemplate).toContain("subagent:nonexistent");
 	});
 
-	it("should fall back to the Agent Oxide agents directory", async () => {
+	it("should fall back to the legacy .agent-oxide/agents directory", async () => {
 		const config = createConfig({
-			allowedBasePaths: [join(process.cwd(), "test/fixtures/ao-workspace")],
+			allowedBasePaths: [join(process.cwd(), "test/fixtures/legacy-workspace")],
 			customSources: [createSubagentPlugin()],
-			templateDir: join(process.cwd(), "test/fixtures/ao-workspace"),
+			templateDir: join(process.cwd(), "test/fixtures/legacy-workspace"),
 			allowHttp: false,
 			maxConcurrency: 1,
 		});
-		const result = await interpolation("{{subagent:ao-reviewer}}", config);
-		expect(result.processedTemplate).toContain("# Agent Oxide Reviewer");
-		expect(result.processedTemplate).not.toContain("ao-model");
+		const result = await interpolation("{{subagent:legacy-reviewer}}", config);
+		expect(result.processedTemplate).toContain("# Legacy Reviewer");
+		expect(result.processedTemplate).not.toContain("legacy-model");
 	});
 });
 
