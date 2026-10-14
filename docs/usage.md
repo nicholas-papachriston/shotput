@@ -87,7 +87,7 @@ Inject context, params, and env directly into the template body, and use conditi
 Pass template content directly as a string instead of reading from a file:
 
 ```ts
-import { shotput } from "@agent_oxide/shotput";
+import { shotput } from "shotput";
 
 const result = await shotput()
   .template("Hello {{./data.txt}}!")

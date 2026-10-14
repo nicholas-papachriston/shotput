@@ -1,6 +1,6 @@
 # Shotput
 
-[![npm](https://img.shields.io/npm/v/@agent_oxide/shotput)](https://www.npmjs.com/package/@agent_oxide/shotput)
+[![npm](https://img.shields.io/npm/v/shotput)](https://www.npmjs.com/package/shotput)
 [![github](https://img.shields.io/github/stars/nicholas-papachriston/shotput)](https://github.com/nicholas-papachriston/shotput)
 
 Zero dependency plug-and-play templating for Bun
@@ -8,7 +8,7 @@ Zero dependency plug-and-play templating for Bun
 ## Installation
 
 ```bash
-bun add @agent_oxide/shotput
+bun add shotput
 ```
 
 ## Motivation
@@ -52,7 +52,7 @@ The benchmark includes:
 ## Quick start
 
 ```ts
-import { shotput } from "@agent_oxide/shotput";
+import { shotput } from "shotput";
 
 const result = await shotput()
 	.templateDir("./templates")

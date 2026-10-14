@@ -90,7 +90,7 @@ interface ShotputOutput {
 ### Example
 
 ```ts
-import { shotput } from "@agent_oxide/shotput";
+import { shotput } from "shotput";
 
 // One-off: chain config setters and call .run()
 const result = await shotput()

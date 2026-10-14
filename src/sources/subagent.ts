@@ -15,9 +15,8 @@ export const SUBAGENT_PREFIX = "subagent:";
 /**
  * Directories searched for `{{subagent:name}}` definitions, in order.
  *
- * `./.agents` is the Shotput layout. `./.agent-oxide/agents` is where Agent Oxide keeps
- * project agent profiles, so one repository can hold a single set of definitions that both
- * tools read.
+ * `./.agents` is the Shotput layout. `./.agent-oxide/agents` is a legacy layout kept as a
+ * read-only fallback so existing agent profiles keep resolving.
  */
 export const DEFAULT_SUBAGENT_DIRS = [
 	"./.agents",
@@ -52,7 +51,7 @@ export interface SubagentConfig {
 
 /**
  * Result of resolveSubagent(): system prompt plus agent config and metadata.
- * Handoff point for agent frameworks (e.g. Agent Oxide).
+ * Handoff point for agent frameworks.
  */
 export interface ResolvedSubagent {
 	/** Resolved template body; use as system prompt */
