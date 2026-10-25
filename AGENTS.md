@@ -149,12 +149,24 @@ Copy `env.example` to `.env` for local runs. `.env` is gitignored.
 
 ## CI/CD
 
-**GitHub Actions exception:** This repo keeps native workflows (`.github/workflows/ci.yml`, `publish.yml`) — it does **not** use the shared ci-cd engine on GitHub. Match the workflow locally before push:
+This repo keeps native GitHub Actions workflows (`.github/workflows/ci.yml`, `publish.yml`). Match the workflow locally before push:
 
 ```bash
 bun install --frozen-lockfile
 bun run lint && bun run typecheck && bun run build && bun test
 ```
+
+### Commit convention
+
+Every commit (agents and humans) follows Conventional Commits:
+`type(scope)?: summary` with type in
+`build|chore|ci|docs|feat|fix|perf|refactor|research|revert|style|test`;
+one logical change per commit; imperative lowercase summary; no trailing
+period; prefer a 50-character header and never exceed 72; blank line before
+a body that wraps at 72 columns and explains what and why. No emojis or
+`wip`/`fixup!`/`squash!` commits on shared branches. Agent-authored
+commits add an `Assisted-by: <agent> (<model>)` trailer; never credit an AI
+tool via `Co-authored-by:`.
 
 ## Documentation
 
