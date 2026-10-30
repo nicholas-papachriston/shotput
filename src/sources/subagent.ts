@@ -14,14 +14,8 @@ export const SUBAGENT_PREFIX = "subagent:";
 
 /**
  * Directories searched for `{{subagent:name}}` definitions, in order.
- *
- * `./.agents` is the Shotput layout. `./.agent-oxide/agents` is a legacy layout kept as a
- * read-only fallback so existing agent profiles keep resolving.
  */
-export const DEFAULT_SUBAGENT_DIRS = [
-	"./.agents",
-	"./.agent-oxide/agents",
-] as const;
+export const DEFAULT_SUBAGENT_DIRS = ["./.agents"] as const;
 
 /**
  * Search order for one lookup: the configured directory first, then the shared defaults.

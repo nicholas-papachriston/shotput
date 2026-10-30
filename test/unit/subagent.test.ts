@@ -168,38 +168,15 @@ describe("{{subagent:name}} resolution", () => {
 		expect(result.processedTemplate).toContain("[Error reading");
 		expect(result.processedTemplate).toContain("subagent:nonexistent");
 	});
-
-	it("should fall back to the legacy .agent-oxide/agents directory", async () => {
-		const config = createConfig({
-			allowedBasePaths: [join(process.cwd(), "test/fixtures/legacy-workspace")],
-			customSources: [createSubagentPlugin()],
-			templateDir: join(process.cwd(), "test/fixtures/legacy-workspace"),
-			allowHttp: false,
-			maxConcurrency: 1,
-		});
-		const result = await interpolation("{{subagent:legacy-reviewer}}", config);
-		expect(result.processedTemplate).toContain("# Legacy Reviewer");
-		expect(result.processedTemplate).not.toContain("legacy-model");
-	});
 });
 
 describe("subagentSearchDirs", () => {
 	it("should put the configured directory first and keep the shared defaults", () => {
-		expect(subagentSearchDirs("./custom")).toEqual([
-			"./custom",
-			"./.agents",
-			"./.agent-oxide/agents",
-		]);
+		expect(subagentSearchDirs("./custom")).toEqual(["./custom", "./.agents"]);
 	});
 
 	it("should not repeat a configured directory that is already a default", () => {
-		expect(subagentSearchDirs("./.agents")).toEqual([
-			"./.agents",
-			"./.agent-oxide/agents",
-		]);
-		expect(subagentSearchDirs()).toEqual([
-			"./.agents",
-			"./.agent-oxide/agents",
-		]);
+		expect(subagentSearchDirs("./.agents")).toEqual(["./.agents"]);
+		expect(subagentSearchDirs()).toEqual(["./.agents"]);
 	});
 });
